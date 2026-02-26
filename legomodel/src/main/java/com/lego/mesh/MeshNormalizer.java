@@ -20,10 +20,15 @@ public final class MeshNormalizer {
     /**
      * Normalizes a mesh into voxel-space-friendly bounds.
      *
-     * Translation:
-     *   - Moves the minimum corner to (0, 0, 0)
-     * Scaling:
-     *   - Uniformly scales by the largest dimension to fit within [0, resolution - 1]
+    * Translation:
+    *   - Moves the minimum corner to (0, 0, 0)
+    * Scaling:
+    *   - Uniformly scales by the largest dimension to fit within [0, resolution]
+    *
+    * Coordinate convention:
+    *   - Normalized meshes span [0, resolution] on their largest axis.
+    *   - Voxel centers are sampled at (x + 0.5, y + 0.5, z + 0.5), where
+    *     x, y, z in [0, resolution - 1].
      *
      * @param mesh input mesh (must be non-null)
      * @param resolution voxel grid resolution (must be >= 2)
@@ -46,7 +51,7 @@ public final class MeshNormalizer {
             throw new IllegalArgumentException("Mesh is degenerate (zero size)");
         }
 
-        double scale = (resolution - 1) / maxDimension;
+        double scale = resolution / maxDimension;
 
         List<Triangle> normalized = new ArrayList<>(mesh.triangles().size());
         for (Triangle triangle : mesh.triangles()) {

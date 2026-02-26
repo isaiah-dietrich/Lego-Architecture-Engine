@@ -12,7 +12,8 @@ import com.lego.model.Vector3;
 public final class Voxelizer {
 
     private static final double EPSILON = 1e-9;
-    private static final double RAY_BIAS = 1e-9;
+    private static final double RAY_BIAS_Y = 1e-6;
+    private static final double RAY_BIAS_Z = 2e-6;
 
     private Voxelizer() {
         // Utility class, prevent instantiation
@@ -20,6 +21,11 @@ public final class Voxelizer {
 
     /**
      * Converts a normalized mesh into a filled voxel grid.
+     *
+     * Coordinate convention:
+     *   - Normalized meshes span [0, resolution] on their largest axis.
+     *   - Voxel centers are sampled at (x + 0.5, y + 0.5, z + 0.5), where
+     *     x, y, z in [0, resolution - 1].
      *
      * Each voxel center casts a ray in the +X direction. An odd number of
      * triangle intersections means the voxel is inside the mesh.
@@ -40,8 +46,9 @@ public final class Voxelizer {
             for (int y = 0; y < resolution; y++) {
                 for (int x = 0; x < resolution; x++) {
                     double ox = x + 0.5;
-                    double oy = y + 0.5 + RAY_BIAS;
-                    double oz = z + 0.5 + RAY_BIAS;
+                    // Use slightly different biases to avoid ray hits exactly on shared edges.
+                    double oy = y + 0.5 + RAY_BIAS_Y;
+                    double oz = z + 0.5 + RAY_BIAS_Z;
 
                     if (isInside(mesh, ox, oy, oz)) {
                         grid.setFilled(x, y, z, true);

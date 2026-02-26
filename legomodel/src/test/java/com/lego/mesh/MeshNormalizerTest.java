@@ -70,7 +70,7 @@ class MeshNormalizerTest {
         Mesh normalized = MeshNormalizer.normalize(mesh, resolution);
         BoundingBox box = new BoundingBox(normalized);
 
-        double maxAllowed = resolution - 1;
+        double maxAllowed = resolution;
 
         assertTrue(box.minX() >= 0.0);
         assertTrue(box.minY() >= 0.0);

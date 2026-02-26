@@ -47,6 +47,17 @@ class VoxelizerTest {
         assertThrows(IllegalArgumentException.class, () -> Voxelizer.voxelize(mesh, 1));
     }
 
+    @Test
+    void testBoundaryCoverageAtResolutionTwo() {
+        Mesh cube = createCubeMesh(0.0, 2.0);
+
+        VoxelGrid grid = Voxelizer.voxelize(cube, 2);
+
+        assertEquals(8, grid.countFilledVoxels());
+        assertTrue(grid.isFilled(0, 0, 0));
+        assertTrue(grid.isFilled(1, 1, 1));
+    }
+
     private static Mesh createCubeMesh(double min, double max) {
         Vector3 v000 = new Vector3(min, min, min);
         Vector3 v100 = new Vector3(max, min, min);

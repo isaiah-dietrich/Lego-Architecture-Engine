@@ -30,6 +30,7 @@
     </dependencies>
 
     <build>
+        <finalName>legomodel</finalName>
         <plugins>
             <!-- Compiler plugin for Java 17 -->
             <plugin>
@@ -53,7 +54,6 @@
                             <mainClass>com.lego.cli.Main</mainClass>
                         </manifest>
                     </archive>
-                    <finalName>legomodel</finalName>
                 </configuration>
             </plugin>
 
