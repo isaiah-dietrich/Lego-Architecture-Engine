@@ -164,11 +164,12 @@ class ObjLoaderTest {
     }
 
     /**
-     * Tests that the loader rejects faces with more than 3 vertices (quads, polygons).
-     * Verifies that an IllegalArgumentException is thrown with an appropriate error message.
+     * Tests that quad faces (4 vertices) are automatically triangulated into
+     * exactly 2 triangles using fan triangulation: (v1, v2, v3) and (v1, v3, v4).
+     * Verifies correct vertex ordering and triangle count.
      */
     @Test
-    void testQuadFaceThrowsException() throws IOException {
+    void testQuadFaceTriangulates() throws IOException {
         String obj = """
             v 0.0 0.0 0.0
             v 1.0 0.0 0.0
@@ -180,13 +181,22 @@ class ObjLoaderTest {
         Path path = tempDir.resolve("quad.obj");
         Files.writeString(path, obj);
 
-        IllegalArgumentException ex = assertThrows(
-            IllegalArgumentException.class,
-            () -> ObjLoader.load(path)
-        );
+        Mesh mesh = ObjLoader.load(path);
 
-        assertTrue(ex.getMessage().contains("Only triangulated faces"));
-        assertTrue(ex.getMessage().contains("4 vertices"));
+        // Quad should become 2 triangles
+        assertEquals(2, mesh.triangleCount());
+
+        // Verify first triangle: (v1, v2, v3)
+        Triangle tri1 = mesh.triangles().get(0);
+        assertEquals(new Vector3(0.0, 0.0, 0.0), tri1.v1());
+        assertEquals(new Vector3(1.0, 0.0, 0.0), tri1.v2());
+        assertEquals(new Vector3(1.0, 1.0, 0.0), tri1.v3());
+
+        // Verify second triangle: (v1, v3, v4)
+        Triangle tri2 = mesh.triangles().get(1);
+        assertEquals(new Vector3(0.0, 0.0, 0.0), tri2.v1());
+        assertEquals(new Vector3(1.0, 1.0, 0.0), tri2.v2());
+        assertEquals(new Vector3(0.0, 1.0, 0.0), tri2.v3());
     }
 
     /**
@@ -338,5 +348,73 @@ class ObjLoaderTest {
         Mesh mesh = ObjLoader.load(path);
 
         assertEquals(12, mesh.triangleCount());
+    }
+
+    /**
+     * Tests that quad faces with texture and normal indices (f v/vt/vn format)
+     * are correctly triangulated, with texture/normal information properly ignored.
+     * Verifies that vertex positions are extracted and used for triangulation.
+     */
+    @Test
+    void testQuadWithTextureAndNormalIndicesTriangulates() throws IOException {
+        String obj = """
+            v 0.0 0.0 0.0
+            v 1.0 0.0 0.0
+            v 1.0 1.0 0.0
+            v 0.0 1.0 0.0
+            vt 0.0 0.0
+            vt 1.0 0.0
+            vt 1.0 1.0
+            vt 0.0 1.0
+            vn 0.0 0.0 1.0
+            f 1/1/1 2/2/1 3/3/1 4/4/1
+            """;
+
+        Path path = tempDir.resolve("quad_texnorm.obj");
+        Files.writeString(path, obj);
+
+        Mesh mesh = ObjLoader.load(path);
+
+        // Quad should become 2 triangles
+        assertEquals(2, mesh.triangleCount());
+
+        // Verify first triangle
+        Triangle tri1 = mesh.triangles().get(0);
+        assertEquals(new Vector3(0.0, 0.0, 0.0), tri1.v1());
+        assertEquals(new Vector3(1.0, 0.0, 0.0), tri1.v2());
+        assertEquals(new Vector3(1.0, 1.0, 0.0), tri1.v3());
+
+        // Verify second triangle
+        Triangle tri2 = mesh.triangles().get(1);
+        assertEquals(new Vector3(0.0, 0.0, 0.0), tri2.v1());
+        assertEquals(new Vector3(1.0, 1.0, 0.0), tri2.v2());
+        assertEquals(new Vector3(0.0, 1.0, 0.0), tri2.v3());
+    }
+
+    /**
+     * Tests that faces with 5 or more vertices are rejected with an exception.
+     * Verifies that the loader only supports triangles (3 vertices) and quads (4 vertices).
+     */
+    @Test
+    void testPolygonWith5VerticesThrowsException() throws IOException {
+        String obj = """
+            v 0.0 0.0 0.0
+            v 1.0 0.0 0.0
+            v 1.0 1.0 0.0
+            v 0.0 1.0 0.0
+            v 0.5 0.5 1.0
+            f 1 2 3 4 5
+            """;
+
+        Path path = tempDir.resolve("pentagon.obj");
+        Files.writeString(path, obj);
+
+        IllegalArgumentException ex = assertThrows(
+            IllegalArgumentException.class,
+            () -> ObjLoader.load(path)
+        );
+
+        assertTrue(ex.getMessage().contains("5 or more vertices"));
+        assertTrue(ex.getMessage().contains("5 vertices"));
     }
 }

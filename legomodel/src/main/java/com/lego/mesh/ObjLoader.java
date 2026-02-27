@@ -16,10 +16,14 @@ import com.lego.model.Vector3;
  *
  * Supports a minimal subset of the OBJ format:
  * - Vertex lines (v x y z)
- * - Face lines (f i j k) — triangles only
+ * - Face lines (f i j k) — triangles, or (f i j k l) — quads (auto-triangulated)
+ * TODO: Support n-gon obj files
+ *
+ * Quad faces (4 vertices) are automatically converted to 2 triangles using
+ * deterministic fan triangulation: (v1, v2, v3) and (v1, v3, v4).
  *
  * All other OBJ features are ignored (normals, texture coords, materials, etc.).
- * Faces must be triangulated. Non-triangle faces will cause an exception.
+ * Faces with 5+ vertices will cause an exception.
  */
 public final class ObjLoader {
 
@@ -102,6 +106,7 @@ public final class ObjLoader {
         List<Triangle> triangles
     ) {
         // Validate face has exactly 3 vertices (triangle)
+        //TODO Change to N-Gon
         if (tokens.length < 4) {
             throw new IllegalArgumentException(
                 "Face must have at least 3 vertices"
