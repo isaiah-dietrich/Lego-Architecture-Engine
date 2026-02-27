@@ -2,6 +2,8 @@
 
 A Java-based 3D LEGO replica generator that converts 3D models (OBJ format) into decorative LEGO structures using voxelization and brick merging algorithms.
 
+Lego database from - rebrickable.com
+
 ## Phase 1 Deliverables
 
 - [x] 3D mesh loading (OBJ parser)

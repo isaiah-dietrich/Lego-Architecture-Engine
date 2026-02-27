@@ -4,7 +4,10 @@ package com.lego.voxel;
  * 3D voxel grid container.
  */
 public final class VoxelGrid {
-
+    /**
+     * True - Voxel is filled (Inside the mesh)
+     * False - Voxel is empty (Outside the emsh)
+     */
     private final boolean[][][] grid;
     private final int width;
     private final int height;
