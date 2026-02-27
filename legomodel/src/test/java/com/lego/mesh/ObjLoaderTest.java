@@ -51,7 +51,7 @@ class ObjLoaderTest {
     }
 
     /**
-     * Tests that an OBJ file with multiple triangles (quad split into two triangles)
+     * Tests that an OBJ file with multiple triangle faces
      * is loaded correctly. Verifies the total triangle count.
      */
     @Test
@@ -164,12 +164,10 @@ class ObjLoaderTest {
     }
 
     /**
-     * Tests that quad faces (4 vertices) are automatically triangulated into
-     * exactly 2 triangles using fan triangulation: (v1, v2, v3) and (v1, v3, v4).
-     * Verifies correct vertex ordering and triangle count.
+     * Tests that quad faces (4 vertices) are rejected with a clear exception.
      */
     @Test
-    void testQuadFaceTriangulates() throws IOException {
+    void testQuadFaceThrowsException() throws IOException {
         String obj = """
             v 0.0 0.0 0.0
             v 1.0 0.0 0.0
@@ -181,22 +179,13 @@ class ObjLoaderTest {
         Path path = tempDir.resolve("quad.obj");
         Files.writeString(path, obj);
 
-        Mesh mesh = ObjLoader.load(path);
+        IllegalArgumentException ex = assertThrows(
+            IllegalArgumentException.class,
+            () -> ObjLoader.load(path)
+        );
 
-        // Quad should become 2 triangles
-        assertEquals(2, mesh.triangleCount());
-
-        // Verify first triangle: (v1, v2, v3)
-        Triangle tri1 = mesh.triangles().get(0);
-        assertEquals(new Vector3(0.0, 0.0, 0.0), tri1.v1());
-        assertEquals(new Vector3(1.0, 0.0, 0.0), tri1.v2());
-        assertEquals(new Vector3(1.0, 1.0, 0.0), tri1.v3());
-
-        // Verify second triangle: (v1, v3, v4)
-        Triangle tri2 = mesh.triangles().get(1);
-        assertEquals(new Vector3(0.0, 0.0, 0.0), tri2.v1());
-        assertEquals(new Vector3(1.0, 1.0, 0.0), tri2.v2());
-        assertEquals(new Vector3(0.0, 1.0, 0.0), tri2.v3());
+        assertTrue(ex.getMessage().contains("Only triangular faces are supported"));
+        assertTrue(ex.getMessage().contains("4 vertices"));
     }
 
     /**
@@ -352,11 +341,10 @@ class ObjLoaderTest {
 
     /**
      * Tests that quad faces with texture and normal indices (f v/vt/vn format)
-     * are correctly triangulated, with texture/normal information properly ignored.
-     * Verifies that vertex positions are extracted and used for triangulation.
+     * are rejected, while still parsing the vertex index component correctly.
      */
     @Test
-    void testQuadWithTextureAndNormalIndicesTriangulates() throws IOException {
+    void testQuadWithTextureAndNormalIndicesThrowsException() throws IOException {
         String obj = """
             v 0.0 0.0 0.0
             v 1.0 0.0 0.0
@@ -373,27 +361,18 @@ class ObjLoaderTest {
         Path path = tempDir.resolve("quad_texnorm.obj");
         Files.writeString(path, obj);
 
-        Mesh mesh = ObjLoader.load(path);
+        IllegalArgumentException ex = assertThrows(
+            IllegalArgumentException.class,
+            () -> ObjLoader.load(path)
+        );
 
-        // Quad should become 2 triangles
-        assertEquals(2, mesh.triangleCount());
-
-        // Verify first triangle
-        Triangle tri1 = mesh.triangles().get(0);
-        assertEquals(new Vector3(0.0, 0.0, 0.0), tri1.v1());
-        assertEquals(new Vector3(1.0, 0.0, 0.0), tri1.v2());
-        assertEquals(new Vector3(1.0, 1.0, 0.0), tri1.v3());
-
-        // Verify second triangle
-        Triangle tri2 = mesh.triangles().get(1);
-        assertEquals(new Vector3(0.0, 0.0, 0.0), tri2.v1());
-        assertEquals(new Vector3(1.0, 1.0, 0.0), tri2.v2());
-        assertEquals(new Vector3(0.0, 1.0, 0.0), tri2.v3());
+        assertTrue(ex.getMessage().contains("Only triangular faces are supported"));
+        assertTrue(ex.getMessage().contains("4 vertices"));
     }
 
     /**
-     * Tests that faces with 5 or more vertices are rejected with an exception.
-     * Verifies that the loader only supports triangles (3 vertices) and quads (4 vertices).
+     * Tests that faces with 5 vertices are rejected with an exception.
+     * Verifies that the loader only supports triangular faces.
      */
     @Test
     void testPolygonWith5VerticesThrowsException() throws IOException {
@@ -414,7 +393,7 @@ class ObjLoaderTest {
             () -> ObjLoader.load(path)
         );
 
-        assertTrue(ex.getMessage().contains("5 or more vertices"));
+        assertTrue(ex.getMessage().contains("Only triangular faces are supported"));
         assertTrue(ex.getMessage().contains("5 vertices"));
     }
 }
