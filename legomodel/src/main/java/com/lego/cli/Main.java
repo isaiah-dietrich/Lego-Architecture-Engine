@@ -80,8 +80,13 @@ public final class Main {
             }
 
             if (outputObjPath != null) {
-                BrickObjExporter.export(bricks, outputObjPath);
-                out.println("Visual OBJ exported: " + outputObjPath.toAbsolutePath());
+                try {
+                    BrickObjExporter.export(bricks, outputObjPath);
+                    out.println("Visual OBJ exported: " + outputObjPath.toAbsolutePath());
+                } catch (IOException e) {
+                    err.println("Error: failed to write output OBJ file: " + e.getMessage());
+                    return 1;
+                }
             }
 
             return 0;
