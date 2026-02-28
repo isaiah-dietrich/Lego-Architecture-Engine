@@ -79,6 +79,10 @@ public class Cleaning {
             return;
         }
 
+        // Print canonical catalog destination for downstream phases
+        System.out.println("Data cleaning pipeline");
+        System.out.println("- canonical catalog path (for downstream use): " + CatalogConfig.CATALOG_RELATIVE_PATH);
+
         try {
             cleaning.buildCatalog(inputPath.toFile(), catalogPath.toFile(), rejectedPath.toFile());
         } catch (IOException | IllegalArgumentException e) {
