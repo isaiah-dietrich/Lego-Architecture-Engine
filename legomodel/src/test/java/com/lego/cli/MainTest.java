@@ -40,6 +40,31 @@ class MainTest {
         assertTrue(output.contains("Total voxels:"));
         assertTrue(output.contains("Filled voxels (solid):"));
         assertTrue(output.contains("Surface voxels:"));
+        assertTrue(output.contains("Bricks generated:"));
+    }
+
+    @Test
+    void testValidInvocationWithOutputPathWritesObj() throws IOException {
+        Path objPath = tempDir.resolve("triangle.obj");
+        Path outObj = tempDir.resolve("bricks.obj");
+        Files.writeString(objPath, """
+            v 0 0 0
+            v 1 0 0
+            v 0 1 0
+            f 1 2 3
+            """);
+
+        ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
+        ByteArrayOutputStream errBuffer = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(outBuffer);
+        PrintStream err = new PrintStream(errBuffer);
+
+        int exitCode = Main.run(new String[] { objPath.toString(), "4", outObj.toString() }, out, err);
+
+        assertEquals(0, exitCode);
+        assertTrue(Files.exists(outObj));
+        String output = outBuffer.toString();
+        assertTrue(output.contains("Visual OBJ exported:"));
     }
 
     @Test
