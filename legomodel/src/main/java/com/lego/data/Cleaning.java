@@ -9,10 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 import java.util.regex.Pattern;
 
 import org.apache.commons.csv.CSVFormat;
@@ -25,46 +22,85 @@ import org.apache.commons.csv.CSVRecord;
  */
 public class Cleaning {
 
-    private static final Pattern SIZE_PATTERN = Pattern.compile(
-        "(?i)(?<![A-Za-z0-9])\\d+\\s*x\\s*\\d+(?:\\s*x\\s*(?:\\d+|\\d+/\\d+))?(?![A-Za-z0-9])"
+    private static final Pattern DIMENSION_PATTERN = Pattern.compile(
+        "(?i)(?<![A-Za-z0-9])(\\d+)\\s*x\\s*(\\d+)(?:\\s*x\\s*(\\d+/\\d+|\\d+))?(?!\\s*[xX])(?![A-Za-z0-9/])"
     );
+    private static final Pattern INTEGER_PATTERN = Pattern.compile("^[1-9]\\d*$");
+    private static final Pattern FRACTION_PATTERN = Pattern.compile("^([1-9]\\d*)/([1-9]\\d*)$");
 
     private static final int PREVIEW_LIMIT = 10;
+    private static final String REJECT_REASON = "reject_reason";
+
+    private static final String[] CATALOG_HEADERS = {
+        "part_id",
+        "name",
+        "category",
+        "stud_x",
+        "stud_y",
+        "height_units",
+        "material",
+        "active"
+    };
+
+    static final class ParsedDimensions {
+        private final int studX;
+        private final int studY;
+        private final String heightUnits;
+
+        ParsedDimensions(int studX, int studY, String heightUnits) {
+            this.studX = studX;
+            this.studY = studY;
+            this.heightUnits = heightUnits;
+        }
+
+        int studX() {
+            return studX;
+        }
+
+        int studY() {
+            return studY;
+        }
+
+        String heightUnits() {
+            return heightUnits;
+        }
+    }
 
     public static void main(String[] args) {
         Cleaning cleaning = new Cleaning();
 
-        Path inputPath = resolvePath("data/parts.csv", "legomodel/data/parts.csv");
-        Path outputPath = resolvePath(
-            "data/parts_dimension_filtered.csv",
-            "legomodel/data/parts_dimension_filtered.csv"
-        );
+        Path inputPath = resolveFilteredInputPath();
+        Path catalogPath = resolveCatalogOutputPath(inputPath);
+        Path rejectedPath = resolveRejectedOutputPath(inputPath);
 
-        if (inputPath == null || outputPath == null) {
+        if (inputPath == null || catalogPath == null || rejectedPath == null) {
             System.err.println("Could not resolve input/output paths from working directory.");
             System.exit(1);
             return;
         }
 
         try {
-            cleaning.clean(inputPath.toFile(), outputPath.toFile());
+            cleaning.buildCatalog(inputPath.toFile(), catalogPath.toFile(), rejectedPath.toFile());
         } catch (IOException | IllegalArgumentException e) {
             System.err.println("CSV cleaning failed: " + e.getMessage());
             System.exit(1);
         }
     }
 
-    public void clean(File input, File output) throws IOException {
+    public void buildCatalog(File input, File catalogOutput, File rejectedOutput) throws IOException {
         Path inputPath = input.toPath();
-        Path outputPath = output.toPath();
+        Path catalogPath = catalogOutput.toPath();
+        Path rejectedPath = rejectedOutput.toPath();
 
         if (!Files.exists(inputPath)) {
             throw new IllegalArgumentException("Input CSV does not exist: " + inputPath.toAbsolutePath());
         }
 
-        Path parent = outputPath.getParent();
-        if (parent != null) {
-            Files.createDirectories(parent);
+        if (catalogPath.getParent() != null) {
+            Files.createDirectories(catalogPath.getParent());
+        }
+        if (rejectedPath.getParent() != null) {
+            Files.createDirectories(rejectedPath.getParent());
         }
 
         CSVFormat format = CSVFormat.DEFAULT.builder()
@@ -72,96 +108,151 @@ public class Cleaning {
             .setSkipHeaderRecord(true)
             .build();
 
-        List<String> headers;
-        List<Map<String, String>> keptRows = new ArrayList<>();
-        List<String> keptNames = new ArrayList<>();
-        List<String> removedNames = new ArrayList<>();
-
         int totalRows = 0;
+        int parsedRows = 0;
+        int rejectedRows = 0;
+
+        List<String> keptNames = new ArrayList<>();
+        List<String> rejectedNames = new ArrayList<>();
 
         try (
             Reader reader = Files.newBufferedReader(inputPath, StandardCharsets.UTF_8);
-            CSVParser parser = format.parse(reader)
+            CSVParser parser = format.parse(reader);
+            Writer catalogWriter = Files.newBufferedWriter(catalogPath, StandardCharsets.UTF_8);
+            Writer rejectedWriter = Files.newBufferedWriter(rejectedPath, StandardCharsets.UTF_8);
+            CSVPrinter catalogPrinter = new CSVPrinter(
+                catalogWriter,
+                CSVFormat.DEFAULT.builder().setHeader(CATALOG_HEADERS).build()
+            );
+            CSVPrinter rejectedPrinter = new CSVPrinter(
+                rejectedWriter,
+                CSVFormat.DEFAULT.builder().setHeader(buildRejectedHeaders(parser.getHeaderNames())).build()
+            )
         ) {
-            headers = parser.getHeaderNames();
-            String nameHeader = resolveNameHeader(headers);
+            List<String> headers = parser.getHeaderNames();
+            String partNumHeader = resolveHeader(headers, "part_num");
+            String nameHeader = resolveHeader(headers, "name");
+            String categoryHeader = resolveHeader(headers, "part_cat_id");
+            String materialHeader = resolveHeader(headers, "part_material");
 
             for (CSVRecord record : parser) {
                 totalRows++;
-
                 String name = record.get(nameHeader);
-                if (containsSizeToken(name)) {
-                    keptRows.add(copyRecord(headers, record));
+
+                ParsedDimensions parsed = parseDimensions(name);
+                if (parsed != null) {
+                    parsedRows++;
                     keptNames.add(name);
+
+                    catalogPrinter.printRecord(
+                        record.get(partNumHeader),
+                        name,
+                        record.get(categoryHeader),
+                        parsed.studX(),
+                        parsed.studY(),
+                        parsed.heightUnits(),
+                        record.get(materialHeader),
+                        true
+                    );
                 } else {
-                    removedNames.add(name);
+                    rejectedRows++;
+                    rejectedNames.add(name);
+                    rejectedPrinter.printRecord(buildRejectedRecord(headers, record, "invalid or missing dimensions"));
                 }
             }
         }
 
-        writeOutput(outputPath, headers, keptRows);
-
-        int keptRowsCount = keptRows.size();
-        int removedRowsCount = removedNames.size();
-        boolean valid = keptRowsCount + removedRowsCount == totalRows;
+        boolean valid = parsedRows + rejectedRows == totalRows;
+        double successPercent = totalRows == 0 ? 0.0 : (parsedRows * 100.0 / totalRows);
 
         System.out.println("Summary:");
         System.out.println("- total input rows: " + totalRows);
-        System.out.println("- kept rows: " + keptRowsCount);
-        System.out.println("- removed rows: " + removedRowsCount);
-        System.out.println("- output path: " + outputPath.toAbsolutePath());
-        System.out.println("- verification (kept + removed == total): " + valid);
-
+        System.out.println("- parsed successfully: " + parsedRows);
+        System.out.println("- rejected rows: " + rejectedRows);
+        System.out.println("- success %: " + String.format("%.2f", successPercent));
+        System.out.println("- parts catalog path: " + catalogPath.toAbsolutePath());
+        System.out.println("- rejected rows path: " + rejectedPath.toAbsolutePath());
+        System.out.println("- verification (parsed + rejected == total): " + valid);
         printPreview("First 10 kept names:", keptNames);
-        printPreview("First 10 removed names:", removedNames);
+        printPreview("First 10 rejected names:", rejectedNames);
 
         if (!valid) {
-            throw new IllegalStateException("Row count mismatch: kept + removed != total");
+            throw new IllegalStateException("Row count mismatch: parsed + rejected != total");
         }
     }
 
-    private static void writeOutput(
-        Path outputPath,
-        List<String> headers,
-        List<Map<String, String>> keptRows
-    ) throws IOException {
-        CSVFormat outputFormat = CSVFormat.DEFAULT.builder()
-            .setHeader(headers.toArray(String[]::new))
-            .build();
-
-        try (
-            Writer writer = Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8);
-            CSVPrinter printer = new CSVPrinter(writer, outputFormat)
-        ) {
-            for (Map<String, String> row : keptRows) {
-                List<String> values = new ArrayList<>(headers.size());
-                for (String header : headers) {
-                    values.add(row.get(header));
-                }
-                printer.printRecord(values);
-            }
+    static ParsedDimensions parseDimensions(String name) {
+        if (name == null) {
+            return null;
         }
+
+        java.util.regex.Matcher matcher = DIMENSION_PATTERN.matcher(name);
+        if (!matcher.find()) {
+            return null;
+        }
+
+        int studX = Integer.parseInt(matcher.group(1));
+        int studY = Integer.parseInt(matcher.group(2));
+        String heightUnits = matcher.group(3) == null ? "1" : matcher.group(3);
+
+        if (studX <= 0 || studY <= 0) {
+            return null;
+        }
+
+        if (!isValidHeightUnits(heightUnits)) {
+            return null;
+        }
+
+        return new ParsedDimensions(studX, studY, heightUnits);
     }
 
-    private static String resolveNameHeader(List<String> headers) {
+    static boolean isValidHeightUnits(String heightUnits) {
+        if (heightUnits == null || heightUnits.isBlank()) {
+            return false;
+        }
+        if (INTEGER_PATTERN.matcher(heightUnits).matches()) {
+            return true;
+        }
+
+        java.util.regex.Matcher fractionMatch = FRACTION_PATTERN.matcher(heightUnits);
+        if (!fractionMatch.matches()) {
+            return false;
+        }
+
+        int numerator = Integer.parseInt(fractionMatch.group(1));
+        int denominator = Integer.parseInt(fractionMatch.group(2));
+        return numerator > 0 && denominator > 0;
+    }
+
+    private static String[] buildRejectedHeaders(List<String> sourceHeaders) {
+        String[] headers = new String[sourceHeaders.size() + 1];
+        for (int i = 0; i < sourceHeaders.size(); i++) {
+            headers[i] = sourceHeaders.get(i);
+        }
+        headers[sourceHeaders.size()] = REJECT_REASON;
+        return headers;
+    }
+
+    private static List<String> buildRejectedRecord(
+        List<String> sourceHeaders,
+        CSVRecord record,
+        String reason
+    ) {
+        List<String> values = new ArrayList<>(sourceHeaders.size() + 1);
+        for (String header : sourceHeaders) {
+            values.add(record.get(header));
+        }
+        values.add(reason);
+        return values;
+    }
+
+    private static String resolveHeader(List<String> headers, String expectedName) {
         for (String header : headers) {
-            if ("name".equalsIgnoreCase(header)) {
+            if (expectedName.equalsIgnoreCase(header)) {
                 return header;
             }
         }
-        throw new IllegalArgumentException("CSV must contain a 'name' header column.");
-    }
-
-    private static Map<String, String> copyRecord(List<String> headers, CSVRecord record) {
-        Map<String, String> row = new LinkedHashMap<>();
-        for (String header : headers) {
-            row.put(header, record.get(header));
-        }
-        return row;
-    }
-
-    private static boolean containsSizeToken(String name) {
-        return name != null && SIZE_PATTERN.matcher(name).find();
+        throw new IllegalArgumentException("CSV must contain a '" + expectedName + "' header column.");
     }
 
     private static void printPreview(String label, List<String> names) {
@@ -173,26 +264,36 @@ public class Cleaning {
         }
     }
 
-    private static Path resolvePath(String preferred, String fallback) {
-        Path preferredPath = Paths.get(preferred);
-        if (Files.exists(preferredPath) || startsWithDataDirectory(preferredPath)) {
-            return preferredPath;
+    static Path resolvePreferredPath(Path cwd, String directPath, String nestedPath) {
+        Path direct = cwd.resolve(directPath);
+        if (Files.exists(direct)) {
+            return direct;
         }
 
-        Path fallbackPath = Paths.get(fallback);
-        if (Files.exists(fallbackPath) || startsWithDataDirectory(fallbackPath)) {
-            return fallbackPath;
+        Path nested = cwd.resolve(nestedPath);
+        if (Files.exists(nested)) {
+            return nested;
         }
 
         return null;
     }
 
-    private static boolean startsWithDataDirectory(Path path) {
-        Path normalized = path.normalize();
-        if (normalized.getNameCount() == 0) {
-            return false;
+    static Path resolveFilteredInputPath() {
+        Path cwd = Paths.get("").toAbsolutePath().normalize();
+        return resolvePreferredPath(cwd, "data/parts_dimension_filtered.csv", "legomodel/data/parts_dimension_filtered.csv");
+    }
+
+    static Path resolveCatalogOutputPath(Path inputPath) {
+        if (inputPath == null) {
+            return null;
         }
-        String first = normalized.getName(0).toString().toLowerCase(Locale.ROOT);
-        return "data".equals(first) || "legomodel".equals(first);
+        return inputPath.getParent().resolve("parts_catalog_v1.csv");
+    }
+
+    static Path resolveRejectedOutputPath(Path inputPath) {
+        if (inputPath == null) {
+            return null;
+        }
+        return inputPath.getParent().resolve("rejected_rows.csv");
     }
 }
