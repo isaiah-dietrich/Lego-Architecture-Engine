@@ -45,7 +45,7 @@ class BrickPlacerTest {
     }
 
     @Test
-    void testTwoAdjacentVoxelsHorizontal_Returns1x2Brick() {
+    void testTwoAdjacentVoxelsHorizontal_Returns2x1Brick() {
         VoxelGrid surface = new VoxelGrid(5, 5, 5);
         surface.setFilled(1, 2, 0, true);
         surface.setFilled(2, 2, 0, true);
@@ -57,29 +57,38 @@ class BrickPlacerTest {
         assertEquals(1, brick.x());
         assertEquals(2, brick.y());
         assertEquals(0, brick.z());
-        assertEquals(2, brick.studX());  // 1x2 horizontal
+        assertEquals(2, brick.studX());
         assertEquals(1, brick.studY());
     }
 
     @Test
-    void testTwoAdjacentVoxelsVertical_Returns1x2Brick() {
+    void testTwoAdjacentVoxelsVertical_ReturnsTwoSeparate1x1Bricks() {
         VoxelGrid surface = new VoxelGrid(5, 5, 5);
         surface.setFilled(1, 2, 0, true);
         surface.setFilled(1, 3, 0, true);
 
         List<Brick> bricks = BrickPlacer.placeBricks(surface);
 
-        assertEquals(1, bricks.size());
-        Brick brick = bricks.get(0);
-        assertEquals(1, brick.x());
-        assertEquals(2, brick.y());
-        assertEquals(0, brick.z());
-        assertEquals(1, brick.studX());  // 1x2 vertical
-        assertEquals(2, brick.studY());
+        // With vertical orientation removed, two adjacent voxels in Y direction
+        // result in two separate 1x1 bricks
+        assertEquals(2, bricks.size());
+        Brick brick1 = bricks.get(0);
+        assertEquals(1, brick1.x());
+        assertEquals(2, brick1.y());
+        assertEquals(0, brick1.z());
+        assertEquals(1, brick1.studX());
+        assertEquals(1, brick1.studY());
+
+        Brick brick2 = bricks.get(1);
+        assertEquals(1, brick2.x());
+        assertEquals(3, brick2.y());
+        assertEquals(0, brick2.z());
+        assertEquals(1, brick2.studX());
+        assertEquals(1, brick2.studY());
     }
 
     @Test
-    void testThreeHorizontalVoxels_Returns1x2And1x1() {
+    void testThreeHorizontalVoxels_Returns2x1And1x1() {
         VoxelGrid surface = new VoxelGrid(5, 5, 5);
         surface.setFilled(0, 0, 0, true);
         surface.setFilled(1, 0, 0, true);
@@ -88,15 +97,13 @@ class BrickPlacerTest {
         List<Brick> bricks = BrickPlacer.placeBricks(surface);
 
         assertEquals(2, bricks.size());
-        
-        // First brick should be 1x2 at (0, 0, 0)
+
         Brick brick1 = bricks.get(0);
         assertEquals(0, brick1.x());
         assertEquals(0, brick1.y());
         assertEquals(2, brick1.studX());
         assertEquals(1, brick1.studY());
 
-        // Second brick should be 1x1 at (2, 0, 0)
         Brick brick2 = bricks.get(1);
         assertEquals(2, brick2.x());
         assertEquals(0, brick2.y());
@@ -123,13 +130,13 @@ class BrickPlacerTest {
         // Verify deterministic placement
         assertEquals(4, bricks.size());
         
-        // First brick: layer 0, y=0, x=0 -> 1x2 horizontal
+        // First brick: layer 0, y=0, x=0 -> 2x1
         assertEquals(0, bricks.get(0).x());
         assertEquals(0, bricks.get(0).y());
         assertEquals(0, bricks.get(0).z());
         assertEquals(2, bricks.get(0).studX());
-        
-        // Second brick: layer 0, y=2, x=0 -> 1x2 horizontal
+
+        // Second brick: layer 0, y=2, x=0 -> 2x1
         assertEquals(0, bricks.get(1).x());
         assertEquals(2, bricks.get(1).y());
         assertEquals(0, bricks.get(1).z());
@@ -264,5 +271,102 @@ class BrickPlacerTest {
         assertEquals(1, bricks.size());
         assertEquals(2, bricks.get(0).x());
         assertEquals(1, bricks.get(0).studX());  // Falls back to 1x1
+    }
+
+    @Test
+    void testExact2x2Patch_ReturnsSingle2x2Brick() {
+        VoxelGrid surface = new VoxelGrid(4, 4, 2);
+        surface.setFilled(1, 1, 0, true);
+        surface.setFilled(2, 1, 0, true);
+        surface.setFilled(1, 2, 0, true);
+        surface.setFilled(2, 2, 0, true);
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface);
+
+        assertEquals(1, bricks.size());
+        Brick brick = bricks.get(0);
+        assertEquals(1, brick.x());
+        assertEquals(1, brick.y());
+        assertEquals(0, brick.z());
+        assertEquals(2, brick.studX());
+        assertEquals(2, brick.studY());
+        assertEquals(1, brick.heightUnits());
+    }
+
+    @Test
+    void testMixedPattern_Uses2x2ThenDeterministicFallbacks() {
+        VoxelGrid surface = new VoxelGrid(5, 5, 1);
+
+        // 2x2 patch at origin
+        surface.setFilled(0, 0, 0, true);
+        surface.setFilled(1, 0, 0, true);
+        surface.setFilled(0, 1, 0, true);
+        surface.setFilled(1, 1, 0, true);
+
+        // Extra voxels become one 2x1 and one 1x1 in scan order
+        surface.setFilled(2, 0, 0, true);
+        surface.setFilled(3, 0, 0, true);
+        surface.setFilled(4, 0, 0, true);
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface);
+
+        assertEquals(3, bricks.size());
+
+        Brick first = bricks.get(0);
+        assertEquals(0, first.x());
+        assertEquals(0, first.y());
+        assertEquals(0, first.z());
+        assertEquals(2, first.studX());
+        assertEquals(2, first.studY());
+
+        Brick second = bricks.get(1);
+        assertEquals(2, second.x());
+        assertEquals(0, second.y());
+        assertEquals(0, second.z());
+        assertEquals(2, second.studX());
+        assertEquals(1, second.studY());
+
+        Brick third = bricks.get(2);
+        assertEquals(4, third.x());
+        assertEquals(0, third.y());
+        assertEquals(0, third.z());
+        assertEquals(1, third.studX());
+        assertEquals(1, third.studY());
+    }
+
+    @Test
+    void testNoVertical1x2BricksEverPlaced() {
+        VoxelGrid surface = new VoxelGrid(10, 10, 5);
+
+        // Fill a pattern that might trigger vertical placement if allowed
+        for (int z = 0; z < 2; z++) {
+            for (int y = 0; y < 8; y++) {
+                for (int x = 0; x < 8; x++) {
+                    surface.setFilled(x, y, z, true);
+                }
+            }
+        }
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface);
+
+        // Verify no brick has the forbidden 1x2 vertical orientation
+        for (Brick brick : bricks) {
+            assertFalse(brick.studX() == 1 && brick.studY() == 2,
+                "Found forbidden 1x2 vertical brick at (" + brick.x() + "," +
+                brick.y() + "," + brick.z() + "): studX=" + brick.studX() +
+                ", studY=" + brick.studY());
+        }
+
+        // Verify only 2x2, 2x1 and 1x1 bricks are used
+        for (Brick brick : bricks) {
+            assertTrue(
+                (brick.studX() == 2 && brick.studY() == 2) ||
+                (brick.studX() == 2 && brick.studY() == 1) ||
+                (brick.studX() == 1 && brick.studY() == 1),
+                "Found invalid brick dimension at (" + brick.x() + "," +
+                brick.y() + "," + brick.z() + "): studX=" + brick.studX() +
+                ", studY=" + brick.studY()
+            );
+        }
     }
 }

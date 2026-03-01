@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 import com.lego.export.BrickObjExporter;
+import com.lego.export.VoxelObjExporter;
 import com.lego.mesh.MeshNormalizer;
 import com.lego.mesh.ObjLoader;
 import com.lego.model.Brick;
@@ -32,13 +33,14 @@ public final class Main {
     }
 
     static int run(String[] args, PrintStream out, PrintStream err) {
-        if (args == null || (args.length != 2 && args.length != 3)) {
+        if (args == null || (args.length != 2 && args.length != 3 && args.length != 4)) {
             printUsage(err);
             return 1;
         }
 
         Path objPath = Path.of(args[0]);
-        Path outputObjPath = args.length == 3 ? Path.of(args[2]) : null;
+        Path outputObjPath = args.length >= 3 ? Path.of(args[2]) : null;
+        String exportMode = args.length == 4 ? args[3] : "brick";
         int resolution;
         try {
             resolution = Integer.parseInt(args[1]);
@@ -50,6 +52,12 @@ public final class Main {
 
         if (resolution < 2) {
             err.println("Error: resolution must be >= 2.");
+            printUsage(err);
+            return 1;
+        }
+
+        if (!exportMode.equals("brick") && !exportMode.equals("voxel-surface") && !exportMode.equals("voxel-solid")) {
+            err.println("Error: export mode must be 'brick', 'voxel-surface', or 'voxel-solid'.");
             printUsage(err);
             return 1;
         }
@@ -81,8 +89,20 @@ public final class Main {
 
             if (outputObjPath != null) {
                 try {
-                    BrickObjExporter.export(bricks, outputObjPath);
-                    out.println("Visual OBJ exported: " + outputObjPath.toAbsolutePath());
+                    switch (exportMode) {
+                        case "brick":
+                            BrickObjExporter.export(bricks, outputObjPath);
+                            out.println("Visual OBJ exported (brick): " + outputObjPath.toAbsolutePath());
+                            break;
+                        case "voxel-surface":
+                            VoxelObjExporter.export(surface, outputObjPath);
+                            out.println("Visual OBJ exported (voxel-surface): " + outputObjPath.toAbsolutePath());
+                            break;
+                        case "voxel-solid":
+                            VoxelObjExporter.export(solid, outputObjPath);
+                            out.println("Visual OBJ exported (voxel-solid): " + outputObjPath.toAbsolutePath());
+                            break;
+                    }
                 } catch (IOException e) {
                     err.println("Error: failed to write output OBJ file: " + e.getMessage());
                     return 1;
@@ -100,6 +120,7 @@ public final class Main {
     }
 
     private static void printUsage(PrintStream err) {
-        err.println("Usage: java -jar legomodel.jar <objPath> <resolution> [outputObjPath]");
+        err.println("Usage: java -jar legomodel.jar <objPath> <resolution> [outputObjPath] [exportMode]");
+        err.println("  exportMode: 'brick' (default), 'voxel-surface', or 'voxel-solid'");
     }
 }
