@@ -12,8 +12,13 @@ import com.lego.model.Vector3;
 public final class Voxelizer {
 
     private static final double EPSILON = 1e-9;
-    private static final double RAY_BIAS_Y = 1e-6;
-    private static final double RAY_BIAS_Z = 2e-6;
+    // Small biases applied to Y and Z ray origins to avoid numerical instability
+    // when rays intersect triangles exactly on shared edges. Values are kept
+    // very small (< 1e-5) to minimize impact on symmetry while ensuring robust
+    // boundary coverage.  Slightly different values help avoid pathological cases
+    // where multiple voxels align perfectly with geometric features.
+    private static final double RAY_BIAS_Y = 1.1e-6;
+    private static final double RAY_BIAS_Z = 1.2e-6;
 
     private Voxelizer() {
         // Utility class, prevent instantiation

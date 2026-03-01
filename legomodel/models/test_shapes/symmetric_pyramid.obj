@@ -1,0 +1,28 @@
+# Symmetric pyramid centered at origin
+# Base: 4x4 square in XZ plane (Y=0)
+# Apex: at (2, 4, 2)
+# Perfect Y-Z mirror symmetry across X=2 plane
+# Perfect X-Z mirror symmetry across Y=2 plane (for base)
+
+# Base vertices (Y=0, Z=0..4, X=0..4)
+v 0 0 0
+v 4 0 0
+v 4 0 4
+v 0 0 4
+
+# Apex vertex
+v 2 4 2
+
+# Four triangular faces (pyramid sides)
+# Front face (Z=0)
+f 1 2 5
+# Right face (X=4)
+f 2 3 5
+# Back face (Z=4)
+f 3 4 5
+# Left face (X=0)
+f 4 1 5
+
+# Base (two triangles)
+f 1 3 2
+f 1 4 3
