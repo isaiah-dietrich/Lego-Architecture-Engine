@@ -177,6 +177,30 @@ public final class CuratedCatalogLoader {
         }
     }
 
+    /**
+     * Parses the 'active' field with strict validation.
+     * Rejects ambiguous values like "tru", "yes", "1" - only "true" and "false" are accepted.
+     * Fails fast with clear error on invalid input.
+     *
+     * @param activeValue the value from the 'active' column
+     * @param rowNumber the CSV record number (1-based) for error messages
+     * @return true if "true", false if "false"
+     * @throws IllegalArgumentException if value is not exactly "true" or "false"
+     */
+    private static boolean parseActiveField(String activeValue, long rowNumber) {
+        if ("true".equalsIgnoreCase(activeValue)) {
+            return true;
+        } else if ("false".equalsIgnoreCase(activeValue)) {
+            return false;
+        } else {
+            throw new IllegalArgumentException(
+                "Invalid 'active' field in row " + (rowNumber + 1) + ": " +
+                "expected 'true' or 'false', got '" + activeValue + "'. " +
+                "Typos like 'tru', 'yes', '1' are not accepted (fail fast)."
+            );
+        }
+    }
+
     private static CatalogPart parseRecord(CSVRecord record) {
         String partId = record.get("part_id");
         String name = record.get("name");
@@ -186,7 +210,7 @@ public final class CuratedCatalogLoader {
         int studY = Integer.parseInt(record.get("stud_y"));
         String heightUnitsRaw = record.get("height_units");
         String material = record.get("material");
-        boolean active = Boolean.parseBoolean(record.get("active"));
+        boolean active = parseActiveField(record.get("active"), record.getRecordNumber());
 
         return CatalogPart.of(
             partId,

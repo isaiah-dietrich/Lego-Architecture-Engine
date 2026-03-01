@@ -46,6 +46,9 @@ public final class BrickPlacer {
     /**
      * Generates a list of bricks from a surface voxel grid using provided dimensions.
      * Test-friendly overload for dependency injection.
+     * 
+     * Uses consistent scan direction (left-to-right, front-to-back) for more predictable
+     * and symmetric results than multi-orientation optimization.
      *
      * @param surface the surface voxel grid
      * @param allowedDimensions allowed brick dimensions in priority order (largest first)
@@ -60,14 +63,38 @@ public final class BrickPlacer {
             throw new IllegalArgumentException("allowedDimensions must not be null or empty");
         }
 
+        // Use single consistent orientation for predictability
+        return placeBricksWithOrientation(surface, allowedDimensions, false, false);
+    }
+
+    /**
+     * Generates bricks with a specific scan orientation.
+     *
+     * @param surface the surface voxel grid
+     * @param allowedDimensions allowed brick dimensions
+     * @param reverseX whether to scan x in descending order
+     * @param reverseY whether to scan y in descending order
+     * @return list of bricks
+     */
+    private static List<Brick> placeBricksWithOrientation(VoxelGrid surface, List<Dimension> allowedDimensions,
+                                                           boolean reverseX, boolean reverseY) {
         List<Brick> bricks = new ArrayList<>();
         boolean[][][] covered = new boolean[surface.width()][surface.height()][surface.depth()];
 
-        // Process layer by layer (z ascending)
+        // Process layer by layer (z always ascending, bottom to top)
         for (int z = 0; z < surface.depth(); z++) {
-            // Scan in deterministic order: y ascending, x ascending
-            for (int y = 0; y < surface.height(); y++) {
-                for (int x = 0; x < surface.width(); x++) {
+            // Scan y in specified direction
+            int yStart = reverseY ? surface.height() - 1 : 0;
+            int yEnd = reverseY ? -1 : surface.height();
+            int yStep = reverseY ? -1 : 1;
+
+            for (int y = yStart; y != yEnd; y += yStep) {
+                // Scan x in specified direction
+                int xStart = reverseX ? surface.width() - 1 : 0;
+                int xEnd = reverseX ? -1 : surface.width();
+                int xStep = reverseX ? -1 : 1;
+
+                for (int x = xStart; x != xEnd; x += xStep) {
                     if (surface.isFilled(x, y, z) && !covered[x][y][z]) {
                         Brick brick = placeBrickAt(surface, covered, x, y, z, allowedDimensions);
                         

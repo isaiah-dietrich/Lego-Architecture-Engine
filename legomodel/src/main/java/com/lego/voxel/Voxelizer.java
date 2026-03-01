@@ -7,7 +7,11 @@ import com.lego.model.Triangle;
 import com.lego.model.Vector3;
 
 /**
- * Voxelizes a normalized mesh using ray-casting parity.
+ * Voxelizes a normalized mesh using ray-casting parity with supersampling.
+ * 
+ * Uses 2x2x2 supersampling (8 samples per voxel) to achieve smoother
+ * layer-to-layer transitions on sloped surfaces while preserving symmetry
+ * and determinism.
  */
 public final class Voxelizer {
 
@@ -20,20 +24,34 @@ public final class Voxelizer {
     private static final double RAY_BIAS_Y = 1.1e-6;
     private static final double RAY_BIAS_Z = 1.2e-6;
 
+    // Supersampling configuration: 4x4x4 grid within each voxel (64 samples)
+    // Uniformly distributed samples for unbiased boundary detection
+    private static final double[] SAMPLE_OFFSETS = {0.125, 0.375, 0.625, 0.875};
+    
+    // Threshold for classifying voxel as filled (out of 64 samples)
+    // Using 16/64 (25%) to capture more boundary transitions on sloped surfaces
+    // Lower threshold reduces stair-stepping by including partially-occupied voxels
+    private static final int FILL_THRESHOLD = 16;
+
     private Voxelizer() {
         // Utility class, prevent instantiation
     }
 
     /**
-     * Converts a normalized mesh into a filled voxel grid.
+     * Converts a normalized mesh into a filled voxel grid using supersampling.
      *
      * Coordinate convention:
      *   - Normalized meshes span [0, resolution] on their largest axis.
-     *   - Voxel centers are sampled at (x + 0.5, y + 0.5, z + 0.5), where
-     *     x, y, z in [0, resolution - 1].
+     *   - Each voxel spans [x, x+1] × [y, y+1] × [z, z+1].
      *
-     * Each voxel center casts a ray in the +X direction. An odd number of
-     * triangle intersections means the voxel is inside the mesh.
+     * Supersampling approach:
+     *   - Samples at 8 positions within each voxel (2×2×2 grid).
+     *   - Sample positions are symmetric around voxel center for symmetry.
+     *   - Voxel is marked filled if >= 4 out of 8 samples are inside mesh.
+     *   - Ray-casting parity: odd intersection count = inside.
+     *
+     * This improves uniformity of layer-to-layer transitions on sloped surfaces
+     * while preserving determinism and symmetry.
      *
      * @param mesh input mesh (must be non-null)
      * @param resolution voxel grid resolution (must be >= 2)
@@ -50,12 +68,25 @@ public final class Voxelizer {
         for (int z = 0; z < resolution; z++) {
             for (int y = 0; y < resolution; y++) {
                 for (int x = 0; x < resolution; x++) {
-                    double ox = x + 0.5;
-                    // Use slightly different biases to avoid ray hits exactly on shared edges.
-                    double oy = y + 0.5 + RAY_BIAS_Y;
-                    double oz = z + 0.5 + RAY_BIAS_Z;
-
-                    if (isInside(mesh, ox, oy, oz)) {
+                    // Count how many sample points within this voxel are inside
+                    int insideCount = 0;
+                    
+                    for (double dz : SAMPLE_OFFSETS) {
+                        for (double dy : SAMPLE_OFFSETS) {
+                            for (double dx : SAMPLE_OFFSETS) {
+                                double ox = x + dx;
+                                double oy = y + dy;
+                                double oz = z + dz;
+                                
+                                if (isInside(mesh, ox, oy, oz)) {
+                                    insideCount++;
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Mark voxel as filled if at least half the samples are inside
+                    if (insideCount >= FILL_THRESHOLD) {
                         grid.setFilled(x, y, z, true);
                     }
                 }

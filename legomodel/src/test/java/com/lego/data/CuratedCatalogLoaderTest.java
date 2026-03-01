@@ -300,6 +300,88 @@ class CuratedCatalogLoaderTest {
         assertTrue(parts.isEmpty());
     }
 
+    @Test
+    void testStrictActiveValidation_RejectsTypos() throws IOException {
+        // Arrange: Create catalog with typo in active field (common misspelling)
+        createCatalogFile(tempDir, VALID_HEADER +
+            "3001,Brick 2x4,11,Bricks,2,4,1,Plastic,tru\n"  // Typo: "tru" instead of "true"
+        );
+
+        // Act & Assert: Should fail fast with clear error about typo
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+            () -> CuratedCatalogLoader.loadActiveParts(tempDir)
+        );
+
+        assertTrue(ex.getMessage().contains("Invalid 'active' field"),
+            "Expected error about invalid active field, got: " + ex.getMessage());
+        assertTrue(ex.getMessage().contains("tru"),
+            "Expected error to mention the actual value 'tru'");
+    }
+
+    @Test
+    void testStrictActiveValidation_RejectsYes() throws IOException {
+        // Arrange: Create catalog with alternative boolean representation
+        createCatalogFile(tempDir, VALID_HEADER +
+            "3001,Brick 2x4,11,Bricks,2,4,1,Plastic,yes\n"  // Invalid: "yes" instead of "true"
+        );
+
+        // Act & Assert: Should fail fast with clear error
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+            () -> CuratedCatalogLoader.loadActiveParts(tempDir)
+        );
+
+        assertTrue(ex.getMessage().contains("Invalid 'active' field"),
+            "Expected error about invalid active field");
+    }
+
+    @Test
+    void testStrictActiveValidation_RejectsNumeric() throws IOException {
+        // Arrange: Create catalog with numeric boolean representation
+        createCatalogFile(tempDir, VALID_HEADER +
+            "3001,Brick 2x4,11,Bricks,2,4,1,Plastic,1\n"  // Invalid: "1" instead of "true"
+        );
+
+        // Act & Assert: Should fail fast with clear error
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+            () -> CuratedCatalogLoader.loadActiveParts(tempDir)
+        );
+
+        assertTrue(ex.getMessage().contains("Invalid 'active' field"),
+            "Expected error about invalid active field");
+    }
+
+    @Test
+    void testStrictActiveValidation_AcceptsTrue() throws IOException {
+        // Arrange: Create catalog with valid "true" (case-insensitive)
+        createCatalogFile(tempDir, VALID_HEADER +
+            "3001,Brick 2x4,11,Bricks,2,4,1,Plastic,true\n" +
+            "3002,Brick 2x3,11,Bricks,2,3,1,Plastic,TRUE\n" +  // Uppercase variant
+            "3003,Brick 2x2,11,Bricks,2,2,1,Plastic,True\n"   // Mixed case variant
+        );
+
+        // Act: Load active parts (should succeed)
+        List<CatalogPart> parts = CuratedCatalogLoader.loadActiveParts(tempDir);
+
+        // Assert: All three parts loaded successfully
+        assertEquals(3, parts.size());
+        assertTrue(parts.stream().allMatch(CatalogPart::active));
+    }
+
+    @Test
+    void testStrictActiveValidation_AcceptsFalse() throws IOException {
+        // Arrange: Create catalog with valid "false" (case-insensitive)
+        createCatalogFile(tempDir, VALID_HEADER +
+            "3001,Brick 2x4,11,Bricks,2,4,1,Plastic,false\n" +
+            "3002,Brick 2x3,11,Bricks,2,3,1,Plastic,FALSE\n"  // Uppercase variant
+        );
+
+        // Act: Load active parts (should succeed, returns empty since all are false)
+        List<CatalogPart> parts = CuratedCatalogLoader.loadActiveParts(tempDir);
+
+        // Assert: No parts returned (all inactive)
+        assertTrue(parts.isEmpty());
+    }
+
     private void createCatalogFile(Path baseDir, String content) throws IOException {
         Path catalogDir = baseDir.resolve("data/catalog");
         Files.createDirectories(catalogDir);

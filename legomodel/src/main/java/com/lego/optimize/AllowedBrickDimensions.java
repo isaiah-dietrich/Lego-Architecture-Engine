@@ -105,8 +105,8 @@ public final class AllowedBrickDimensions {
      * Extracts and filters dimensions from catalog parts.
      * 
      * Filtering rules:
-     * - Only heightUnitsRaw == "1" (full-height bricks)
-     * - Only category "Bricks" (excludes slopes, special parts, plates)
+     * - Only heightUnitsRaw == "1" or "1.0" (full-height bricks, normalized)
+     * - Only category "Bricks" (case-insensitive, trimmed) - excludes slopes, special, plates
      * - Handles orientations: adds 2x1 horizontal but excludes 1x2 vertical
      * 
      * @param parts catalog parts to extract dimensions from
@@ -116,13 +116,15 @@ public final class AllowedBrickDimensions {
         Set<Dimension> uniqueDimensions = new HashSet<>();
 
         for (CatalogPart part : parts) {
-            // Filter: only full-height bricks
-            if (!"1".equals(part.heightUnitsRaw())) {
+            // Filter: only full-height bricks (accept both "1" and "1.0")
+            String height = part.heightUnitsRaw().trim();
+            if (!isFullHeight(height)) {
                 continue;
             }
 
-            // Filter: only standard "Bricks" category (excludes slopes, special, plates)
-            if (!"Bricks".equals(part.categoryName())) {
+            // Filter: only standard "Bricks" category (case-insensitive, trimmed)
+            String category = part.categoryName().trim();
+            if (!"bricks".equalsIgnoreCase(category)) {
                 continue;
             }
 
@@ -156,5 +158,16 @@ public final class AllowedBrickDimensions {
         );
 
         return sorted;
+    }
+
+    /**
+     * Checks if a height value represents a full-height brick.
+     * Accepts "1" or "1.0" (common format variations).
+     *
+     * @param height the height string from catalog
+     * @return true if represents full-height brick
+     */
+    private static boolean isFullHeight(String height) {
+        return "1".equals(height) || "1.0".equals(height);
     }
 }

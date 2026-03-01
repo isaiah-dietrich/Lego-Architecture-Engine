@@ -11,6 +11,7 @@ import com.lego.mesh.MeshNormalizer;
 import com.lego.mesh.ObjLoader;
 import com.lego.model.Brick;
 import com.lego.model.Mesh;
+import com.lego.optimize.AllowedBrickDimensions;
 import com.lego.optimize.BrickPlacer;
 import com.lego.voxel.SurfaceExtractor;
 import com.lego.voxel.VoxelGrid;
@@ -33,6 +34,20 @@ public final class Main {
     }
 
     static int run(String[] args, PrintStream out, PrintStream err) {
+        return run(args, out, err, null);
+    }
+
+    /**
+     * Internal overload for testing: accepts optional catalog base directory.
+     * When baseDir is null, uses default catalog location.
+     * 
+     * @param args command-line arguments
+     * @param out output stream for normal messages
+     * @param err output stream for errors
+     * @param catalogBaseDir optional base directory for catalog loading (test-only)
+     * @return exit code
+     */
+    static int run(String[] args, PrintStream out, PrintStream err, Path catalogBaseDir) {
         if (args == null || (args.length != 2 && args.length != 3 && args.length != 4)) {
             printUsage(err);
             return 1;
@@ -67,7 +82,11 @@ public final class Main {
             Mesh normalized = MeshNormalizer.normalize(mesh, resolution);
             VoxelGrid solid = Voxelizer.voxelize(normalized, resolution);
             VoxelGrid surface = SurfaceExtractor.extractSurface(solid);
-            List<Brick> bricks = BrickPlacer.placeBricks(surface);
+            
+            // Load dimensions from catalog (test-friendly with optional base dir)
+            List<Brick> bricks = catalogBaseDir != null
+                ? BrickPlacer.placeBricks(surface, AllowedBrickDimensions.loadFromCatalog(catalogBaseDir))
+                : BrickPlacer.placeBricks(surface);
 
             int triangleCount = mesh.triangleCount();
             int totalVoxels = resolution * resolution * resolution;

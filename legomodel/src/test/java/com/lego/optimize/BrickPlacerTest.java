@@ -1,5 +1,6 @@
 package com.lego.optimize;
 
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -11,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
 import com.lego.model.Brick;
+import com.lego.optimize.AllowedBrickDimensions.Dimension;
 import com.lego.voxel.VoxelGrid;
 
 class BrickPlacerTest {
@@ -368,6 +370,326 @@ class BrickPlacerTest {
                 brick.y() + "," + brick.z() + "): studX=" + brick.studX() +
                 ", studY=" + brick.studY()
             );
+        }
+    }
+
+    // ========== PRIORITY POLICY TESTS ==========
+
+    @Test
+    void testPriorityPolicy_Prefers2x4OverSmallerCandidates() {
+        VoxelGrid surface = new VoxelGrid(4, 6, 1);
+        for (int x = 0; x < 2; x++) {
+            for (int y = 0; y < 4; y++) {
+                surface.setFilled(x, y, 0, true);
+            }
+        }
+
+        List<Dimension> dims = Arrays.asList(
+            new Dimension(2, 4),
+            new Dimension(2, 2),
+            new Dimension(2, 1),
+            new Dimension(1, 1)
+        );
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, dims);
+
+        assertEquals(1, bricks.size());
+        Brick placed = bricks.get(0);
+        assertEquals(0, placed.x());
+        assertEquals(0, placed.y());
+        assertEquals(0, placed.z());
+        assertEquals(2, placed.studX());
+        assertEquals(4, placed.studY());
+    }
+
+    @Test
+    void testPriorityPolicy_Uses2x2When2x4DoesNotFit() {
+        VoxelGrid surface = new VoxelGrid(4, 4, 1);
+        for (int x = 0; x < 2; x++) {
+            for (int y = 0; y < 2; y++) {
+                surface.setFilled(x, y, 0, true);
+            }
+        }
+
+        List<Dimension> dims = Arrays.asList(
+            new Dimension(2, 4),
+            new Dimension(2, 2),
+            new Dimension(2, 1),
+            new Dimension(1, 1)
+        );
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, dims);
+
+        assertEquals(1, bricks.size());
+        assertEquals(2, bricks.get(0).studX());
+        assertEquals(2, bricks.get(0).studY());
+    }
+
+    @Test
+    void testPriorityPolicy_Uses2x1When2x4And2x2CannotFit() {
+        VoxelGrid surface = new VoxelGrid(4, 4, 1);
+        surface.setFilled(0, 0, 0, true);
+        surface.setFilled(1, 0, 0, true);
+
+        List<Dimension> dims = Arrays.asList(
+            new Dimension(2, 4),
+            new Dimension(2, 2),
+            new Dimension(2, 1),
+            new Dimension(1, 1)
+        );
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, dims);
+
+        assertEquals(1, bricks.size());
+        assertEquals(2, bricks.get(0).studX());
+        assertEquals(1, bricks.get(0).studY());
+    }
+
+    @Test
+    void testPriorityPolicy_Uses1x1FallbackWhenNeeded() {
+        VoxelGrid surface = new VoxelGrid(3, 3, 1);
+        surface.setFilled(1, 1, 0, true);
+
+        List<Dimension> dims = Arrays.asList(
+            new Dimension(2, 4),
+            new Dimension(2, 2),
+            new Dimension(2, 1),
+            new Dimension(1, 1)
+        );
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, dims);
+
+        assertEquals(1, bricks.size());
+        assertEquals(1, bricks.get(0).studX());
+        assertEquals(1, bricks.get(0).studY());
+    }
+
+    @Test
+    void testPriorityPolicy_DeterminismRemainsUnchanged() {
+        VoxelGrid surface = new VoxelGrid(6, 6, 1);
+        for (int x = 0; x < 2; x++) {
+            for (int y = 0; y < 4; y++) {
+                surface.setFilled(x, y, 0, true);
+            }
+        }
+        surface.setFilled(3, 0, 0, true);
+        surface.setFilled(4, 0, 0, true);
+        surface.setFilled(5, 5, 0, true);
+
+        List<Dimension> dims = Arrays.asList(
+            new Dimension(2, 4),
+            new Dimension(2, 2),
+            new Dimension(2, 1),
+            new Dimension(1, 1)
+        );
+
+        List<Brick> first = BrickPlacer.placeBricks(surface, dims);
+        List<Brick> second = BrickPlacer.placeBricks(surface, dims);
+
+        assertEquals(first.size(), second.size());
+        for (int i = 0; i < first.size(); i++) {
+            Brick b1 = first.get(i);
+            Brick b2 = second.get(i);
+            assertEquals(b1.x(), b2.x());
+            assertEquals(b1.y(), b2.y());
+            assertEquals(b1.z(), b2.z());
+            assertEquals(b1.studX(), b2.studX());
+            assertEquals(b1.studY(), b2.studY());
+        }
+    }
+
+    // ========== REGRESSION TESTS: Catalog-Driven Behavior ==========
+
+    @Test
+    void testRegressionCatalogToggle_2x4Disabled() {
+        // When 2x4 is disabled, placement should use smaller dimensions
+        VoxelGrid surface = new VoxelGrid(5, 5, 1);
+
+        // Fill a 4x1 horizontal strip
+        surface.setFilled(0, 0, 0, true);
+        surface.setFilled(1, 0, 0, true);
+        surface.setFilled(2, 0, 0, true);
+        surface.setFilled(3, 0, 0, true);
+
+        // Without 2x4, allowed dimensions are only 2x1 and 1x1
+        List<Dimension> limited = Arrays.asList(
+            new Dimension(2, 1),
+            new Dimension(1, 1)
+        );
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, limited);
+
+        // Should produce two 2x1 bricks
+        assertEquals(2, bricks.size());
+        assertEquals(2, bricks.get(0).studX());
+        assertEquals(1, bricks.get(0).studY());
+        assertEquals(2, bricks.get(1).studX());
+        assertEquals(1, bricks.get(1).studY());
+    }
+
+    @Test
+    void testRegressionCatalogToggle_2x4Enabled() {
+        // When 2x4 is enabled, placement should prefer larger bricks
+        VoxelGrid surface = new VoxelGrid(5, 5, 1);
+
+        // Fill a 4x1 horizontal strip
+        surface.setFilled(0, 0, 0, true);
+        surface.setFilled(1, 0, 0, true);
+        surface.setFilled(2, 0, 0, true);
+        surface.setFilled(3, 0, 0, true);
+
+        // With 2x4 enabled (but 4x1 not possible due to grid width)
+        List<Dimension> full = Arrays.asList(
+            new Dimension(2, 4),
+            new Dimension(2, 2),
+            new Dimension(2, 1),
+            new Dimension(1, 1)
+        );
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, full);
+
+        // Should still produce two 2x1 bricks (4x1 dimension isn't available)
+        // but this verifies we're using the full catalog
+        assertEquals(2, bricks.size());
+    }
+
+    @Test
+    void testRegressionCatalogToggle_2x2CanCreateLargerPatterns() {
+        // When 2x2 is available, a 2x2 pattern should be placed as single brick
+        VoxelGrid surface = new VoxelGrid(5, 5, 1);
+
+        surface.setFilled(0, 0, 0, true);
+        surface.setFilled(1, 0, 0, true);
+        surface.setFilled(0, 1, 0, true);
+        surface.setFilled(1, 1, 0, true);
+
+        // With 2x2 enabled
+        List<Dimension> full = Arrays.asList(
+            new Dimension(2, 4),
+            new Dimension(2, 2),
+            new Dimension(2, 1),
+            new Dimension(1, 1)
+        );
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, full);
+
+        // Should produce single 2x2 brick
+        assertEquals(1, bricks.size());
+        assertEquals(2, bricks.get(0).studX());
+        assertEquals(2, bricks.get(0).studY());
+    }
+
+    @Test
+    void testRegressionCatalogToggle_2x2Disabled_UsesFallback() {
+        // When 2x2 is disabled, a 2x2 pattern should fall back to smaller bricks
+        VoxelGrid surface = new VoxelGrid(5, 5, 1);
+
+        surface.setFilled(0, 0, 0, true);
+        surface.setFilled(1, 0, 0, true);
+        surface.setFilled(0, 1, 0, true);
+        surface.setFilled(1, 1, 0, true);
+
+        // Without 2x2, only 2x1 and 1x1 available
+        List<Dimension> limited = Arrays.asList(
+            new Dimension(2, 1),
+            new Dimension(1, 1)
+        );
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, limited);
+
+        // Should produce two 2x1 bricks (one per row)
+        assertEquals(2, bricks.size());
+        for (Brick brick : bricks) {
+            assertEquals(2, brick.studX());
+            assertEquals(1, brick.studY());
+        }
+    }
+
+    @Test
+    void testRegressionMissing1x1Fallback_FailsFast() {
+        // If 1x1 (fallback) is missing, should fail fast with clear error
+        VoxelGrid surface = new VoxelGrid(3, 3, 1);
+        surface.setFilled(1, 1, 0, true);
+
+        // Only large dimensions, no 1x1 fallback
+        List<Dimension> noFallback = Arrays.asList(
+            new Dimension(2, 4),
+            new Dimension(2, 2)
+        );
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class,
+            () -> BrickPlacer.placeBricks(surface, noFallback)
+        );
+
+        assertTrue(ex.getMessage().contains("Cannot place any brick"),
+            "Expected error message about missing fallback, got: " + ex.getMessage());
+        assertTrue(ex.getMessage().contains("1x1"),
+            "Expected mention of 1x1 fallback in error");
+    }
+
+    @Test
+    void testRegressionNoDuplicateDimensionsInPlacement() {
+        // Verify no duplicate dimensions cause issues
+        VoxelGrid surface = new VoxelGrid(5, 5, 1);
+
+        // Fill 4x4 patch for testing
+        for (int x = 0; x < 4; x++) {
+            for (int y = 0; y < 4; y++) {
+                surface.setFilled(x, y, 0, true);
+            }
+        }
+
+        // Dimensions with duplicates (should be deduplicated elsewhere, but don't break placement)
+        List<Dimension> dims = Arrays.asList(
+            new Dimension(2, 2),
+            new Dimension(2, 2),  // Duplicate
+            new Dimension(2, 1),
+            new Dimension(1, 1)
+        );
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, dims);
+
+        // Should still work correctly
+        assertTrue(bricks.size() > 0);
+        assertTrue(bricks.size() <= 4);  // At most 4 (all 1x1) or fewer with larger bricks
+    }
+
+    @Test
+    void testRegressionDeterministicOrderWithDifferentDimensions() {
+        // Verify placement order is deterministic even with different available dimensions
+        VoxelGrid surface = new VoxelGrid(4, 4, 1);
+
+        // Fill a scattered pattern
+        surface.setFilled(0, 0, 0, true);
+        surface.setFilled(1, 0, 0, true);
+        surface.setFilled(0, 1, 0, true);
+        surface.setFilled(2, 2, 0, true);
+
+        List<Dimension> dims1 = Arrays.asList(
+            new Dimension(2, 2),
+            new Dimension(2, 1),
+            new Dimension(1, 1)
+        );
+
+        List<Dimension> dims2 = Arrays.asList(
+            new Dimension(2, 2),
+            new Dimension(2, 1),
+            new Dimension(1, 1)
+        );
+
+        List<Brick> result1 = BrickPlacer.placeBricks(surface, dims1);
+        List<Brick> result2 = BrickPlacer.placeBricks(surface, dims2);
+
+        // Should be identical
+        assertEquals(result1.size(), result2.size());
+        for (int i = 0; i < result1.size(); i++) {
+            Brick b1 = result1.get(i);
+            Brick b2 = result2.get(i);
+            assertEquals(b1.x(), b2.x());
+            assertEquals(b1.y(), b2.y());
+            assertEquals(b1.z(), b2.z());
+            assertEquals(b1.studX(), b2.studX());
+            assertEquals(b1.studY(), b2.studY());
         }
     }
 }
