@@ -1,0 +1,39 @@
+part_id,name,category,category_name,stud_x,stud_y,height_units,material,active
+11211,Brick Special 1 x 2 with 2 Studs on 1 Side,5,Bricks Special,1,2,1,Plastic,false
+11477,Slope Curved 2 x 1 No Studs [1/2 Bow],37,Bricks Curved,2,1,1,Plastic,false
+15068,Slope Curved 2 x 2 x 2/3,37,Bricks Curved,2,2,2/3,Plastic,false
+15573,Plate Special 1 x 2 with 1 Stud with Groove and Inside Stud Holder (Jumper),9,Plates Special,1,2,1/3,Plastic,false
+22385,Tile Special 2 x 3 Pentagonal,15,Tiles Special,2,3,1/3,Plastic,false
+2420,Plate 2 x 2 Corner,14,Plates,2,2,1,Plastic,false
+29119,Slope Curved 2 x 1 with Stud Notch Right,37,Bricks Curved,2,1,1,Plastic,false
+3001,Brick 2 x 4,11,Bricks,2,4,1,Plastic,true
+3002,Brick 2 x 3,11,Bricks,2,3,1,Plastic,false
+3003,Brick 2 x 2,11,Bricks,2,2,1,Plastic,true
+3004,Brick 1 x 2,11,Bricks,1,2,1,Plastic,true
+3005,Brick 1 x 1,11,Bricks,1,1,1,Plastic,true
+3020,Plate 2 x 4,14,Plates,2,4,1/3,Plastic,true
+3021,Plate 2 x 3,14,Plates,2,3,1/3,Plastic,false
+3022,Plate 2 x 2,14,Plates,2,2,1/3,Plastic,true
+3023,Plate 1 x 2,14,Plates,1,2,1/3,Plastic,true
+3024,Plate 1 x 1,14,Plates,1,1,1/3,Plastic,true
+3037,Slope 45° 2 x 4,3,Bricks Sloped,2,4,1,Plastic,false
+3039,Slope 45° 2 x 2,3,Bricks Sloped,2,2,1,Plastic,false
+3040b,Slope 45° 2 x 1 with Bottom Pin,3,Bricks Sloped,2,1,1,Plastic,false
+30414,Brick Special 1 x 4 with 4 Studs on One Side,5,Bricks Special,1,4,1,Plastic,false
+3044b,Slope 45° 2 x 1 Double with Ovoid Bottom Pin,3,Bricks Sloped,2,1,1,Plastic,false
+3048b,Slope 45° 2 x 1 Triple Smooth,3,Bricks Sloped,2,1,1,Plastic,false
+3068b,Tile 2 x 2 with Groove,19,Tiles,2,2,1,Plastic,false
+3069b,Tile 1 x 2 with Groove,19,Tiles,1,2,1,Plastic,false
+3070b,Tile 1 x 1 with Groove,19,Tiles,1,1,1,Plastic,false
+3298,Slope 33° 3 x 2,3,Bricks Sloped,3,2,1,Plastic,false
+3622,Brick 1 x 3,11,Bricks,1,3,1,Plastic,false
+3623,Plate 1 x 3,14,Plates,1,3,1,Plastic,false
+3660,"Slope Inverted 45° 2 x 2 [Ovoid Bottom Pin, Bar-sized Stud Holes]",3,Bricks Sloped,2,2,1,Plastic,false
+3665,Slope Inverted 45° 2 x 1,3,Bricks Sloped,2,1,1,Plastic,false
+3794b,Plate Special 1 x 2 with 1 Stud with Groove (Jumper),9,Plates Special,1,2,1/3,Plastic,false
+4070,Brick Special 1 x 1 with Headlight,5,Bricks Special,1,1,1,Plastic,false
+4286,Slope 33° 3 x 1,3,Bricks Sloped,3,1,1,Plastic,false
+85984,Slope 30° 1 x 2 x 2/3,3,Bricks Sloped,1,2,2/3,Plastic,false
+87079,Tile 2 x 4 with Groove,19,Tiles,2,4,1/3,Plastic,false
+87087,Brick Special 1 x 1 with Stud on 1 Side,5,Bricks Special,1,1,1,Plastic,false
+87580,Plate Special 2 x 2 with Groove and Center Stud (Jumper),9,Plates Special,2,2,1/3,Plastic,false
