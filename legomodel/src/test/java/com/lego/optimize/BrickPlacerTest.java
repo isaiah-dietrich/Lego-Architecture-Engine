@@ -357,9 +357,10 @@ class BrickPlacerTest {
                 ", studY=" + brick.studY());
         }
 
-        // Verify only 2x2, 2x1 and 1x1 bricks are used
+        // Verify only catalog-allowed dimensions are used (2x4, 2x2, 2x1, 1x1)
         for (Brick brick : bricks) {
             assertTrue(
+                (brick.studX() == 2 && brick.studY() == 4) ||
                 (brick.studX() == 2 && brick.studY() == 2) ||
                 (brick.studX() == 2 && brick.studY() == 1) ||
                 (brick.studX() == 1 && brick.studY() == 1),
