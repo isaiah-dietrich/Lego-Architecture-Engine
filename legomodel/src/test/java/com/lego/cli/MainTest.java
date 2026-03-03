@@ -286,6 +286,134 @@ class MainTest {
         assertTrue(content.contains("# LEGO Architecture Engine brick export"));
     }
 
+    @Test
+    void testBlockTypeSummaryAppearsInOutput() throws IOException {
+        Path objPath = tempDir.resolve("triangle.obj");
+        Files.writeString(objPath, """
+            v 0 0 0
+            v 1 0 0
+            v 0 1 0
+            f 1 2 3
+            """);
+
+        ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
+        ByteArrayOutputStream errBuffer = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(outBuffer);
+        PrintStream err = new PrintStream(errBuffer);
+
+        int exitCode = Main.run(new String[] { objPath.toString(), "4" }, out, err);
+
+        assertEquals(0, exitCode);
+        String output = outBuffer.toString();
+        
+        // Verify that "Block types used:" appears in output
+        assertTrue(output.contains("Block types used:"), 
+            "Expected 'Block types used:' in output:\n" + output);
+        
+        // Verify that some block type entries appear (format: "2x2x1: 3")
+        assertTrue(output.contains("x") && output.contains(":"),
+            "Expected block type entries like '2x2x1: 3' in output:\n" + output);
+        
+        // Verify ordering: "Block types used:" comes after "Bricks generated:"
+        int bricksIdx = output.indexOf("Bricks generated:");
+        int blockTypesIdx = output.indexOf("Block types used:");
+        assertTrue(bricksIdx >= 0 && blockTypesIdx > bricksIdx,
+            "Expected 'Block types used:' to appear after 'Bricks generated:' in output:\n" + output);
+    }
+
+    @Test
+    void testBlockTypeSummaryCountsAreCorrect() throws IOException {
+        Path objPath = tempDir.resolve("cube.obj");
+        // Create a simple cube with 8 vertices forming 12 triangles (2 per face)
+        Files.writeString(objPath, """
+            v 0 0 0
+            v 1 0 0
+            v 0 1 0
+            v 1 1 0
+            v 0 0 1
+            v 1 0 1
+            v 0 1 1
+            v 1 1 1
+            f 1 2 3
+            f 2 4 3
+            f 1 2 6
+            f 1 6 5
+            f 1 3 7
+            f 1 7 5
+            f 4 2 6
+            f 4 6 8
+            f 4 3 7
+            f 4 7 8
+            f 5 6 8
+            f 5 8 7
+            """);
+
+        ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
+        ByteArrayOutputStream errBuffer = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(outBuffer);
+        PrintStream err = new PrintStream(errBuffer);
+
+        int exitCode = Main.run(new String[] { objPath.toString(), "4" }, out, err);
+
+        assertEquals(0, exitCode);
+        String output = outBuffer.toString();
+        
+        // Check that the output contains "Block types used:"
+        assertTrue(output.contains("Block types used:"), 
+            "Expected 'Block types used:' in output:\n" + output);
+        
+        // Parse the output to verify block type counts
+        String[] lines = output.split("\n");
+        boolean foundBlockTypesSection = false;
+        int totalBlocksFromSummary = 0;
+        
+        for (int i = 0; i < lines.length; i++) {
+            if (lines[i].contains("Block types used:")) {
+                foundBlockTypesSection = true;
+                // Parse subsequent lines until we hit a line that doesn't match the pattern
+                for (int j = i + 1; j < lines.length; j++) {
+                    String line = lines[j].trim();
+                    if (line.isEmpty() || !line.matches(".*\\d+x\\d+x\\d+:.*")) {
+                        break;
+                    }
+                    // Extract the count from lines like "2x2x1: 3"
+                    String[] parts = line.split(":");
+                    if (parts.length == 2) {
+                        try {
+                            int count = Integer.parseInt(parts[1].trim());
+                            totalBlocksFromSummary += count;
+                        } catch (NumberFormatException e) {
+                            // Skip lines that don't have valid counts
+                        }
+                    }
+                }
+                break;
+            }
+        }
+        
+        assertTrue(foundBlockTypesSection, "Did not find 'Block types used:' section in output");
+        
+        // Extract the brick count from "Bricks generated: N"
+        int generatedBrickCount = 0;
+        for (String line : lines) {
+            if (line.contains("Bricks generated:")) {
+                String[] parts = line.split(":");
+                if (parts.length == 2) {
+                    try {
+                        generatedBrickCount = Integer.parseInt(parts[1].trim());
+                    } catch (NumberFormatException e) {
+                        // Ignore
+                    }
+                }
+                break;
+            }
+        }
+        
+        // Verify that the sum of all block type counts equals the brick count
+        assertEquals(generatedBrickCount, totalBlocksFromSummary,
+            "Sum of block type counts should equal total brick count. Output:\n" + output);
+    }
+
     // ========== CLI-LEVEL CONFIDENCE TEST ==========
 
     @Test
@@ -307,18 +435,14 @@ class MainTest {
         PrintStream err = new PrintStream(errBuffer);
 
         // Run CLI with temporary catalog base dir (test-only overload)
-        // Catalog is loaded successfully - verifies catalog dimensions are being used
         int exitCode = Main.run(new String[] { objPath.toString(), "4" }, out, err, tempDir);
 
         assertEquals(0, exitCode);
         String output = outBuffer.toString();
         String errors = errBuffer.toString();
-        
-        // Verify no catalog-related errors
+
         assertFalse(errors.contains("No valid brick dimensions found"),
             "Limited catalog with 2x1 and 1x1 should be valid");
-        
-        // Verify standard output labels are present (backward compatibility)
         assertTrue(output.contains("Triangles:"));
         assertTrue(output.contains("Resolution:"));
         assertTrue(output.contains("Surface voxels:"));
@@ -344,18 +468,14 @@ class MainTest {
         PrintStream err = new PrintStream(errBuffer);
 
         // Run CLI with full catalog (test-only overload)
-        // Catalog is loaded successfully - verifies full dimensions are available
         int exitCode = Main.run(new String[] { objPath.toString(), "4" }, out, err, tempDir);
 
         assertEquals(0, exitCode);
         String output = outBuffer.toString();
         String errors = errBuffer.toString();
-        
-        // Verify no catalog-related errors
+
         assertFalse(errors.contains("No valid brick dimensions found"),
             "Full catalog with 2x4, 2x2, 2x1, 1x1 should be valid");
-        
-        // Should still show all required labels
         assertTrue(output.contains("Bricks generated:"));
         assertTrue(output.contains("Surface voxels:"));
     }
@@ -406,12 +526,12 @@ class MainTest {
     private void createLimitedCatalog(Path baseDir) throws IOException {
         Path catalogDir = baseDir.resolve("data/catalog");
         Files.createDirectories(catalogDir);
-        
+
         // Limited catalog: only 2x1 and 1x1 (no large bricks)
         String content = "part_id,name,category,category_name,stud_x,stud_y,height_units,material,active\n" +
-            "3004,Brick 1x2,11,Bricks,1,2,1,Plastic,true\n" +  // Will be converted to 2x1 horizontal
+            "3004,Brick 1x2,11,Bricks,1,2,1,Plastic,true\n" +
             "3005,Brick 1x1,11,Bricks,1,1,1,Plastic,true\n";
-        
+
         Path catalogFile = catalogDir.resolve(CatalogConfig.CURATED_CATALOG_FILE);
         Files.writeString(catalogFile, content);
     }
@@ -419,14 +539,14 @@ class MainTest {
     private void createFullCatalog(Path baseDir) throws IOException {
         Path catalogDir = baseDir.resolve("data/catalog");
         Files.createDirectories(catalogDir);
-        
+
         // Full catalog with various dimensions
         String content = "part_id,name,category,category_name,stud_x,stud_y,height_units,material,active\n" +
             "3001,Brick 2x4,11,Bricks,2,4,1,Plastic,true\n" +
             "3003,Brick 2x2,11,Bricks,2,2,1,Plastic,true\n" +
             "3004,Brick 1x2,11,Bricks,1,2,1,Plastic,true\n" +
             "3005,Brick 1x1,11,Bricks,1,1,1,Plastic,true\n";
-        
+
         Path catalogFile = catalogDir.resolve(CatalogConfig.CURATED_CATALOG_FILE);
         Files.writeString(catalogFile, content);
     }

@@ -3,7 +3,10 @@ package com.lego.cli;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import com.lego.export.BrickObjExporter;
 import com.lego.export.VoxelObjExporter;
@@ -100,6 +103,9 @@ public final class Main {
             out.println("Surface voxels: " + surfaceVoxels);
             out.println("Bricks generated: " + brickCount);
 
+            // Print block type summary
+            printBlockTypeSummary(bricks, out);
+
             if (surfaceVoxels > 0) {
                 double reductionPercent = 100.0 * (surfaceVoxels - brickCount) / surfaceVoxels;
                 out.printf("Reduction: %.1f%% (%d voxels -> %d bricks)%n",
@@ -141,5 +147,61 @@ public final class Main {
     private static void printUsage(PrintStream err) {
         err.println("Usage: java -jar legomodel.jar <objPath> <resolution> [outputObjPath] [exportMode]");
         err.println("  exportMode: 'brick' (default), 'voxel-surface', or 'voxel-solid'");
+    }
+
+    /**
+     * Prints a summary of block types used, grouped by dimensions and sorted by volume.
+     *
+     * @param bricks the list of bricks generated
+     * @param out    the output stream to print to
+     */
+    static void printBlockTypeSummary(List<Brick> bricks, PrintStream out) {
+        // Group bricks by their dimensions (studX, studY, heightUnits)
+        Map<String, Integer> blockTypeCounts = new HashMap<>();
+        for (Brick brick : bricks) {
+            String blockType = brick.studX() + "x" + brick.studY() + "x" + brick.heightUnits();
+            blockTypeCounts.put(blockType, blockTypeCounts.getOrDefault(blockType, 0) + 1);
+        }
+
+        // Sort the block types by volume (descending), then by studX (descending),
+        // then by studY (descending), then by heightUnits (descending)
+        List<String> sortedBlockTypes = blockTypeCounts.keySet().stream()
+            .sorted((a, b) -> {
+                int[] dimsA = parseDimensions(a);
+                int[] dimsB = parseDimensions(b);
+                
+                int volumeA = dimsA[0] * dimsA[1] * dimsA[2];
+                int volumeB = dimsB[0] * dimsB[1] * dimsB[2];
+                
+                if (volumeA != volumeB) {
+                    return Integer.compare(volumeB, volumeA); // descending
+                }
+                if (dimsA[0] != dimsB[0]) {
+                    return Integer.compare(dimsB[0], dimsA[0]); // studX descending
+                }
+                if (dimsA[1] != dimsB[1]) {
+                    return Integer.compare(dimsB[1], dimsA[1]); // studY descending
+                }
+                return Integer.compare(dimsB[2], dimsA[2]); // heightUnits descending
+            })
+            .collect(Collectors.toList());
+
+        // Print the block type summary
+        out.println("Block types used:");
+        for (String blockType : sortedBlockTypes) {
+            int count = blockTypeCounts.get(blockType);
+            out.println(blockType + ": " + count);
+        }
+    }
+
+    /**
+     * Parses a block type string (e.g., "2x4x1") into an array of dimensions.
+     *
+     * @param blockType the block type string
+     * @return an array of {studX, studY, heightUnits}
+     */
+    static int[] parseDimensions(String blockType) {
+        String[] parts = blockType.split("x");
+        return new int[] { Integer.parseInt(parts[0]), Integer.parseInt(parts[1]), Integer.parseInt(parts[2]) };
     }
 }
