@@ -45,15 +45,14 @@ class TopologicalVoxelizerTest {
 
     @Test
     void testUnitCubeProducesVoxelGrid() {
-        // Basic smoke test: algorithm should not crash and should return a valid grid
         int resolution = 10;
         Mesh cube = createScaledCube(resolution);
         VoxelGrid grid = TopologicalVoxelizer.voxelizeSurface(cube, resolution);
 
         assertNotNull(grid);
-        // Don't assert count > 0 yet - debugging segment-triangle intersection
-        // Just verify grid is created without crash
-        assertTrue(true, "Algorithm executes without crashing");
+        assertTrue(grid.countFilledVoxels() > 0, "Cube surface should produce non-zero voxels");
+        assertTrue(grid.countFilledVoxels() < resolution * resolution * resolution,
+            "Surface-only voxelization should not fill full volume");
     }
 
     @Test
@@ -72,7 +71,8 @@ class TopologicalVoxelizerTest {
     @Test
     void testAnisotropicVoxelSizes() {
         int resolution = 10;
-        Mesh cube = createScaledCube(resolution);
+        Mesh isoCube = createScaledCube(resolution);
+        Mesh anisoCompatibleBox = createScaledBox(10.0, 5.0, 10.0);
         
         // Isotropic configuration
         TopologicalVoxelizerConfig isoConfig = new TopologicalVoxelizerConfig(
@@ -80,7 +80,7 @@ class TopologicalVoxelizerTest {
             Connectivity.TWENTY_SIX,
             1e-9
         );
-        VoxelGrid isoGrid = TopologicalVoxelizer.voxelizeSurfaceWithConfig(cube, resolution, isoConfig);
+        VoxelGrid isoGrid = TopologicalVoxelizer.voxelizeSurfaceWithConfig(isoCube, resolution, isoConfig);
 
         // Anisotropic configuration
         TopologicalVoxelizerConfig anisoConfig = new TopologicalVoxelizerConfig(
@@ -88,7 +88,9 @@ class TopologicalVoxelizerTest {
             Connectivity.TWENTY_SIX,
             1e-9
         );
-        VoxelGrid anisoGrid = TopologicalVoxelizer.voxelizeSurfaceWithConfig(cube, resolution, anisoConfig);
+        VoxelGrid anisoGrid = TopologicalVoxelizer.voxelizeSurfaceWithConfig(
+            anisoCompatibleBox, resolution, anisoConfig
+        );
 
         // Both should produce valid grids without crashing
         assertNotNull(isoGrid);
@@ -116,10 +118,10 @@ class TopologicalVoxelizerTest {
             tiltedPlane, resolution, twentySixConfig
         );
 
-        // Both should produce valid grids
         assertNotNull(sixGrid);
         assertNotNull(twentySixGrid);
-        // Note: Connectivity difference testing deferred pending algorithm validation
+        assertTrue(sixGrid.countFilledVoxels() > 0, "SIX connectivity should produce voxels");
+        assertTrue(twentySixGrid.countFilledVoxels() > 0, "TWENTY_SIX connectivity should produce voxels");
     }
 
     @Test
@@ -129,8 +131,7 @@ class TopologicalVoxelizerTest {
         VoxelGrid grid = TopologicalVoxelizer.voxelizeSurface(plane, resolution);
 
         assertNotNull(grid);
-        // Grid should be valid even if algorithm needs refinement
-        assertTrue(true, "Algorithm executes for small grids");
+        assertTrue(grid.countFilledVoxels() > 0, "Plane should produce non-zero voxels");
     }
 
     @Test
@@ -167,15 +168,19 @@ class TopologicalVoxelizerTest {
      */
     private Mesh createScaledCube(int resolution) {
         double scale = resolution;
+        return createScaledBox(scale, scale, scale);
+    }
+
+    private Mesh createScaledBox(double sizeX, double sizeY, double sizeZ) {
         Vector3[] vertices = {
             new Vector3(0, 0, 0),
-            new Vector3(scale, 0, 0),
-            new Vector3(scale, scale, 0),
-            new Vector3(0, scale, 0),
-            new Vector3(0, scale, scale),
-            new Vector3(scale, scale, scale),
-            new Vector3(scale, 0, scale),
-            new Vector3(0, 0, scale)
+            new Vector3(sizeX, 0, 0),
+            new Vector3(sizeX, sizeY, 0),
+            new Vector3(0, sizeY, 0),
+            new Vector3(0, sizeY, sizeZ),
+            new Vector3(sizeX, sizeY, sizeZ),
+            new Vector3(sizeX, 0, sizeZ),
+            new Vector3(0, 0, sizeZ)
         };
 
         List<Triangle> triangles = List.of(
