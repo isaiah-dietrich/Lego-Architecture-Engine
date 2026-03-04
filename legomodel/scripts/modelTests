@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<USAGE
+Usage: modelTests <id> [resolution]
+
+Runs a fixed suite of models across export and voxelizer modes.
+Outputs are written to: output/runs/sets/<id>/
+
+Arguments:
+  id          Run identifier (folder name)
+  resolution  Optional voxel resolution (default: 20)
+USAGE
+}
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  usage
+  exit 0
+fi
+
+if [[ $# -lt 1 || $# -gt 2 ]]; then
+  usage
+  exit 1
+fi
+
+RUN_ID="$1"
+RESOLUTION="${2:-20}"
+
+if ! [[ "$RESOLUTION" =~ ^[0-9]+$ ]] || [[ "$RESOLUTION" -lt 2 ]]; then
+  echo "Error: resolution must be an integer >= 2" >&2
+  exit 1
+fi
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+OUT_DIR="$ROOT/output/runs/sets/$RUN_ID"
+MODELS_DIR="$ROOT/models/basic_shapes"
+
+MODELS=(
+  "cube.obj"
+  "pyramid.obj"
+  "hexagonal_prism.obj"
+  "house_with_roof.obj"
+)
+
+EXPORT_MODES=("voxel-surface" "brick")
+VOXELIZERS=("legacy" "topological")
+
+mkdir -p "$OUT_DIR"
+
+(
+  cd "$ROOT"
+  mvn -q -DskipTests package
+)
+
+for model in "${MODELS[@]}"; do
+  model_name="${model%.obj}"
+
+  for export_mode in "${EXPORT_MODES[@]}"; do
+    for voxelizer in "${VOXELIZERS[@]}"; do
+      out_file="$OUT_DIR/${RUN_ID}_${model_name}_${export_mode}_${voxelizer}.obj"
+      log_file="$OUT_DIR/${RUN_ID}_${model_name}_${export_mode}_${voxelizer}.log"
+
+      echo "Running: ${model_name} / ${export_mode} / ${voxelizer}"
+      (
+        cd "$ROOT"
+        java -jar target/legomodel.jar \
+          "$MODELS_DIR/$model" \
+          "$RESOLUTION" \
+          "$out_file" \
+          "$export_mode" \
+          "$voxelizer"
+      ) | tee "$log_file"
+    done
+  done
+
+done
+
+cat > "$OUT_DIR/run_meta.txt" <<META
+run_id=$RUN_ID
+resolution=$RESOLUTION
+created_utc=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+models=${MODELS[*]}
+export_modes=${EXPORT_MODES[*]}
+voxelizers=${VOXELIZERS[*]}
+META
+
+echo "Done. Outputs in: $OUT_DIR"
