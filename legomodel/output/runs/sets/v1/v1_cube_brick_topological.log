@@ -1,0 +1,12 @@
+Triangles: 12
+Resolution: 20x20x20
+Total voxels: 8000
+Filled voxels (solid): 2168
+Surface voxels: 2168
+Bricks generated: 1108
+Block types used:
+2x4x1: 100
+2x1x1: 360
+1x1x1: 648
+Reduction: 48.9% (2168 voxels -> 1108 bricks)
+Visual OBJ exported (brick): /Users/isaiahdietrich/Desktop/Projects/Lego-Architecture-Engine/legomodel/output/runs/sets/v1/v1_cube_brick_topological.obj

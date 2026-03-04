@@ -34,7 +34,8 @@ fi
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_DIR="$ROOT/output/runs/sets/$RUN_ID"
-MODELS_DIR="$ROOT/models/basic_shapes"
+MODELS_DIR="$ROOT/models/testing"
+COMMAND_LOG="$OUT_DIR/command_output.txt"
 
 MODELS=(
   "cube.obj"
@@ -47,21 +48,28 @@ EXPORT_MODES=("voxel-surface" "brick")
 VOXELIZERS=("legacy" "topological")
 
 mkdir -p "$OUT_DIR"
+: > "$COMMAND_LOG"
 
+echo "Building project (mvn -q -DskipTests package)" | tee -a "$COMMAND_LOG"
 (
   cd "$ROOT"
   mvn -q -DskipTests package
-)
+) 2>&1 | tee -a "$COMMAND_LOG"
 
 for model in "${MODELS[@]}"; do
   model_name="${model%.obj}"
+  if [[ ! -f "$MODELS_DIR/$model" ]]; then
+    echo "Error: missing test model: $MODELS_DIR/$model" >&2
+    exit 1
+  fi
 
   for export_mode in "${EXPORT_MODES[@]}"; do
     for voxelizer in "${VOXELIZERS[@]}"; do
       out_file="$OUT_DIR/${RUN_ID}_${model_name}_${export_mode}_${voxelizer}.obj"
       log_file="$OUT_DIR/${RUN_ID}_${model_name}_${export_mode}_${voxelizer}.log"
 
-      echo "Running: ${model_name} / ${export_mode} / ${voxelizer}"
+      echo "Running: ${model_name} / ${export_mode} / ${voxelizer}" | tee -a "$COMMAND_LOG"
+      echo "Command: java -jar target/legomodel.jar \"$MODELS_DIR/$model\" \"$RESOLUTION\" \"$out_file\" \"$export_mode\" \"$voxelizer\"" | tee -a "$COMMAND_LOG"
       (
         cd "$ROOT"
         java -jar target/legomodel.jar \
@@ -70,7 +78,7 @@ for model in "${MODELS[@]}"; do
           "$out_file" \
           "$export_mode" \
           "$voxelizer"
-      ) | tee "$log_file"
+      ) 2>&1 | tee "$log_file" | tee -a "$COMMAND_LOG"
     done
   done
 
@@ -80,9 +88,10 @@ cat > "$OUT_DIR/run_meta.txt" <<META
 run_id=$RUN_ID
 resolution=$RESOLUTION
 created_utc=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+command_output_log=$(basename "$COMMAND_LOG")
 models=${MODELS[*]}
 export_modes=${EXPORT_MODES[*]}
 voxelizers=${VOXELIZERS[*]}
 META
 
-echo "Done. Outputs in: $OUT_DIR"
+echo "Done. Outputs in: $OUT_DIR" | tee -a "$COMMAND_LOG"

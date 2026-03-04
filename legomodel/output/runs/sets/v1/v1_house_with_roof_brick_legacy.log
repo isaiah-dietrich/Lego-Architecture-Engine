@@ -1,0 +1,13 @@
+Triangles: 18
+Resolution: 20x20x20
+Total voxels: 8000
+Filled voxels (solid): 4282
+Surface voxels: 1355
+Bricks generated: 635
+Block types used:
+2x4x1: 56
+2x2x1: 19
+2x1x1: 271
+1x1x1: 289
+Reduction: 53.1% (1355 voxels -> 635 bricks)
+Visual OBJ exported (brick): /Users/isaiahdietrich/Desktop/Projects/Lego-Architecture-Engine/legomodel/output/runs/sets/v1/v1_house_with_roof_brick_legacy.obj

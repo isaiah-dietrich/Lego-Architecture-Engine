@@ -1,0 +1,13 @@
+Triangles: 20
+Resolution: 20x20x20
+Total voxels: 8000
+Filled voxels (solid): 1256
+Surface voxels: 1256
+Bricks generated: 516
+Block types used:
+2x4x1: 83
+2x2x1: 17
+2x1x1: 108
+1x1x1: 308
+Reduction: 58.9% (1256 voxels -> 516 bricks)
+Visual OBJ exported (voxel-surface): /Users/isaiahdietrich/Desktop/Projects/Lego-Architecture-Engine/legomodel/output/runs/sets/v1/v1_hexagonal_prism_voxel-surface_topological.obj

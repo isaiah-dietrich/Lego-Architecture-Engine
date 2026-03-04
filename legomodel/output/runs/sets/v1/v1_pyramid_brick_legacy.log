@@ -1,0 +1,13 @@
+Triangles: 6
+Resolution: 20x20x20
+Total voxels: 8000
+Filled voxels (solid): 3040
+Surface voxels: 1084
+Bricks generated: 553
+Block types used:
+2x4x1: 50
+2x2x1: 1
+2x1x1: 178
+1x1x1: 324
+Reduction: 49.0% (1084 voxels -> 553 bricks)
+Visual OBJ exported (brick): /Users/isaiahdietrich/Desktop/Projects/Lego-Architecture-Engine/legomodel/output/runs/sets/v1/v1_pyramid_brick_legacy.obj

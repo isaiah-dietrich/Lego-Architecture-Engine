@@ -1,0 +1,13 @@
+Triangles: 18
+Resolution: 20x20x20
+Total voxels: 8000
+Filled voxels (solid): 2074
+Surface voxels: 2074
+Bricks generated: 704
+Block types used:
+2x4x1: 108
+2x2x1: 155
+2x1x1: 149
+1x1x1: 292
+Reduction: 66.1% (2074 voxels -> 704 bricks)
+Visual OBJ exported (voxel-surface): /Users/isaiahdietrich/Desktop/Projects/Lego-Architecture-Engine/legomodel/output/runs/sets/v1/v1_house_with_roof_voxel-surface_topological.obj

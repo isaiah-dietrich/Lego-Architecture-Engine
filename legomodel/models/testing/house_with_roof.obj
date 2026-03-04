@@ -1,0 +1,43 @@
+# house_with_roof
+# A simple "house" mesh: rectangular body + gable roof.
+o house_with_roof
+
+# Body vertices (rectangular prism): x in [-1,1], y in [-0.7,0.7], z in [0,1.2]
+v -1.0 -0.7 0.0
+v 1.0 -0.7 0.0
+v 1.0 0.7 0.0
+v -1.0 0.7 0.0
+v -1.0 -0.7 1.2
+v 1.0 -0.7 1.2
+v 1.0 0.7 1.2
+v -1.0 0.7 1.2
+
+# Roof ridge vertices
+v 0.0 -0.7 1.8
+v 0.0 0.7 1.8
+
+# Body faces (triangulated cuboid)
+f 1 3 2
+f 1 4 3
+f 5 6 7
+f 5 7 8
+f 1 2 6
+f 1 6 5
+f 2 3 7
+f 2 7 6
+f 3 4 8
+f 3 8 7
+f 4 1 5
+f 4 5 8
+
+# Roof faces (triangulated)
+# Front roof slope (y = -0.7 side)
+f 5 6 9
+# Back roof slope (y = +0.7 side)
+f 8 10 7
+# Left roof slope (x = -1 side, quad split into 2 triangles)
+f 5 9 10
+f 5 10 8
+# Right roof slope (x = +1 side, quad split into 2 triangles)
+f 6 7 10
+f 6 10 9
