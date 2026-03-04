@@ -27,3 +27,11 @@ buildNumber.properties
 build/
 dist/
 *.class
+
+# Generated model outputs:
+# - ignore ad-hoc/single runs
+# - keep curated test-set outputs under output/runs/sets/ in git
+output/runs/*
+!output/runs/.gitkeep
+!output/runs/sets/
+!output/runs/sets/**

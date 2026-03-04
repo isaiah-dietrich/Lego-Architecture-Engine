@@ -59,8 +59,27 @@ public final class Main {
 
         Path objPath = Path.of(args[0]);
         Path outputObjPath = args.length >= 3 ? Path.of(args[2]) : null;
-        String exportMode = args.length >= 4 ? args[3] : "brick";
-        String voxelizerModeArg = args.length == 5 ? args[4] : "legacy";
+        
+        // Smart argument parsing: detect if arg is exportMode or voxelizerMode
+        String exportMode = "brick";
+        String voxelizerModeArg = "legacy";
+        
+        if (args.length >= 4) {
+            String arg3 = args[3];
+            // Check if arg3 is a voxelizer mode (not an export mode)
+            if (arg3.equals("legacy") || arg3.equals("topological")) {
+                voxelizerModeArg = arg3;
+                // Keep exportMode as default "brick"
+            } else {
+                // arg3 is export mode
+                exportMode = arg3;
+            }
+        }
+        
+        if (args.length == 5) {
+            voxelizerModeArg = args[4];
+        }
+        
         int resolution;
         try {
             resolution = Integer.parseInt(args[1]);
