@@ -164,10 +164,11 @@ class ObjLoaderTest {
     }
 
     /**
-     * Tests that quad faces (4 vertices) are rejected with a clear exception.
+     * Tests that quad faces (4 vertices) are triangulated into 2 triangles.
+     * Verifies fan triangulation: (v1,v2,v3) and (v1,v3,v4).
      */
     @Test
-    void testQuadFaceThrowsException() throws IOException {
+    void testQuadFaceIsTriangulated() throws IOException {
         String obj = """
             v 0.0 0.0 0.0
             v 1.0 0.0 0.0
@@ -179,13 +180,22 @@ class ObjLoaderTest {
         Path path = tempDir.resolve("quad.obj");
         Files.writeString(path, obj);
 
-        IllegalArgumentException ex = assertThrows(
-            IllegalArgumentException.class,
-            () -> ObjLoader.load(path)
-        );
+        Mesh mesh = ObjLoader.load(path);
 
-        assertTrue(ex.getMessage().contains("Only triangular faces are supported"));
-        assertTrue(ex.getMessage().contains("4 vertices"));
+        // Quad should produce exactly 2 triangles
+        assertEquals(2, mesh.triangleCount());
+
+        // Verify triangle 1: (v1, v2, v3)
+        Triangle tri1 = mesh.triangles().get(0);
+        assertEquals(new Vector3(0.0, 0.0, 0.0), tri1.v1());
+        assertEquals(new Vector3(1.0, 0.0, 0.0), tri1.v2());
+        assertEquals(new Vector3(1.0, 1.0, 0.0), tri1.v3());
+
+        // Verify triangle 2: (v1, v3, v4)
+        Triangle tri2 = mesh.triangles().get(1);
+        assertEquals(new Vector3(0.0, 0.0, 0.0), tri2.v1());
+        assertEquals(new Vector3(1.0, 1.0, 0.0), tri2.v2());
+        assertEquals(new Vector3(0.0, 1.0, 0.0), tri2.v3());
     }
 
     /**
@@ -341,10 +351,10 @@ class ObjLoaderTest {
 
     /**
      * Tests that quad faces with texture and normal indices (f v/vt/vn format)
-     * are rejected, while still parsing the vertex index component correctly.
+     * are triangulated correctly, extracting vertex indices properly.
      */
     @Test
-    void testQuadWithTextureAndNormalIndicesThrowsException() throws IOException {
+    void testQuadWithTextureAndNormalIndicesIsTriangulated() throws IOException {
         String obj = """
             v 0.0 0.0 0.0
             v 1.0 0.0 0.0
@@ -361,18 +371,21 @@ class ObjLoaderTest {
         Path path = tempDir.resolve("quad_texnorm.obj");
         Files.writeString(path, obj);
 
-        IllegalArgumentException ex = assertThrows(
-            IllegalArgumentException.class,
-            () -> ObjLoader.load(path)
-        );
+        Mesh mesh = ObjLoader.load(path);
 
-        assertTrue(ex.getMessage().contains("Only triangular faces are supported"));
-        assertTrue(ex.getMessage().contains("4 vertices"));
+        // Quad should produce exactly 2 triangles
+        assertEquals(2, mesh.triangleCount());
+
+        // Verify vertices are correctly extracted from slash notation
+        Triangle tri1 = mesh.triangles().get(0);
+        assertEquals(new Vector3(0.0, 0.0, 0.0), tri1.v1());
+        assertEquals(new Vector3(1.0, 0.0, 0.0), tri1.v2());
+        assertEquals(new Vector3(1.0, 1.0, 0.0), tri1.v3());
     }
 
     /**
      * Tests that faces with 5 vertices are rejected with an exception.
-     * Verifies that the loader only supports triangular faces.
+     * Verifies that the loader only supports triangular and quad faces.
      */
     @Test
     void testPolygonWith5VerticesThrowsException() throws IOException {
@@ -393,7 +406,105 @@ class ObjLoaderTest {
             () -> ObjLoader.load(path)
         );
 
-        assertTrue(ex.getMessage().contains("Only triangular faces are supported"));
+        assertTrue(ex.getMessage().contains("Only triangular and quad faces are supported"));
         assertTrue(ex.getMessage().contains("5 vertices"));
+    }
+
+    /**
+     * Tests that an OBJ file with mixed triangles and quads is loaded correctly.
+     * Verifies the total triangle count after quad triangulation.
+     */
+    @Test
+    void testMixedTrianglesAndQuads() throws IOException {
+        String obj = """
+            v 0.0 0.0 0.0
+            v 1.0 0.0 0.0
+            v 1.0 1.0 0.0
+            v 0.0 1.0 0.0
+            v 2.0 0.0 0.0
+            v 2.0 1.0 0.0
+            # First face is a triangle
+            f 1 2 3
+            # Second face is a quad (produces 2 triangles)
+            f 1 3 4 5
+            # Third face is another triangle
+            f 2 5 6
+            """;
+
+        Path path = tempDir.resolve("mixed.obj");
+        Files.writeString(path, obj);
+
+        Mesh mesh = ObjLoader.load(path);
+
+        // 1 triangle + 1 quad (2 triangles) + 1 triangle = 4 triangles total
+        assertEquals(4, mesh.triangleCount());
+    }
+
+    /**
+     * Tests that a quad with only vertex indices (no slashes) is triangulated correctly.
+     */
+    @Test
+    void testQuadWithSimpleIndices() throws IOException {
+        String obj = """
+            v -1.0 -1.0 0.0
+            v  1.0 -1.0 0.0
+            v  1.0  1.0 0.0
+            v -1.0  1.0 0.0
+            f 1 2 3 4
+            """;
+
+        Path path = tempDir.resolve("simple_quad.obj");
+        Files.writeString(path, obj);
+
+        Mesh mesh = ObjLoader.load(path);
+
+        assertEquals(2, mesh.triangleCount());
+    }
+
+    /**
+     * Tests that a quad with texture indices (f v/vt format) is triangulated correctly.
+     */
+    @Test
+    void testQuadWithTextureIndices() throws IOException {
+        String obj = """
+            v 0.0 0.0 0.0
+            v 1.0 0.0 0.0
+            v 1.0 1.0 0.0
+            v 0.0 1.0 0.0
+            vt 0.0 0.0
+            vt 1.0 0.0
+            vt 1.0 1.0
+            vt 0.0 1.0
+            f 1/1 2/2 3/3 4/4
+            """;
+
+        Path path = tempDir.resolve("quad_tex.obj");
+        Files.writeString(path, obj);
+
+        Mesh mesh = ObjLoader.load(path);
+
+        assertEquals(2, mesh.triangleCount());
+    }
+
+    /**
+     * Tests that a quad with normal indices (f v//vn format) is triangulated correctly.
+     */
+    @Test
+    void testQuadWithNormalIndices() throws IOException {
+        String obj = """
+            v 0.0 0.0 0.0
+            v 1.0 0.0 0.0
+            v 1.0 1.0 0.0
+            v 0.0 1.0 0.0
+            vn 0.0 0.0 1.0
+            f 1//1 2//1 3//1 4//1
+            """;
+
+        Path path = tempDir.resolve("quad_norm.obj");
+        Files.writeString(path, obj);
+
+        Mesh mesh = ObjLoader.load(path);
+
+        assertEquals(2, mesh.triangleCount());
     }
 }

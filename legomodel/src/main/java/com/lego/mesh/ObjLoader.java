@@ -16,11 +16,11 @@ import com.lego.model.Vector3;
  *
  * Supports a minimal subset of the OBJ format:
  * - Vertex lines (v x y z)
- * - Face lines (f i j k) — triangles only
- * TODO: Support quad and n-gon OBJ faces.
+ * - Face lines (f i j k) — triangles
+ * - Face lines (f i j k l) — quads (triangulated automatically)
  *
  * All other OBJ features are ignored (normals, texture coords, materials, etc.).
- * Faces with 4+ vertices will cause an exception.
+ * Faces with 5+ vertices will cause an exception.
  */
 public final class ObjLoader {
 
@@ -92,9 +92,13 @@ public final class ObjLoader {
     }
 
     /**
-     * Parses a face line: "f i j k"
+     * Parses a face line: "f i j k" or "f i j k l"
      *
-     * Only triangles (3 vertices) are supported.
+     * Triangles (3 vertices) and quads (4 vertices) are supported.
+     * Quads are triangulated using fan triangulation:
+     * - Triangle 1: (v1, v2, v3)
+     * - Triangle 2: (v1, v3, v4)
+     *
      * OBJ indices are 1-based, so we subtract 1 to convert to 0-based.
      */
     private static void parseFace(
@@ -102,31 +106,50 @@ public final class ObjLoader {
         List<Vector3> vertices,
         List<Triangle> triangles
     ) {
-        // Validate face has exactly 3 vertices (triangle)
-        //TODO Change to N-Gon
+        // Validate face has at least 3 vertices
         if (tokens.length < 4) {
             throw new IllegalArgumentException(
                 "Face must have at least 3 vertices"
             );
         }
 
-        if (tokens.length > 4) {
+        int vertexCount = tokens.length - 1;
+
+        // Support triangles (3 vertices) and quads (4 vertices)
+        if (vertexCount == 3) {
+            // Triangle: add directly
+            int i1 = parseVertexIndex(tokens[1], vertices.size());
+            int i2 = parseVertexIndex(tokens[2], vertices.size());
+            int i3 = parseVertexIndex(tokens[3], vertices.size());
+
+            Vector3 v1 = vertices.get(i1);
+            Vector3 v2 = vertices.get(i2);
+            Vector3 v3 = vertices.get(i3);
+
+            triangles.add(new Triangle(v1, v2, v3));
+        } else if (vertexCount == 4) {
+            // Quad: triangulate using fan triangulation
+            int i1 = parseVertexIndex(tokens[1], vertices.size());
+            int i2 = parseVertexIndex(tokens[2], vertices.size());
+            int i3 = parseVertexIndex(tokens[3], vertices.size());
+            int i4 = parseVertexIndex(tokens[4], vertices.size());
+
+            Vector3 v1 = vertices.get(i1);
+            Vector3 v2 = vertices.get(i2);
+            Vector3 v3 = vertices.get(i3);
+            Vector3 v4 = vertices.get(i4);
+
+            // Triangle 1: (v1, v2, v3)
+            triangles.add(new Triangle(v1, v2, v3));
+            // Triangle 2: (v1, v3, v4)
+            triangles.add(new Triangle(v1, v3, v4));
+        } else {
+            // Reject faces with 5+ vertices
             throw new IllegalArgumentException(
-                "Only triangular faces are supported. " +
-                "Face has " + (tokens.length - 1) + " vertices (expected 3)"
+                "Only triangular and quad faces are supported. " +
+                "Face has " + vertexCount + " vertices (expected 3 or 4)"
             );
         }
-
-        // Parse vertex indices (OBJ uses 1-based indexing)
-        int i1 = parseVertexIndex(tokens[1], vertices.size());
-        int i2 = parseVertexIndex(tokens[2], vertices.size());
-        int i3 = parseVertexIndex(tokens[3], vertices.size());
-
-        Vector3 v1 = vertices.get(i1);
-        Vector3 v2 = vertices.get(i2);
-        Vector3 v3 = vertices.get(i3);
-
-        triangles.add(new Triangle(v1, v2, v3));
     }
 
     /**
