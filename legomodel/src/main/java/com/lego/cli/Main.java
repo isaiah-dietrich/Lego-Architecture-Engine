@@ -18,8 +18,8 @@ import com.lego.optimize.AllowedBrickDimensions;
 import com.lego.optimize.BrickPlacer;
 import com.lego.voxel.SurfaceExtractor;
 import com.lego.voxel.VoxelGrid;
-import com.lego.voxel.Voxelizer;
 import com.lego.voxel.VoxelizationStrategy;
+import com.lego.voxel.Voxelizer;
 
 /**
  * Command-line entry point for the LEGO Architecture Engine.
@@ -95,7 +95,11 @@ public final class Main {
             Mesh mesh = ObjLoader.load(objPath);
             Mesh normalized = MeshNormalizer.normalize(mesh, resolution);
             VoxelGrid solid = Voxelizer.voxelize(normalized, resolution, voxelizationStrategy);
-            VoxelGrid surface = SurfaceExtractor.extractSurface(solid);
+            
+            // Topological mode produces surface-only grid; legacy mode requires surface extraction.
+            VoxelGrid surface = (voxelizationStrategy == VoxelizationStrategy.TOPOLOGICAL_SURFACE)
+                ? solid
+                : SurfaceExtractor.extractSurface(solid);
             
             // Load dimensions from catalog (test-friendly with optional base dir)
             List<Brick> bricks = catalogBaseDir != null

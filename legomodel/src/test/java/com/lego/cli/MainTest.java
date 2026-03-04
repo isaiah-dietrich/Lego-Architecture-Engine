@@ -288,7 +288,7 @@ class MainTest {
     }
 
     @Test
-    void testTopologicalVoxelizerModeReportsNotImplemented() throws IOException {
+    void testTopologicalVoxelizerModeIsNowImplemented() throws IOException {
         Path objPath = tempDir.resolve("triangle.obj");
         Path outObj = tempDir.resolve("out.obj");
         Files.writeString(objPath, """
@@ -303,15 +303,15 @@ class MainTest {
         PrintStream out = new PrintStream(outBuffer);
         PrintStream err = new PrintStream(errBuffer);
 
+        // Topological voxelizer is now implemented
         int exitCode = Main.run(
             new String[] { objPath.toString(), "4", outObj.toString(), "brick", "topological" },
             out,
             err
         );
 
-        assertEquals(1, exitCode);
-        String error = errBuffer.toString();
-        assertTrue(error.contains("Topological voxelizer is not implemented yet"));
+        // Should succeed (no longer returns error for "not implemented")
+        assertEquals(0, exitCode, "Topological mode should succeed. Errors: " + errBuffer.toString());
     }
 
     @Test
@@ -685,4 +685,5 @@ class MainTest {
         }
         return 0;
     }
+
 }
