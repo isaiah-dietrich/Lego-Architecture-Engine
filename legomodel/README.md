@@ -34,12 +34,15 @@ mvn clean package
 ## Running
 
 ```bash
-java -jar target/legomodel.jar path/to/model.obj 40
+java -jar target/legomodel.jar path/to/model.obj 40 [output.obj] [exportMode] [voxelizerMode]
 ```
 
 Arguments:
 - `path/to/model.obj` - Path to OBJ file
 - `40` - Voxel grid resolution (40×40×40)
+- `output.obj` (optional) - Output OBJ path
+- `exportMode` (optional) - `brick` (default), `voxel-surface`, `voxel-solid`
+- `voxelizerMode` (optional) - `legacy` (default), `topological` (placeholder scaffold)
 
 ## Requirements
 

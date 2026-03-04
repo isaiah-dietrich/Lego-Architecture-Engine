@@ -19,6 +19,7 @@ import com.lego.optimize.BrickPlacer;
 import com.lego.voxel.SurfaceExtractor;
 import com.lego.voxel.VoxelGrid;
 import com.lego.voxel.Voxelizer;
+import com.lego.voxel.VoxelizationStrategy;
 
 /**
  * Command-line entry point for the LEGO Architecture Engine.
@@ -51,14 +52,15 @@ public final class Main {
      * @return exit code
      */
     static int run(String[] args, PrintStream out, PrintStream err, Path catalogBaseDir) {
-        if (args == null || (args.length != 2 && args.length != 3 && args.length != 4)) {
+        if (args == null || (args.length != 2 && args.length != 3 && args.length != 4 && args.length != 5)) {
             printUsage(err);
             return 1;
         }
 
         Path objPath = Path.of(args[0]);
         Path outputObjPath = args.length >= 3 ? Path.of(args[2]) : null;
-        String exportMode = args.length == 4 ? args[3] : "brick";
+        String exportMode = args.length >= 4 ? args[3] : "brick";
+        String voxelizerModeArg = args.length == 5 ? args[4] : "legacy";
         int resolution;
         try {
             resolution = Integer.parseInt(args[1]);
@@ -80,10 +82,19 @@ public final class Main {
             return 1;
         }
 
+        VoxelizationStrategy voxelizationStrategy;
+        try {
+            voxelizationStrategy = VoxelizationStrategy.fromCliValue(voxelizerModeArg);
+        } catch (IllegalArgumentException e) {
+            err.println("Error: " + e.getMessage());
+            printUsage(err);
+            return 1;
+        }
+
         try {
             Mesh mesh = ObjLoader.load(objPath);
             Mesh normalized = MeshNormalizer.normalize(mesh, resolution);
-            VoxelGrid solid = Voxelizer.voxelize(normalized, resolution);
+            VoxelGrid solid = Voxelizer.voxelize(normalized, resolution, voxelizationStrategy);
             VoxelGrid surface = SurfaceExtractor.extractSurface(solid);
             
             // Load dimensions from catalog (test-friendly with optional base dir)
@@ -141,12 +152,16 @@ public final class Main {
         } catch (IllegalArgumentException e) {
             err.println("Error: " + e.getMessage());
             return 1;
+        } catch (UnsupportedOperationException e) {
+            err.println("Error: " + e.getMessage());
+            return 1;
         }
     }
 
     private static void printUsage(PrintStream err) {
-        err.println("Usage: java -jar legomodel.jar <objPath> <resolution> [outputObjPath] [exportMode]");
+        err.println("Usage: java -jar legomodel.jar <objPath> <resolution> [outputObjPath] [exportMode] [voxelizerMode]");
         err.println("  exportMode: 'brick' (default), 'voxel-surface', or 'voxel-solid'");
+        err.println("  voxelizerMode: 'legacy' (default) or 'topological'");
     }
 
     /**

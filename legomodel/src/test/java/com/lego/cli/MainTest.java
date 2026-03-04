@@ -260,6 +260,61 @@ class MainTest {
     }
 
     @Test
+    void testInvalidVoxelizerModeFails() throws IOException {
+        Path objPath = tempDir.resolve("triangle.obj");
+        Path outObj = tempDir.resolve("out.obj");
+        Files.writeString(objPath, """
+            v 0 0 0
+            v 1 0 0
+            v 0 1 0
+            f 1 2 3
+            """);
+
+        ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
+        ByteArrayOutputStream errBuffer = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(outBuffer);
+        PrintStream err = new PrintStream(errBuffer);
+
+        int exitCode = Main.run(
+            new String[] { objPath.toString(), "4", outObj.toString(), "brick", "invalid-voxelizer" },
+            out,
+            err
+        );
+
+        assertEquals(1, exitCode);
+        String error = errBuffer.toString();
+        assertTrue(error.contains("voxelizer mode must be 'legacy' or 'topological'"));
+        assertTrue(error.contains("Usage:"));
+    }
+
+    @Test
+    void testTopologicalVoxelizerModeReportsNotImplemented() throws IOException {
+        Path objPath = tempDir.resolve("triangle.obj");
+        Path outObj = tempDir.resolve("out.obj");
+        Files.writeString(objPath, """
+            v 0 0 0
+            v 1 0 0
+            v 0 1 0
+            f 1 2 3
+            """);
+
+        ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
+        ByteArrayOutputStream errBuffer = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(outBuffer);
+        PrintStream err = new PrintStream(errBuffer);
+
+        int exitCode = Main.run(
+            new String[] { objPath.toString(), "4", outObj.toString(), "brick", "topological" },
+            out,
+            err
+        );
+
+        assertEquals(1, exitCode);
+        String error = errBuffer.toString();
+        assertTrue(error.contains("Topological voxelizer is not implemented yet"));
+    }
+
+    @Test
     void testBackwardCompatibilityDefaultsToBrickMode() throws IOException {
         Path objPath = tempDir.resolve("triangle.obj");
         Path outObj = tempDir.resolve("default_bricks.obj");
@@ -284,6 +339,33 @@ class MainTest {
         assertTrue(output.contains("Visual OBJ exported (brick):"));
         String content = Files.readString(outObj);
         assertTrue(content.contains("# LEGO Architecture Engine brick export"));
+    }
+
+    @Test
+    void testExplicitLegacyVoxelizerModeWorks() throws IOException {
+        Path objPath = tempDir.resolve("triangle.obj");
+        Path outObj = tempDir.resolve("legacy_mode.obj");
+        Files.writeString(objPath, """
+            v 0 0 0
+            v 1 0 0
+            v 0 1 0
+            f 1 2 3
+            """);
+
+        ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
+        ByteArrayOutputStream errBuffer = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(outBuffer);
+        PrintStream err = new PrintStream(errBuffer);
+
+        int exitCode = Main.run(
+            new String[] { objPath.toString(), "4", outObj.toString(), "brick", "legacy" },
+            out,
+            err
+        );
+
+        assertEquals(0, exitCode);
+        assertTrue(Files.exists(outObj));
+        assertTrue(outBuffer.toString().contains("Visual OBJ exported (brick):"));
     }
 
     @Test
