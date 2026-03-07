@@ -54,6 +54,13 @@ public final class GlbLoader implements ModelLoader {
 
     private static final int GL_TRIANGLES = 4;
 
+    /**
+     * sRGB channel threshold for UV-padding detection. Pixels with all channels
+     * at or below this value (out of 255) are treated as texture atlas padding
+     * and excluded from color sampling.
+     */
+    private static final int UV_PADDING_SRGB_THRESHOLD = 10;
+
     @Override
     public LoadedModel load(Path path) throws IOException {
         String filename = path.getFileName().toString().toLowerCase();
@@ -256,7 +263,8 @@ public final class GlbLoader implements ModelLoader {
     /**
      * Determines the color for a triangle. Priority:
      * 1. COLOR_0 vertex attribute (average of 3 vertex colors)
-     * 2. baseColorTexture sampled at UV centroid (× baseColorFactor if set)
+     * 2. baseColorTexture multi-sampled across the triangle's UV footprint
+     *    (× baseColorFactor if set)
      * 3. baseColorFactor alone
      * 4. null (no color)
      */
@@ -276,17 +284,54 @@ public final class GlbLoader implements ModelLoader {
         }
 
         if (textureImage != null && texCoords != null) {
-            float u = (texCoords.get(i0, 0) + texCoords.get(i1, 0) + texCoords.get(i2, 0)) / 3f;
-            float v = (texCoords.get(i0, 1) + texCoords.get(i1, 1) + texCoords.get(i2, 1)) / 3f;
-            ColorRgb texColor = sampleTexture(textureImage, u, v);
-            if (materialColor != null) {
-                return new ColorRgb(
-                    clamp01(texColor.r() * materialColor.r()),
-                    clamp01(texColor.g() * materialColor.g()),
-                    clamp01(texColor.b() * materialColor.b())
-                );
+            float u0 = texCoords.get(i0, 0), v0 = texCoords.get(i0, 1);
+            float u1 = texCoords.get(i1, 0), v1 = texCoords.get(i1, 1);
+            float u2 = texCoords.get(i2, 0), v2 = texCoords.get(i2, 1);
+
+            // Multi-sample: 3 vertices + centroid + 3 edge midpoints = 7 samples.
+            // This captures interior color that vertex-only sampling misses
+            // (e.g., white body fur where vertices sit at texture island edges).
+            float rSum = 0, gSum = 0, bSum = 0;
+            int validCount = 0;
+
+            // Vertex samples
+            ColorRgb s;
+            s = sampleTextureFiltered(textureImage, u0, v0);
+            if (s != null) { rSum += s.r(); gSum += s.g(); bSum += s.b(); validCount++; }
+            s = sampleTextureFiltered(textureImage, u1, v1);
+            if (s != null) { rSum += s.r(); gSum += s.g(); bSum += s.b(); validCount++; }
+            s = sampleTextureFiltered(textureImage, u2, v2);
+            if (s != null) { rSum += s.r(); gSum += s.g(); bSum += s.b(); validCount++; }
+
+            // Centroid sample
+            s = sampleTextureFiltered(textureImage,
+                (u0 + u1 + u2) / 3f, (v0 + v1 + v2) / 3f);
+            if (s != null) { rSum += s.r(); gSum += s.g(); bSum += s.b(); validCount++; }
+
+            // Edge midpoint samples
+            s = sampleTextureFiltered(textureImage,
+                (u0 + u1) / 2f, (v0 + v1) / 2f);
+            if (s != null) { rSum += s.r(); gSum += s.g(); bSum += s.b(); validCount++; }
+            s = sampleTextureFiltered(textureImage,
+                (u1 + u2) / 2f, (v1 + v2) / 2f);
+            if (s != null) { rSum += s.r(); gSum += s.g(); bSum += s.b(); validCount++; }
+            s = sampleTextureFiltered(textureImage,
+                (u0 + u2) / 2f, (v0 + v2) / 2f);
+            if (s != null) { rSum += s.r(); gSum += s.g(); bSum += s.b(); validCount++; }
+
+            if (validCount > 0) {
+                ColorRgb texColor = new ColorRgb(
+                    rSum / validCount, gSum / validCount, bSum / validCount);
+                if (materialColor != null) {
+                    return new ColorRgb(
+                        clamp01(texColor.r() * materialColor.r()),
+                        clamp01(texColor.g() * materialColor.g()),
+                        clamp01(texColor.b() * materialColor.b())
+                    );
+                }
+                return texColor;
             }
-            return texColor;
+            // All samples were UV padding — fall through to materialColor
         }
 
         return materialColor; // may be null
@@ -353,6 +398,36 @@ public final class GlbLoader implements ModelLoader {
             clamp01((float) srgbToLinear(sR)),
             clamp01((float) srgbToLinear(sG)),
             clamp01((float) srgbToLinear(sB))
+        );
+    }
+
+    /**
+     * Samples a texture at the given UV coordinate, returning null if the pixel
+     * is likely UV-atlas padding (all sRGB channels ≤ {@link #UV_PADDING_SRGB_THRESHOLD}).
+     * Non-padding pixels are converted from sRGB to linear RGB.
+     */
+    private ColorRgb sampleTextureFiltered(BufferedImage image, float u, float v) {
+        u = u - (float) Math.floor(u);
+        v = v - (float) Math.floor(v);
+
+        int x = Math.min((int) (u * image.getWidth()), image.getWidth() - 1);
+        int y = Math.min((int) (v * image.getHeight()), image.getHeight() - 1);
+
+        int argb = image.getRGB(x, y);
+        int sR = (argb >> 16) & 0xFF;
+        int sG = (argb >> 8) & 0xFF;
+        int sB = argb & 0xFF;
+
+        if (sR <= UV_PADDING_SRGB_THRESHOLD
+                && sG <= UV_PADDING_SRGB_THRESHOLD
+                && sB <= UV_PADDING_SRGB_THRESHOLD) {
+            return null; // likely UV-atlas padding
+        }
+
+        return new ColorRgb(
+            clamp01((float) srgbToLinear(sR / 255f)),
+            clamp01((float) srgbToLinear(sG / 255f)),
+            clamp01((float) srgbToLinear(sB / 255f))
         );
     }
 

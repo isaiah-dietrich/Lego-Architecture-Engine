@@ -95,7 +95,7 @@ class ColorSamplerTest {
     }
 
     @Test
-    void majorityVoteAcrossMultipleTriangles() {
+    void averageColorAcrossMultipleTriangles() {
         // Two red triangles and one blue triangle all overlapping the same voxel
         Triangle t1 = new Triangle(
             new Vector3(0, 0, 0), new Vector3(2, 0, 0), new Vector3(0, 2, 0)
@@ -124,7 +124,12 @@ class ColorSamplerTest {
             mesh, mesh, colorMap, surface, List.of(brick), 4
         );
 
-        assertEquals(red, result.get(brick), "Red should win by majority vote (2 vs 1)");
+        ColorRgb color = result.get(brick);
+        assertNotNull(color, "Brick should have a color");
+        // Average of 2 red (1,0,0) + 1 blue (0,0,1) = (2/3, 0, 1/3)
+        assertEquals(2f / 3f, color.r(), 0.01f, "Red channel should be ~0.667");
+        assertEquals(0f, color.g(), 0.01f, "Green channel should be 0");
+        assertEquals(1f / 3f, color.b(), 0.01f, "Blue channel should be ~0.333");
     }
 
     @Test

@@ -220,10 +220,10 @@ class GlbLoaderTest {
             1f, 0f, 0f,  1f, 1f, 0f,  0f, 1f, 0f    // tri 1
         };
         int[] indices = { 0, 1, 2, 3, 4, 5 };
-        // tri 0 UVs → left half (u ≈ 0.17), tri 1 UVs → right half (u ≈ 0.83)
+        // tri 0 UVs → left half, tri 1 UVs → right half
         float[] texCoords = {
-            0.0f, 0.5f,  0.25f, 0.5f,  0.25f, 0.5f, // avg u=0.167 → pixel 0 (red)
-            0.75f, 0.5f, 1.0f, 0.5f,   0.75f, 0.5f   // avg u=0.833 → pixel 1 (blue)
+            0.0f, 0.5f,  0.25f, 0.5f,  0.25f, 0.5f, // all → pixel 0 (red)
+            0.75f, 0.5f, 0.99f, 0.5f,  0.75f, 0.5f   // all → pixel 1 (blue)
         };
         byte[] png = createTwoColorPng(0xFF0000, 0x0000FF); // left=red, right=blue
 

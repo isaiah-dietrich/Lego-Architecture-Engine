@@ -16,8 +16,14 @@ import com.lego.voxel.VoxelGrid;
  *
  * <p>For each filled voxel, determines which triangles from the normalized mesh
  * overlap it (using the same SAT-based overlap test as the voxelizer), then
- * applies a majority-vote rule to assign a single color. Per-brick color is then
- * determined by majority-vote across the brick's constituent voxels.
+ * computes an area-weighted average of their colors in linear RGB to assign a
+ * single color. Per-brick color is then determined by averaging across the
+ * brick's constituent voxels.
+ *
+ * <p>Area weighting ensures that large triangles (e.g., flat body panels)
+ * contribute proportionally more than small triangles from detailed/dense
+ * geometry areas. Without it, detailed regions with many small triangles
+ * would dominate the color simply by having more triangle overlaps per voxel.
  *
  * <p>Color is remapped from pre-normalization triangle keys to post-normalization
  * triangle keys by index position (triangle order is preserved by
@@ -26,6 +32,9 @@ import com.lego.voxel.VoxelGrid;
 public final class ColorSampler {
 
     private ColorSampler() {}
+
+    /** A color sample paired with its triangle's area weight. */
+    private record WeightedColor(ColorRgb color, double weight) {}
 
     /**
      * Determines per-brick color from triangle color data.
@@ -51,13 +60,13 @@ public final class ColorSampler {
             originalMesh, normalizedMesh, colorMap
         );
 
-        // Step 1: For each filled voxel, find majority color from overlapping triangles
+        // Step 1: For each filled voxel, average color from overlapping triangles
         ColorRgb[][][] voxelColors = sampleVoxelColors(normalizedMesh, normalizedColorMap, surface, resolution);
 
-        // Step 2: For each brick, majority-vote across its voxels
+        // Step 2: For each brick, average color across its voxels
         Map<Brick, ColorRgb> brickColors = new HashMap<>();
         for (Brick brick : bricks) {
-            ColorRgb brickColor = majorityVoteBrick(brick, voxelColors, surface);
+            ColorRgb brickColor = averageBrickColor(brick, voxelColors, surface);
             if (brickColor != null) {
                 brickColors.put(brick, brickColor);
             }
@@ -86,7 +95,7 @@ public final class ColorSampler {
     }
 
     /**
-     * For each filled voxel, finds the majority color from overlapping triangles.
+     * For each filled voxel, computes area-weighted average color from overlapping triangles.
      */
     private static ColorRgb[][][] sampleVoxelColors(
         Mesh normalizedMesh,
@@ -97,11 +106,14 @@ public final class ColorSampler {
         int w = surface.width();
         int h = surface.height();
         int d = surface.depth();
-        Map<Long, List<ColorRgb>> voxelVotes = new HashMap<>();
+        Map<Long, List<WeightedColor>> voxelVotes = new HashMap<>();
 
         for (Triangle tri : normalizedMesh.triangles()) {
             ColorRgb color = colorMap.get(tri);
             if (color == null) continue;
+
+            double area = triangleArea(tri);
+            if (area <= 0) continue;
 
             // Find candidate voxel range for this triangle
             double triMinX = Math.min(tri.v1().x(), Math.min(tri.v2().x(), tri.v3().x()));
@@ -118,6 +130,8 @@ public final class ColorSampler {
             int kMin = clamp((int) Math.floor(triMinZ) - 1, 0, resolution - 1);
             int kMax = clamp((int) Math.ceil(triMaxZ) + 1, 0, resolution - 1);
 
+            WeightedColor wc = new WeightedColor(color, area);
+
             for (int i = iMin; i <= iMax; i++) {
                 for (int j = jMin; j <= jMax; j++) {
                     for (int k = kMin; k <= kMax; k++) {
@@ -129,71 +143,114 @@ public final class ColorSampler {
 
                         if (triangleOverlapsVoxel(tri, cx, cy, cz, 0.5, 0.5, 0.5)) {
                             long key = pack(i, j, k);
-                            voxelVotes.computeIfAbsent(key, x -> new ArrayList<>()).add(color);
+                            voxelVotes.computeIfAbsent(key, x -> new ArrayList<>()).add(wc);
                         }
                     }
                 }
             }
         }
 
-        // Resolve majority color per voxel
+        // Area-weighted average color per voxel
         ColorRgb[][][] result = new ColorRgb[w][h][d];
-        for (Map.Entry<Long, List<ColorRgb>> entry : voxelVotes.entrySet()) {
+        for (Map.Entry<Long, List<WeightedColor>> entry : voxelVotes.entrySet()) {
             long key = entry.getKey();
             int x = unpackX(key);
             int y = unpackY(key);
             int z = unpackZ(key);
-            result[x][y][z] = majorityColor(entry.getValue());
+            result[x][y][z] = weightedAverageColor(entry.getValue());
         }
         return result;
     }
 
     /**
-     * Returns the most common color in the list. On ties, picks the first color
-     * that reached the maximum count (deterministic for a given triangle order).
+     * Computes the area of a triangle using the cross-product formula.
      */
-    private static ColorRgb majorityColor(List<ColorRgb> votes) {
-        if (votes.isEmpty()) return null;
-        if (votes.size() == 1) return votes.get(0);
-
-        Map<ColorRgb, Integer> counts = new HashMap<>();
-        for (ColorRgb c : votes) {
-            counts.merge(c, 1, Integer::sum);
-        }
-
-        ColorRgb best = null;
-        int bestCount = 0;
-        // Iterate in insertion order over votes to break ties deterministically
-        for (ColorRgb c : votes) {
-            int count = counts.get(c);
-            if (count > bestCount) {
-                bestCount = count;
-                best = c;
-            }
-        }
-        return best;
+    private static double triangleArea(Triangle tri) {
+        double ex1 = tri.v2().x() - tri.v1().x();
+        double ey1 = tri.v2().y() - tri.v1().y();
+        double ez1 = tri.v2().z() - tri.v1().z();
+        double ex2 = tri.v3().x() - tri.v1().x();
+        double ey2 = tri.v3().y() - tri.v1().y();
+        double ez2 = tri.v3().z() - tri.v1().z();
+        double cx = ey1 * ez2 - ez1 * ey2;
+        double cy = ez1 * ex2 - ex1 * ez2;
+        double cz = ex1 * ey2 - ey1 * ex2;
+        return 0.5 * Math.sqrt(cx * cx + cy * cy + cz * cz);
     }
 
     /**
-     * Majority-vote color across all voxels covered by a brick.
+     * Computes area-weighted average color.
      */
-    private static ColorRgb majorityVoteBrick(
+    private static ColorRgb weightedAverageColor(List<WeightedColor> samples) {
+        if (samples.isEmpty()) return null;
+        if (samples.size() == 1) return samples.get(0).color();
+
+        double rSum = 0, gSum = 0, bSum = 0, wSum = 0;
+        for (WeightedColor wc : samples) {
+            double w = wc.weight();
+            rSum += wc.color().r() * w;
+            gSum += wc.color().g() * w;
+            bSum += wc.color().b() * w;
+            wSum += w;
+        }
+        return new ColorRgb(
+            (float) Math.min(1.0, rSum / wSum),
+            (float) Math.min(1.0, gSum / wSum),
+            (float) Math.min(1.0, bSum / wSum)
+        );
+    }
+
+    /**
+     * Averages the colors in the list (in linear RGB space).
+     * Returns null if the list is empty.
+     */
+    private static ColorRgb averageColor(List<ColorRgb> colors) {
+        if (colors.isEmpty()) return null;
+        if (colors.size() == 1) return colors.get(0);
+
+        float rSum = 0, gSum = 0, bSum = 0;
+        for (ColorRgb c : colors) {
+            rSum += c.r();
+            gSum += c.g();
+            bSum += c.b();
+        }
+        int n = colors.size();
+        return new ColorRgb(
+            Math.min(1f, rSum / n),
+            Math.min(1f, gSum / n),
+            Math.min(1f, bSum / n)
+        );
+    }
+
+    /**
+     * Averages color across all voxels covered by a brick.
+     */
+    private static ColorRgb averageBrickColor(
         Brick brick, ColorRgb[][][] voxelColors, VoxelGrid surface
     ) {
-        List<ColorRgb> votes = new ArrayList<>();
+        float rSum = 0, gSum = 0, bSum = 0;
+        int count = 0;
         for (int x = brick.x(); x < brick.maxX(); x++) {
             for (int y = brick.y(); y < brick.maxY(); y++) {
                 for (int z = brick.z(); z < brick.maxZ(); z++) {
                     if (x < voxelColors.length && y < voxelColors[0].length && z < voxelColors[0][0].length) {
                         ColorRgb c = voxelColors[x][y][z];
                         if (c != null) {
-                            votes.add(c);
+                            rSum += c.r();
+                            gSum += c.g();
+                            bSum += c.b();
+                            count++;
                         }
                     }
                 }
             }
         }
-        return majorityColor(votes);
+        if (count == 0) return null;
+        return new ColorRgb(
+            Math.min(1f, rSum / count),
+            Math.min(1f, gSum / count),
+            Math.min(1f, bSum / count)
+        );
     }
 
     // ---- SAT triangle-AABB overlap (same algorithm as TopologicalVoxelizer) ----

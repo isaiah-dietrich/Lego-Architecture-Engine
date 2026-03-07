@@ -7,3 +7,7 @@
 ## Catalog
 - Support more parts
 - 
+
+## Known Bugs
+ - the_cats_body model front legs are connected
+ 
