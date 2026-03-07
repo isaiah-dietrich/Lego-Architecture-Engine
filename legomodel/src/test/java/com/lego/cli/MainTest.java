@@ -153,7 +153,7 @@ class MainTest {
 
         assertEquals(1, exitCode);
         String error = errBuffer.toString();
-        assertTrue(error.contains("failed to write output OBJ file"), 
+        assertTrue(error.contains("failed to write output file"),
             "Expected write error message, got: " + error);
     }
 
@@ -255,8 +255,28 @@ class MainTest {
 
         assertEquals(1, exitCode);
         String error = errBuffer.toString();
-        assertTrue(error.contains("export mode must be 'brick', 'voxel-surface', or 'voxel-solid'"));
+        assertTrue(error.contains("export mode must be 'brick', 'voxel-surface', 'voxel-solid', or 'ldraw'"));
         assertTrue(error.contains("Usage:"));
+    }
+
+    @Test
+    void testExportModeLDrawWritesLdr() throws IOException {
+        Path objPath = tempDir.resolve("cube.obj");
+        Path outLdr = tempDir.resolve("model.ldr");
+        createCubeObj(objPath);
+
+        ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
+        ByteArrayOutputStream errBuffer = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(outBuffer);
+        PrintStream err = new PrintStream(errBuffer);
+
+        int exitCode = Main.run(new String[] { objPath.toString(), "12", outLdr.toString(), "ldraw" }, out, err);
+
+        assertEquals(0, exitCode, "Expected success. Errors: " + errBuffer);
+        assertTrue(Files.exists(outLdr));
+        String content = Files.readString(outLdr);
+        assertTrue(content.contains("0 LEGO Architecture Engine LDraw export"));
+        assertTrue(content.lines().anyMatch(line -> line.startsWith("1 ")), "Expected at least one part placement line");
     }
 
     @Test
@@ -603,6 +623,76 @@ class MainTest {
         assertTrue(fullCount < limitedCount,
             "Expected full catalog to use fewer bricks via larger parts; limited=" +
             limitedCount + ", full=" + fullCount);
+    }
+
+    @Test
+    void testAnalyzeSteppingWritesMetricsFiles() throws IOException {
+        Path objPath = tempDir.resolve("triangle.obj");
+        Path outObj = tempDir.resolve("triangle_out.obj");
+        Path analysisDir = tempDir.resolve("analysis");
+        Files.writeString(objPath, """
+            v 0 0 0
+            v 1 0 0
+            v 0 1 0
+            f 1 2 3
+            """);
+
+        ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
+        ByteArrayOutputStream errBuffer = new ByteArrayOutputStream();
+        int exitCode = Main.run(
+            new String[] {
+                objPath.toString(),
+                "10",
+                outObj.toString(),
+                "brick",
+                "legacy",
+                "--analyze-stepping",
+                "--analysis-dir",
+                analysisDir.toString()
+            },
+            new PrintStream(outBuffer),
+            new PrintStream(errBuffer)
+        );
+
+        assertEquals(0, exitCode, "Expected analysis mode to succeed. Errors: " + errBuffer);
+        assertTrue(Files.exists(analysisDir.resolve("stepping_metrics.json")));
+        assertTrue(Files.exists(analysisDir.resolve("stepping_layers.csv")));
+    }
+
+    @Test
+    void testAnalyzeSteppingSweepWritesComparativeFiles() throws IOException {
+        Path objPath = tempDir.resolve("triangle.obj");
+        Path outObj = tempDir.resolve("triangle_sweep.obj");
+        Path analysisDir = tempDir.resolve("analysis_sweep");
+        Files.writeString(objPath, """
+            v 0 0 0
+            v 1 0 0
+            v 0 1 0
+            f 1 2 3
+            """);
+
+        ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
+        ByteArrayOutputStream errBuffer = new ByteArrayOutputStream();
+        int exitCode = Main.run(
+            new String[] {
+                objPath.toString(),
+                "10",
+                outObj.toString(),
+                "brick",
+                "legacy",
+                "--analyze-stepping",
+                "--analysis-dir=" + analysisDir,
+                "--sweep=10,20"
+            },
+            new PrintStream(outBuffer),
+            new PrintStream(errBuffer)
+        );
+
+        assertEquals(0, exitCode, "Expected sweep analysis mode to succeed. Errors: " + errBuffer);
+        assertTrue(Files.exists(analysisDir.resolve("stepping_sweep.json")));
+        assertTrue(Files.exists(analysisDir.resolve("stepping_sweep.csv")));
+        assertTrue(Files.exists(analysisDir.resolve("resolution_10").resolve("stepping_metrics.json")));
+        assertTrue(Files.exists(analysisDir.resolve("resolution_20").resolve("stepping_layers.csv")));
     }
 
     private void createLimitedCatalog(Path baseDir) throws IOException {

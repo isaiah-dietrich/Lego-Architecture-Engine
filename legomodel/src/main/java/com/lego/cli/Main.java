@@ -3,12 +3,15 @@ package com.lego.cli;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 import com.lego.export.BrickObjExporter;
+import com.lego.export.LDrawExporter;
 import com.lego.export.VoxelObjExporter;
 import com.lego.mesh.MeshNormalizer;
 import com.lego.mesh.ObjLoader;
@@ -18,6 +21,10 @@ import com.lego.optimize.AllowedBrickDimensions;
 import com.lego.optimize.BrickPlacer;
 import com.lego.voxel.SurfaceExtractor;
 import com.lego.voxel.VoxelGrid;
+import com.lego.voxel.VoxelSteppingAnalyzer;
+import com.lego.voxel.VoxelSteppingAnalyzer.AnalysisMetadata;
+import com.lego.voxel.VoxelSteppingAnalyzer.ResolutionSweepResult;
+import com.lego.voxel.VoxelSteppingAnalyzer.VoxelSteppingMetrics;
 import com.lego.voxel.VoxelizationStrategy;
 import com.lego.voxel.Voxelizer;
 
@@ -52,37 +59,48 @@ public final class Main {
      * @return exit code
      */
     static int run(String[] args, PrintStream out, PrintStream err, Path catalogBaseDir) {
-        if (args == null || (args.length != 2 && args.length != 3 && args.length != 4 && args.length != 5)) {
+        if (args == null) {
             printUsage(err);
             return 1;
         }
 
-        Path objPath = Path.of(args[0]);
-        Path outputObjPath = args.length >= 3 ? Path.of(args[2]) : null;
-        
-        // Smart argument parsing: detect if arg is exportMode or voxelizerMode
+        ParsedOptions parsedOptions;
+        try {
+            parsedOptions = parseCliOptions(args);
+        } catch (IllegalArgumentException e) {
+            err.println("Error: " + e.getMessage());
+            printUsage(err);
+            return 1;
+        }
+
+        List<String> positional = parsedOptions.positionalArgs();
+        if (positional.size() < 2 || positional.size() > 5) {
+            printUsage(err);
+            return 1;
+        }
+
+        Path objPath = Path.of(positional.get(0));
+        Path outputObjPath = positional.size() >= 3 ? Path.of(positional.get(2)) : null;
+
         String exportMode = "brick";
         String voxelizerModeArg = "legacy";
-        
-        if (args.length >= 4) {
-            String arg3 = args[3];
-            // Check if arg3 is a voxelizer mode (not an export mode)
+
+        if (positional.size() >= 4) {
+            String arg3 = positional.get(3);
             if (arg3.equals("legacy") || arg3.equals("topological")) {
                 voxelizerModeArg = arg3;
-                // Keep exportMode as default "brick"
             } else {
-                // arg3 is export mode
                 exportMode = arg3;
             }
         }
-        
-        if (args.length == 5) {
-            voxelizerModeArg = args[4];
+
+        if (positional.size() == 5) {
+            voxelizerModeArg = positional.get(4);
         }
-        
+
         int resolution;
         try {
-            resolution = Integer.parseInt(args[1]);
+            resolution = Integer.parseInt(positional.get(1));
         } catch (NumberFormatException e) {
             err.println("Error: resolution must be an integer.");
             printUsage(err);
@@ -95,8 +113,11 @@ public final class Main {
             return 1;
         }
 
-        if (!exportMode.equals("brick") && !exportMode.equals("voxel-surface") && !exportMode.equals("voxel-solid")) {
-            err.println("Error: export mode must be 'brick', 'voxel-surface', or 'voxel-solid'.");
+        if (!exportMode.equals("brick")
+            && !exportMode.equals("voxel-surface")
+            && !exportMode.equals("voxel-solid")
+            && !exportMode.equals("ldraw")) {
+            err.println("Error: export mode must be 'brick', 'voxel-surface', 'voxel-solid', or 'ldraw'.");
             printUsage(err);
             return 1;
         }
@@ -114,7 +135,7 @@ public final class Main {
             Mesh mesh = ObjLoader.load(objPath);
             Mesh normalized = MeshNormalizer.normalize(mesh, resolution);
             VoxelGrid solid = Voxelizer.voxelize(normalized, resolution, voxelizationStrategy);
-            
+
             // Topological mode produces surface-only grid; legacy mode requires surface extraction.
             VoxelGrid surface = (voxelizationStrategy == VoxelizationStrategy.TOPOLOGICAL_SURFACE)
                 ? solid
@@ -161,9 +182,66 @@ public final class Main {
                             VoxelObjExporter.export(solid, outputObjPath);
                             out.println("Visual OBJ exported (voxel-solid): " + outputObjPath.toAbsolutePath());
                             break;
+                        case "ldraw":
+                            LDrawExporter.export(bricks, outputObjPath, catalogBaseDir);
+                            out.println("LDraw exported: " + outputObjPath.toAbsolutePath());
+                            break;
                     }
                 } catch (IOException e) {
-                    err.println("Error: failed to write output OBJ file: " + e.getMessage());
+                    err.println("Error: failed to write output file: " + e.getMessage());
+                    return 1;
+                }
+            }
+
+            if (parsedOptions.analyzeStepping()) {
+                Path analysisDir = resolveAnalysisDir(parsedOptions.analysisDir(), outputObjPath);
+                try {
+                    if (!parsedOptions.sweepResolutions().isEmpty()) {
+                        ResolutionSweepResult sweepResult = VoxelSteppingAnalyzer.runResolutionSweep(
+                            mesh,
+                            objPath,
+                            parsedOptions.sweepResolutions(),
+                            voxelizationStrategy,
+                            exportMode,
+                            parsedOptions.largeJumpThreshold()
+                        );
+
+                        for (VoxelSteppingAnalyzer.SweepEntry entry : sweepResult.entries()) {
+                            Path perResolutionDir = analysisDir.resolve("resolution_" + entry.resolution());
+                            VoxelSteppingAnalyzer.writeMetricsJson(
+                                entry.metrics(),
+                                perResolutionDir.resolve("stepping_metrics.json")
+                            );
+                            VoxelSteppingAnalyzer.writeLayersCsv(
+                                entry.metrics(),
+                                perResolutionDir.resolve("stepping_layers.csv")
+                            );
+                        }
+
+                        VoxelSteppingAnalyzer.writeSweepJson(sweepResult, analysisDir.resolve("stepping_sweep.json"));
+                        VoxelSteppingAnalyzer.writeSweepCsv(sweepResult, analysisDir.resolve("stepping_sweep.csv"));
+                        out.println("Stepping analysis sweep exported: " + analysisDir.toAbsolutePath());
+                    } else {
+                        AnalysisMetadata metadata = new AnalysisMetadata(
+                            objPath.toString(),
+                            resolution,
+                            voxelizationStrategy.cliValue(),
+                            exportMode,
+                            Instant.now().toString()
+                        );
+                        VoxelSteppingMetrics metrics = VoxelSteppingAnalyzer.analyze(
+                            solid,
+                            surface,
+                            metadata,
+                            parsedOptions.largeJumpThreshold()
+                        );
+
+                        VoxelSteppingAnalyzer.writeMetricsJson(metrics, analysisDir.resolve("stepping_metrics.json"));
+                        VoxelSteppingAnalyzer.writeLayersCsv(metrics, analysisDir.resolve("stepping_layers.csv"));
+                        out.println("Stepping analysis exported: " + analysisDir.toAbsolutePath());
+                    }
+                } catch (IOException e) {
+                    err.println("Error: failed to write stepping analysis files: " + e.getMessage());
                     return 1;
                 }
             }
@@ -182,10 +260,96 @@ public final class Main {
     }
 
     private static void printUsage(PrintStream err) {
-        err.println("Usage: java -jar legomodel.jar <objPath> <resolution> [outputObjPath] [exportMode] [voxelizerMode]");
-        err.println("  exportMode: 'brick' (default), 'voxel-surface', or 'voxel-solid'");
+        err.println("Usage: java -jar legomodel.jar <objPath> <resolution> [outputObjPath] [exportMode] [voxelizerMode] [options]");
+        err.println("  exportMode: 'brick' (default), 'voxel-surface', 'voxel-solid', or 'ldraw'");
         err.println("  voxelizerMode: 'legacy' (default) or 'topological'");
+        err.println("  options:");
+        err.println("    --analyze-stepping             Write stepping analysis files");
+        err.println("    --analysis-dir=<path>          Output directory for analysis artifacts");
+        err.println("    --jump-threshold=<int>         Large jump threshold (default: 25)");
+        err.println("    --sweep=<r1,r2,...>            Analyze multiple resolutions (e.g., 10,20,30)");
     }
+
+    private static ParsedOptions parseCliOptions(String[] args) {
+        List<String> positional = new ArrayList<>();
+        boolean analyzeStepping = false;
+        Path analysisDir = null;
+        int jumpThreshold = 25;
+        List<Integer> sweepResolutions = new ArrayList<>();
+
+        for (int i = 0; i < args.length; i++) {
+            String arg = args[i];
+            if ("--analyze-stepping".equals(arg)) {
+                analyzeStepping = true;
+            } else if (arg.startsWith("--analysis-dir=")) {
+                analysisDir = Path.of(arg.substring("--analysis-dir=".length()));
+            } else if ("--analysis-dir".equals(arg)) {
+                if (i + 1 >= args.length) {
+                    throw new IllegalArgumentException("--analysis-dir requires a value");
+                }
+                analysisDir = Path.of(args[++i]);
+            } else if (arg.startsWith("--jump-threshold=")) {
+                String value = arg.substring("--jump-threshold=".length());
+                jumpThreshold = parseNonNegativeInt(value, "jump-threshold");
+            } else if (arg.startsWith("--sweep=")) {
+                String value = arg.substring("--sweep=".length());
+                sweepResolutions = parseSweepResolutions(value);
+            } else {
+                positional.add(arg);
+            }
+        }
+
+        return new ParsedOptions(positional, analyzeStepping, analysisDir, jumpThreshold, sweepResolutions);
+    }
+
+    private static Path resolveAnalysisDir(Path explicitAnalysisDir, Path outputObjPath) {
+        if (explicitAnalysisDir != null) {
+            return explicitAnalysisDir;
+        }
+        if (outputObjPath != null && outputObjPath.getParent() != null) {
+            return outputObjPath.getParent();
+        }
+        return Path.of("output", "analysis");
+    }
+
+    private static int parseNonNegativeInt(String value, String fieldName) {
+        int parsed;
+        try {
+            parsed = Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(fieldName + " must be an integer");
+        }
+        if (parsed < 0) {
+            throw new IllegalArgumentException(fieldName + " must be >= 0");
+        }
+        return parsed;
+    }
+
+    private static List<Integer> parseSweepResolutions(String csv) {
+        if (csv == null || csv.isBlank()) {
+            throw new IllegalArgumentException("sweep resolutions must not be empty");
+        }
+
+        String[] parts = csv.split(",");
+        List<Integer> resolutions = new ArrayList<>();
+        for (String part : parts) {
+            String trimmed = part.trim();
+            int resolution = parseNonNegativeInt(trimmed, "sweep resolution");
+            if (resolution < 2) {
+                throw new IllegalArgumentException("sweep resolution must be >= 2");
+            }
+            resolutions.add(resolution);
+        }
+        return resolutions;
+    }
+
+    private record ParsedOptions(
+        List<String> positionalArgs,
+        boolean analyzeStepping,
+        Path analysisDir,
+        int largeJumpThreshold,
+        List<Integer> sweepResolutions
+    ) {}
 
     /**
      * Prints a summary of block types used, grouped by dimensions and sorted by volume.

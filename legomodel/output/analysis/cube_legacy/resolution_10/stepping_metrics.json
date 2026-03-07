@@ -1,0 +1,44 @@
+{
+  "metadata": {
+    "model_path": "models/basic_shapes/cube.obj",
+    "resolution": 10,
+    "voxelizer_mode": "legacy",
+    "export_mode": "voxel-surface",
+    "timestamp": "2026-03-05T00:07:23.836596Z"
+  },
+  "layer_series": {
+    "filled_voxels": [100,100,100,100,100,100,100,100,100,100],
+    "surface_voxels": [100,36,36,36,36,36,36,36,36,100],
+    "delta": [64,0,0,0,0,0,0,0,-64]
+  },
+  "delta_stats": {
+    "mean": 0.00000000,
+    "stddev": 30.16988933,
+    "min": -64,
+    "max": 64,
+    "coefficient_of_variation": 0.00000000
+  },
+  "jump_severity": {
+    "largest_abs_jump": 64,
+    "large_jump_threshold": 10,
+    "large_jump_count": 2
+  },
+  "plateaus": {
+    "repeated_adjacent_layers": 7,
+    "longest_plateau_length": 8
+  },
+  "symmetry_mismatch": {
+    "x_overall": 0,
+    "y_overall": 0,
+    "z_overall": 0,
+    "x_per_layer": [0,0,0,0,0,0,0,0,0,0],
+    "y_per_layer": [0,0,0,0,0,0,0,0,0,0],
+    "z_per_layer": [0,0,0,0,0,0,0,0,0,0]
+  },
+  "connectivity": {
+    "overall_filled_components": 1,
+    "overall_surface_components": 1,
+    "filled_components_per_layer": [1,1,1,1,1,1,1,1,1,1],
+    "surface_components_per_layer": [1,1,1,1,1,1,1,1,1,1]
+  }
+}

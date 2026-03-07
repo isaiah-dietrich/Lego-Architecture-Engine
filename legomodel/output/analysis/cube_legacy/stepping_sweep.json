@@ -1,0 +1,24 @@
+{
+  "entries": [
+    {
+      "resolution": 10,
+      "surface_voxels": 488,
+      "largest_abs_jump": 64,
+      "large_jump_count": 2,
+      "delta_mean": 0.00000000,
+      "delta_stddev": 30.16988933,
+      "delta_cv": 0.00000000,
+      "longest_plateau": 8
+    },
+    {
+      "resolution": 20,
+      "surface_voxels": 2168,
+      "largest_abs_jump": 324,
+      "large_jump_count": 2,
+      "delta_mean": 0.00000000,
+      "delta_stddev": 105.11948089,
+      "delta_cv": 0.00000000,
+      "longest_plateau": 18
+    }
+  ]
+}
