@@ -695,6 +695,112 @@ class MainTest {
         assertTrue(Files.exists(analysisDir.resolve("resolution_20").resolve("stepping_layers.csv")));
     }
 
+    // ========== COLOR MODE CLI TESTS ==========
+
+    @Test
+    void testColorModeGlbColorWithObjInputFails() throws IOException {
+        Path objPath = tempDir.resolve("model.obj");
+        Path outLdr = tempDir.resolve("model.ldr");
+        Files.writeString(objPath, """
+            v 0 0 0
+            v 1 0 0
+            v 0 1 0
+            f 1 2 3
+            """);
+
+        ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
+        ByteArrayOutputStream errBuffer = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(outBuffer);
+        PrintStream err = new PrintStream(errBuffer);
+
+        int exitCode = Main.run(new String[] {
+            objPath.toString(), "4", outLdr.toString(), "ldraw",
+            "--color-mode=glb-color"
+        }, out, err);
+
+        assertEquals(1, exitCode);
+        String error = errBuffer.toString();
+        assertTrue(error.contains("glb-color"),
+            "Should mention glb-color in error. Got: " + error);
+        assertTrue(error.contains(".obj"),
+            "Should mention .obj in error. Got: " + error);
+    }
+
+    @Test
+    void testInvalidColorModeFails() throws IOException {
+        Path objPath = tempDir.resolve("model.obj");
+        Path outLdr = tempDir.resolve("model.ldr");
+        Files.writeString(objPath, """
+            v 0 0 0
+            v 1 0 0
+            v 0 1 0
+            f 1 2 3
+            """);
+
+        ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
+        ByteArrayOutputStream errBuffer = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(outBuffer);
+        PrintStream err = new PrintStream(errBuffer);
+
+        int exitCode = Main.run(new String[] {
+            objPath.toString(), "4", outLdr.toString(), "ldraw",
+            "--color-mode=invalid"
+        }, out, err);
+
+        assertEquals(1, exitCode);
+        String error = errBuffer.toString();
+        assertTrue(error.contains("Invalid --color-mode"),
+            "Should show color mode error. Got: " + error);
+    }
+
+    @Test
+    void testColorFallbackOptionIsParsedWithoutError() throws IOException {
+        Path objPath = tempDir.resolve("model.obj");
+        Files.writeString(objPath, """
+            v 0 0 0
+            v 1 0 0
+            v 0 1 0
+            f 1 2 3
+            """);
+
+        ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
+        ByteArrayOutputStream errBuffer = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(outBuffer);
+        PrintStream err = new PrintStream(errBuffer);
+
+        int exitCode = Main.run(new String[] {
+            objPath.toString(), "4",
+            "--color-fallback=15"
+        }, out, err);
+
+        assertEquals(0, exitCode,
+            "color-fallback with default color mode should not cause errors. Err: " + errBuffer);
+    }
+
+    @Test
+    void testColorModeNoneIsAccepted() throws IOException {
+        Path objPath = tempDir.resolve("model.obj");
+        Files.writeString(objPath, """
+            v 0 0 0
+            v 1 0 0
+            v 0 1 0
+            f 1 2 3
+            """);
+
+        ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
+        ByteArrayOutputStream errBuffer = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(outBuffer);
+        PrintStream err = new PrintStream(errBuffer);
+
+        int exitCode = Main.run(new String[] {
+            objPath.toString(), "4",
+            "--color-mode=none"
+        }, out, err);
+
+        assertEquals(0, exitCode,
+            "color-mode=none should be accepted. Err: " + errBuffer);
+    }
+
     private void createLimitedCatalog(Path baseDir) throws IOException {
         Path catalogDir = baseDir.resolve("data/catalog");
         Files.createDirectories(catalogDir);

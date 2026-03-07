@@ -126,4 +126,66 @@ class ColorSamplerTest {
 
         assertEquals(red, result.get(brick), "Red should win by majority vote (2 vs 1)");
     }
+
+    @Test
+    void multipleBricksGetDistinctColorsFromDifferentTriangles() {
+        // Two triangles in different spatial regions with different colors
+        Triangle t1 = new Triangle(
+            new Vector3(0, 0, 0), new Vector3(2, 0, 0), new Vector3(0, 2, 0)
+        );
+        Triangle t2 = new Triangle(
+            new Vector3(3, 0, 0), new Vector3(5, 0, 0), new Vector3(3, 2, 0)
+        );
+        Mesh mesh = new Mesh(List.of(t1, t2));
+
+        ColorRgb red = new ColorRgb(1f, 0f, 0f);
+        ColorRgb blue = new ColorRgb(0f, 0f, 1f);
+        Map<Triangle, ColorRgb> colorMap = new HashMap<>();
+        colorMap.put(t1, red);
+        colorMap.put(t2, blue);
+
+        VoxelGrid surface = new VoxelGrid(6, 6, 6);
+        surface.setFilled(0, 0, 0, true);
+        surface.setFilled(3, 0, 0, true);
+
+        Brick brick1 = new Brick(0, 0, 0, 1, 1, 1);
+        Brick brick2 = new Brick(3, 0, 0, 1, 1, 1);
+
+        Map<Brick, ColorRgb> result = ColorSampler.sampleBrickColors(
+            mesh, mesh, colorMap, surface, List.of(brick1, brick2), 6
+        );
+
+        assertEquals(red, result.get(brick1), "Brick1 should be red from t1");
+        assertEquals(blue, result.get(brick2), "Brick2 should be blue from t2");
+    }
+
+    @Test
+    void remapColorsSkipsTrianglesWithNoColorEntry() {
+        Triangle origTri1 = new Triangle(
+            new Vector3(0, 0, 0), new Vector3(10, 0, 0), new Vector3(0, 10, 0)
+        );
+        Triangle origTri2 = new Triangle(
+            new Vector3(1, 0, 0), new Vector3(11, 0, 0), new Vector3(1, 10, 0)
+        );
+        Triangle normTri1 = new Triangle(
+            new Vector3(0, 0, 0), new Vector3(1, 0, 0), new Vector3(0, 1, 0)
+        );
+        Triangle normTri2 = new Triangle(
+            new Vector3(0.1, 0, 0), new Vector3(1.1, 0, 0), new Vector3(0.1, 1, 0)
+        );
+
+        Mesh original = new Mesh(List.of(origTri1, origTri2));
+        Mesh normalized = new Mesh(List.of(normTri1, normTri2));
+
+        // Only map color for the first triangle
+        ColorRgb red = new ColorRgb(1f, 0f, 0f);
+        Map<Triangle, ColorRgb> colorMap = new HashMap<>();
+        colorMap.put(origTri1, red);
+
+        Map<Triangle, ColorRgb> remapped = ColorSampler.remapColors(original, normalized, colorMap);
+
+        assertEquals(1, remapped.size(), "Only mapped triangle should be in result");
+        assertEquals(red, remapped.get(normTri1));
+        assertNull(remapped.get(normTri2), "Unmapped triangle should not be in result");
+    }
 }

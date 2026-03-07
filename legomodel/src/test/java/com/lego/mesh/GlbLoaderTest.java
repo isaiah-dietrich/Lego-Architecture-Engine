@@ -277,6 +277,118 @@ class GlbLoaderTest {
         assertEquals(0.1f, color.b(), 0.01f);
     }
 
+    // ---- Phase 3 edge case tests ----
+
+    @Test
+    void uvWrappingHandlesCoordinatesAboveOne() throws IOException {
+        float[] positions = {
+            0f, 0f, 0f,
+            1f, 0f, 0f,
+            0f, 1f, 0f
+        };
+        int[] indices = { 0, 1, 2 };
+        // UV coords > 1.0 should wrap: 1.5 → 0.5
+        float[] texCoords = { 1.5f, 1.5f, 1.5f, 1.5f, 1.5f, 1.5f };
+        byte[] png = createSolidPng(1, 1, 0x00FF00); // sRGB green
+
+        Path glb = writeGlbWithTexture(
+            tempDir.resolve("tex_wrap.glb"), positions, indices, texCoords, png, null
+        );
+
+        GlbLoader loader = new GlbLoader();
+        LoadedModel loaded = loader.load(glb);
+
+        assertTrue(loaded.colorMap().isPresent(), "wrapped-UV GLB should have color map");
+        ColorRgb color = loaded.colorMap().get().values().iterator().next();
+        // sRGB (0, 255, 0) → linear (0, 1.0, 0)
+        assertEquals(0f, color.r(), 0.01f);
+        assertEquals(1f, color.g(), 0.01f);
+        assertEquals(0f, color.b(), 0.01f);
+    }
+
+    @Test
+    void textureWithMidGrayProducesCorrectLinearValue() throws IOException {
+        float[] positions = {
+            0f, 0f, 0f,
+            1f, 0f, 0f,
+            0f, 1f, 0f
+        };
+        int[] indices = { 0, 1, 2 };
+        float[] texCoords = { 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f };
+        byte[] png = createSolidPng(1, 1, 0x808080); // sRGB mid-gray
+
+        Path glb = writeGlbWithTexture(
+            tempDir.resolve("tex_gray.glb"), positions, indices, texCoords, png, null
+        );
+
+        GlbLoader loader = new GlbLoader();
+        LoadedModel loaded = loader.load(glb);
+
+        assertTrue(loaded.colorMap().isPresent());
+        ColorRgb color = loaded.colorMap().get().values().iterator().next();
+        // sRGB 128/255 ≈ 0.502; linear ≈ ((0.502 + 0.055)/1.055)^2.4 ≈ 0.214
+        float expected = (float) Math.pow((128 / 255.0 + 0.055) / 1.055, 2.4);
+        assertEquals(expected, color.r(), 0.02f);
+        assertEquals(expected, color.g(), 0.02f);
+        assertEquals(expected, color.b(), 0.02f);
+    }
+
+    @Test
+    void materialColorAloneWithNoTextureOrVertexColors() throws IOException {
+        float[] positions = {
+            0f, 0f, 0f,
+            1f, 0f, 0f,
+            0f, 1f, 0f,
+            1f, 0f, 0f,
+            1f, 1f, 0f,
+            0f, 1f, 0f
+        };
+        int[] indices = { 0, 1, 2, 3, 4, 5 };
+        float[] baseColorFactor = { 0.3f, 0.6f, 0.9f, 1.0f };
+
+        Path glb = writeGlb(tempDir.resolve("mat_two_tris.glb"), positions, indices, null, baseColorFactor);
+
+        GlbLoader loader = new GlbLoader();
+        LoadedModel loaded = loader.load(glb);
+
+        assertTrue(loaded.colorMap().isPresent());
+        Map<Triangle, ColorRgb> map = loaded.colorMap().get();
+        assertEquals(2, map.size(), "Both triangles should get the material color");
+
+        for (ColorRgb color : map.values()) {
+            assertEquals(0.3f, color.r(), 0.01f);
+            assertEquals(0.6f, color.g(), 0.01f);
+            assertEquals(0.9f, color.b(), 0.01f);
+        }
+    }
+
+    @Test
+    void uvWrappingHandlesNegativeCoordinates() throws IOException {
+        float[] positions = {
+            0f, 0f, 0f,
+            1f, 0f, 0f,
+            0f, 1f, 0f
+        };
+        int[] indices = { 0, 1, 2 };
+        // Negative UV coords: -0.5 wraps to 0.5
+        float[] texCoords = { -0.5f, -0.5f, -0.5f, -0.5f, -0.5f, -0.5f };
+        byte[] png = createSolidPng(1, 1, 0xFF0000); // sRGB red
+
+        Path glb = writeGlbWithTexture(
+            tempDir.resolve("tex_negwrap.glb"), positions, indices, texCoords, png, null
+        );
+
+        GlbLoader loader = new GlbLoader();
+        LoadedModel loaded = loader.load(glb);
+
+        assertTrue(loaded.colorMap().isPresent());
+        ColorRgb color = loaded.colorMap().get().values().iterator().next();
+        // sRGB (255, 0, 0) → linear (1.0, 0, 0) — same as red regardless of wrap
+        assertEquals(1f, color.r(), 0.01f);
+        assertEquals(0f, color.g(), 0.01f);
+        assertEquals(0f, color.b(), 0.01f);
+    }
+
     // ---- GLB binary file builder for tests ----
 
     /**

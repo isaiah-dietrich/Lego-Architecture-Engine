@@ -110,4 +110,49 @@ class LegoPaletteMapperTest {
         LegoPaletteMapper mapper = LegoPaletteMapper.load(csv);
         assertEquals(2, mapper.opaqueEntryCount(), "Transparent entry should be excluded");
     }
+
+    @Test
+    void srgbToLinearMidGrayUsesGammaCurve() {
+        // sRGB 0.5 > 0.04045, so it uses the power curve
+        double result = LegoPaletteMapper.srgbToLinear(0.5);
+        double expected = Math.pow((0.5 + 0.055) / 1.055, 2.4);
+        assertEquals(expected, result, 1e-10);
+    }
+
+    @Test
+    void srgbToLinearBelowThresholdUsesLinearSegment() {
+        // Values ≤ 0.04045 use the linear segment c/12.92
+        double result = LegoPaletteMapper.srgbToLinear(0.04);
+        assertEquals(0.04 / 12.92, result, 1e-10);
+    }
+
+    @Test
+    void srgbToLinearAtThresholdBoundary() {
+        // At exactly 0.04045, should use the linear segment
+        double result = LegoPaletteMapper.srgbToLinear(0.04045);
+        assertEquals(0.04045 / 12.92, result, 1e-10);
+    }
+
+    @Test
+    void linearToLabRedHasPositiveA() {
+        // Pure linear red should have positive a* (red-green axis)
+        double[] lab = LegoPaletteMapper.linearRgbToLab(1, 0, 0);
+        assertTrue(lab[1] > 0, "Red should have positive a*. Got a*=" + lab[1]);
+    }
+
+    @Test
+    void linearToLabGreenHasNegativeA() {
+        // Pure linear green should have negative a*
+        double[] lab = LegoPaletteMapper.linearRgbToLab(0, 1, 0);
+        assertTrue(lab[1] < 0, "Green should have negative a*. Got a*=" + lab[1]);
+    }
+
+    @Test
+    void nearestColorIsConsistentForSameInput() throws IOException {
+        LegoPaletteMapper mapper = LegoPaletteMapper.loadDefault();
+        ColorRgb color = new ColorRgb(0.5f, 0.2f, 0.1f);
+        int code1 = mapper.nearestLDrawColor(color);
+        int code2 = mapper.nearestLDrawColor(color);
+        assertEquals(code1, code2, "Same input should always produce the same nearest color");
+    }
 }
