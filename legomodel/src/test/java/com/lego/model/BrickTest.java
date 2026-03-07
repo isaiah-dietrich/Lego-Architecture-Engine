@@ -82,13 +82,15 @@ class BrickTest {
 
     @Test
     void testMaxY() {
-        Brick brick = new Brick(0, 5, 0, 1, 3, 1);
+        // maxY = y + heightUnits (Y is the height axis)
+        Brick brick = new Brick(0, 5, 0, 1, 1, 3);
         assertEquals(8, brick.maxY());
     }
 
     @Test
     void testMaxZ() {
-        Brick brick = new Brick(0, 0, 5, 1, 1, 3);
+        // maxZ = z + studY (Z is the depth axis; studY spans depth)
+        Brick brick = new Brick(0, 0, 5, 1, 3, 1);
         assertEquals(8, brick.maxZ());
     }
 
@@ -117,8 +119,9 @@ class BrickTest {
 
     @Test
     void testOverlap_Partial() {
+        // Two bricks offset in X and Z (both at same height layer y=0), partly overlapping
         Brick brick1 = new Brick(0, 0, 0, 2, 2, 1);
-        Brick brick2 = new Brick(1, 1, 0, 2, 2, 1);
+        Brick brick2 = new Brick(1, 0, 1, 2, 2, 1);
         assertTrue(brick1.overlaps(brick2));
         assertTrue(brick2.overlaps(brick1));
     }
@@ -133,8 +136,9 @@ class BrickTest {
 
     @Test
     void testOverlap_SpanningMultipleLayers() {
-        Brick brick1 = new Brick(0, 0, 0, 1, 1, 3);
-        Brick brick2 = new Brick(0, 0, 2, 1, 1, 2);
+        // studY spans Z: brick1 covers z=[0,3), brick2 covers z=[2,4) — they overlap at z=2
+        Brick brick1 = new Brick(0, 0, 0, 1, 3, 1);
+        Brick brick2 = new Brick(0, 0, 2, 1, 2, 1);
         assertTrue(brick1.overlaps(brick2));
         assertTrue(brick2.overlaps(brick1));
     }

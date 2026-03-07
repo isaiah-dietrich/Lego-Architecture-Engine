@@ -13,16 +13,19 @@ import com.lego.voxel.VoxelGrid;
  * Converts a surface voxel grid into a list of LEGO bricks using catalog-driven dimensions.
  * 
  * Algorithm:
- * - Process layer-by-layer (z ascending)
- * - Within each layer, scan y ascending, then x ascending
+ * - Process layer-by-layer (y ascending: VoxelGrid Y = OBJ height axis)
+ * - Within each height layer, scan z ascending (depth), then x ascending (width)
  * - At each unfilled position, try to place the largest brick that fits
  * - Priority: determined by catalog (area desc, width desc, depth desc)
- * 
+ *
+ * Brick dimensions occupy the horizontal X-Z plane (one voxel tall in Y):
+ * - studX spans VoxelGrid X (wolf width)
+ * - studY spans VoxelGrid Z (wolf depth)
+ *
  * Dimensions are loaded from the curated catalog and filtered to:
  * - Active parts only (active=true)
  * - Full-height bricks only (heightUnitsRaw == "1")
  * - Standard "Bricks" category only (excludes slopes, plates, special parts)
- * - Allowed orientations only (1x2 vertical forbidden)
  */
 public final class BrickPlacer {
 
@@ -73,22 +76,22 @@ public final class BrickPlacer {
      * @param surface the surface voxel grid
      * @param allowedDimensions allowed brick dimensions
      * @param reverseX whether to scan x in descending order
-     * @param reverseY whether to scan y in descending order
+     * @param reverseZ whether to scan z in descending order
      * @return list of bricks
      */
     private static List<Brick> placeBricksWithOrientation(VoxelGrid surface, List<Dimension> allowedDimensions,
-                                                           boolean reverseX, boolean reverseY) {
+                                                           boolean reverseX, boolean reverseZ) {
         List<Brick> bricks = new ArrayList<>();
         boolean[][][] covered = new boolean[surface.width()][surface.height()][surface.depth()];
 
-        // Process layer by layer (z always ascending, bottom to top)
-        for (int z = 0; z < surface.depth(); z++) {
-            // Scan y in specified direction
-            int yStart = reverseY ? surface.height() - 1 : 0;
-            int yEnd = reverseY ? -1 : surface.height();
-            int yStep = reverseY ? -1 : 1;
+        // Process layer by layer (y ascending: VoxelGrid Y = OBJ height axis)
+        for (int y = 0; y < surface.height(); y++) {
+            // Scan z in specified direction (depth axis)
+            int zStart = reverseZ ? surface.depth() - 1 : 0;
+            int zEnd = reverseZ ? -1 : surface.depth();
+            int zStep = reverseZ ? -1 : 1;
 
-            for (int y = yStart; y != yEnd; y += yStep) {
+            for (int z = zStart; z != zEnd; z += zStep) {
                 // Scan x in specified direction
                 int xStart = reverseX ? surface.width() - 1 : 0;
                 int xEnd = reverseX ? -1 : surface.width();
@@ -97,15 +100,6 @@ public final class BrickPlacer {
                 for (int x = xStart; x != xEnd; x += xStep) {
                     if (surface.isFilled(x, y, z) && !covered[x][y][z]) {
                         Brick brick = placeBrickAt(surface, covered, x, y, z, allowedDimensions);
-                        
-                        // Enforce: never allow 1x2 vertical orientation
-                        if (brick.studX() == 1 && brick.studY() == 2) {
-                            throw new IllegalStateException(
-                                "Invalid brick placement at (" + x + "," + y + "," + z + "): " +
-                                "1x2 vertical bricks are not allowed"
-                            );
-                        }
-
                         bricks.add(brick);
                         markCovered(covered, brick);
                     }
@@ -139,6 +133,10 @@ public final class BrickPlacer {
     /**
      * Checks if a brick of the given size can be placed at the position.
      *
+     * Bricks tile flat in the X-Z plane at height layer y:
+     * - studX spans VoxelGrid X (wolf width)
+     * - studY spans VoxelGrid Z (wolf depth)
+     *
      * A brick can be placed if:
      * - All required voxels are within bounds
      * - All required voxels are filled in the surface
@@ -147,17 +145,17 @@ public final class BrickPlacer {
     private static boolean canPlaceBrick(VoxelGrid surface, boolean[][][] covered,
                                           int x, int y, int z, int studX, int studY) {
         for (int dx = 0; dx < studX; dx++) {
-            for (int dy = 0; dy < studY; dy++) {
+            for (int dz = 0; dz < studY; dz++) {
                 int cx = x + dx;
-                int cy = y + dy;
+                int cz = z + dz;
 
                 // Check bounds
-                if (cx >= surface.width() || cy >= surface.height()) {
+                if (cx >= surface.width() || cz >= surface.depth()) {
                     return false;
                 }
 
                 // Check if surface is filled and not yet covered
-                if (!surface.isFilled(cx, cy, z) || covered[cx][cy][z]) {
+                if (!surface.isFilled(cx, y, cz) || covered[cx][y][cz]) {
                     return false;
                 }
             }

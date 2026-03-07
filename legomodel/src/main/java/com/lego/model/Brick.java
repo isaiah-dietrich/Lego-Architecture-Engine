@@ -51,16 +51,18 @@ public record Brick(int x, int y, int z, int studX, int studY, int heightUnits) 
 
     /**
      * Returns the maximum y coordinate occupied by this brick (exclusive).
+     * Y is the height axis (VoxelGrid Y = OBJ Y-up), so the Y extent is heightUnits.
      */
     public int maxY() {
-        return y + studY;
+        return y + heightUnits;
     }
 
     /**
      * Returns the maximum z coordinate occupied by this brick (exclusive).
+     * Z is the depth axis (VoxelGrid Z = OBJ front-back), so the Z extent is studY.
      */
     public int maxZ() {
-        return z + heightUnits;
+        return z + studY;
     }
 
     /**

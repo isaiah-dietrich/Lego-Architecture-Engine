@@ -7,6 +7,7 @@ import com.lego.model.Triangle;
 import com.lego.model.Vector3;
 
 /**
+ * NO LONGER SUPPORTED
  * Voxelizes a normalized mesh using ray-casting parity with supersampling.
  * 
  * Uses 2x2x2 supersampling (8 samples per voxel) to achieve smoother

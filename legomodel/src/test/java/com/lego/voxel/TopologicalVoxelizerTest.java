@@ -17,8 +17,8 @@ import com.lego.model.Vector3;
  * Validates:
  * - Basic surface detection (cube, pyramid, tilted plane)
  * - Deterministic run-to-run consistency
- * - Connectivity model differences (SIX vs TWENTY_SIX)
  * - Anisotropic voxel size handling
+ * - SAT-based hole-free detection of diagonal triangles
  */
 class TopologicalVoxelizerTest {
 
@@ -59,11 +59,10 @@ class TopologicalVoxelizerTest {
     void testDeterministicRunsProduceSameResult() {
         int resolution = 8;
         Mesh pyramid = createScaledPyramid(resolution);
-        
+
         VoxelGrid grid1 = TopologicalVoxelizer.voxelizeSurface(pyramid, resolution);
         VoxelGrid grid2 = TopologicalVoxelizer.voxelizeSurface(pyramid, resolution);
 
-        // Determinism: same input produces same output
         assertEquals(grid1.countFilledVoxels(), grid2.countFilledVoxels(),
             "Deterministic runs should produce identical voxel counts");
     }
@@ -73,55 +72,17 @@ class TopologicalVoxelizerTest {
         int resolution = 10;
         Mesh isoCube = createScaledCube(resolution);
         Mesh anisoCompatibleBox = createScaledBox(10.0, 5.0, 10.0);
-        
-        // Isotropic configuration
-        TopologicalVoxelizerConfig isoConfig = new TopologicalVoxelizerConfig(
-            1.0, 1.0, 1.0,
-            Connectivity.TWENTY_SIX,
-            1e-9
-        );
+
+        TopologicalVoxelizerConfig isoConfig = new TopologicalVoxelizerConfig(1.0, 1.0, 1.0, 1e-9);
         VoxelGrid isoGrid = TopologicalVoxelizer.voxelizeSurfaceWithConfig(isoCube, resolution, isoConfig);
 
-        // Anisotropic configuration
-        TopologicalVoxelizerConfig anisoConfig = new TopologicalVoxelizerConfig(
-            2.0, 0.5, 1.0,
-            Connectivity.TWENTY_SIX,
-            1e-9
-        );
+        TopologicalVoxelizerConfig anisoConfig = new TopologicalVoxelizerConfig(2.0, 0.5, 1.0, 1e-9);
         VoxelGrid anisoGrid = TopologicalVoxelizer.voxelizeSurfaceWithConfig(
             anisoCompatibleBox, resolution, anisoConfig
         );
 
-        // Both should produce valid grids without crashing
         assertNotNull(isoGrid);
         assertNotNull(anisoGrid);
-    }
-
-    @Test
-    void testConnectivitySixVstwentySix() {
-        int resolution = 12;
-        Mesh tiltedPlane = createScaledTiltedPlane(resolution);
-        
-        TopologicalVoxelizerConfig sixConfig = new TopologicalVoxelizerConfig(
-            1.0, 1.0, 1.0,
-            Connectivity.SIX,
-            1e-9
-        );
-        VoxelGrid sixGrid = TopologicalVoxelizer.voxelizeSurfaceWithConfig(tiltedPlane, resolution, sixConfig);
-
-        TopologicalVoxelizerConfig twentySixConfig = new TopologicalVoxelizerConfig(
-            1.0, 1.0, 1.0,
-            Connectivity.TWENTY_SIX,
-            1e-9
-        );
-        VoxelGrid twentySixGrid = TopologicalVoxelizer.voxelizeSurfaceWithConfig(
-            tiltedPlane, resolution, twentySixConfig
-        );
-
-        assertNotNull(sixGrid);
-        assertNotNull(twentySixGrid);
-        assertTrue(sixGrid.countFilledVoxels() > 0, "SIX connectivity should produce voxels");
-        assertTrue(twentySixGrid.countFilledVoxels() > 0, "TWENTY_SIX connectivity should produce voxels");
     }
 
     @Test
@@ -137,11 +98,7 @@ class TopologicalVoxelizerTest {
     @Test
     void testConfigValidationRejectsInvalidVoxelSizes() {
         try {
-            new TopologicalVoxelizerConfig(
-                -1.0, 1.0, 1.0,
-                Connectivity.TWENTY_SIX,
-                1e-9
-            );
+            new TopologicalVoxelizerConfig(-1.0, 1.0, 1.0, 1e-9);
             assertTrue(false, "Should reject negative voxel size");
         } catch (IllegalArgumentException e) {
             assertTrue(e.getMessage().contains("positive"));
@@ -151,11 +108,7 @@ class TopologicalVoxelizerTest {
     @Test
     void testConfigValidationRejectsNegativeEpsilon() {
         try {
-            new TopologicalVoxelizerConfig(
-                1.0, 1.0, 1.0,
-                Connectivity.TWENTY_SIX,
-                -1e-9
-            );
+            new TopologicalVoxelizerConfig(1.0, 1.0, 1.0, -1e-9);
             assertTrue(false, "Should reject negative epsilon");
         } catch (IllegalArgumentException e) {
             assertTrue(e.getMessage().contains("Epsilon"));
@@ -163,12 +116,31 @@ class TopologicalVoxelizerTest {
     }
 
     /**
-     * Creates a cube scaled to [0, 10] for voxel grid resolution 10.
-     * This matches the coordinate space expected by voxelizers after MeshNormalizer.
+     * A triangle that passes through the corner of a voxel without intersecting
+     * any of its 3 center crosshair lines would have been silently missed by the
+     * old segment-intersection approach. SAT must detect it.
+     *
+     * Triangle at the (0,0,0) corner of the first voxel with all three vertices
+     * inside [1.0, 1.2]^3. The voxel center crosshair lines pass through (1.5, 1.5, 1.5),
+     * which none of the triangle's vertices or edges can reach at max coord 1.2.
      */
+    @Test
+    void testCornerTriangleCapturedBySat() {
+        Triangle corner = new Triangle(
+            new Vector3(1.0, 1.0, 1.2),
+            new Vector3(1.2, 1.0, 1.0),
+            new Vector3(1.0, 1.2, 1.0)
+        );
+        Mesh mesh = new Mesh(List.of(corner));
+
+        VoxelGrid grid = TopologicalVoxelizer.voxelizeSurface(mesh, 5);
+
+        assertTrue(grid.isFilled(0, 0, 0),
+            "Triangle at voxel corner must be detected by SAT even though it misses all center crosshair lines");
+    }
+
     private Mesh createScaledCube(int resolution) {
-        double scale = resolution;
-        return createScaledBox(scale, scale, scale);
+        return createScaledBox(resolution, resolution, resolution);
     }
 
     private Mesh createScaledBox(double sizeX, double sizeY, double sizeZ) {
@@ -184,22 +156,16 @@ class TopologicalVoxelizerTest {
         };
 
         List<Triangle> triangles = List.of(
-            // Bottom (z=0)
             new Triangle(vertices[0], vertices[2], vertices[1]),
             new Triangle(vertices[0], vertices[3], vertices[2]),
-            // Top (z=scale)
             new Triangle(vertices[7], vertices[6], vertices[5]),
             new Triangle(vertices[7], vertices[5], vertices[4]),
-            // Front (y=0)
             new Triangle(vertices[0], vertices[1], vertices[6]),
             new Triangle(vertices[0], vertices[6], vertices[7]),
-            // Back (y=scale)
             new Triangle(vertices[3], vertices[5], vertices[2]),
             new Triangle(vertices[3], vertices[4], vertices[5]),
-            // Left (x=0)
             new Triangle(vertices[0], vertices[7], vertices[4]),
             new Triangle(vertices[0], vertices[4], vertices[3]),
-            // Right (x=scale)
             new Triangle(vertices[1], vertices[2], vertices[5]),
             new Triangle(vertices[1], vertices[5], vertices[6])
         );
@@ -207,55 +173,25 @@ class TopologicalVoxelizerTest {
         return new Mesh(triangles);
     }
 
-    /**
-     * Creates a simple pyramid with triangular base, scaled to [0, resolution].
-     */
     private Mesh createScaledPyramid(int resolution) {
         double scale = resolution;
         Vector3[] vertices = {
-            new Vector3(0, 0, 0),               // base corner 1
-            new Vector3(scale, 0, 0),           // base corner 2
-            new Vector3(scale / 2, scale, 0),   // base corner 3
-            new Vector3(scale / 2, scale / 2, scale) // apex
+            new Vector3(0, 0, 0),
+            new Vector3(scale, 0, 0),
+            new Vector3(scale / 2, scale, 0),
+            new Vector3(scale / 2, scale / 2, scale)
         };
 
         List<Triangle> triangles = List.of(
-            // Base
             new Triangle(vertices[0], vertices[1], vertices[2]),
-            // Side 1
             new Triangle(vertices[0], vertices[3], vertices[1]),
-            // Side 2
             new Triangle(vertices[1], vertices[3], vertices[2]),
-            // Side 3
             new Triangle(vertices[2], vertices[3], vertices[0])
         );
 
         return new Mesh(triangles);
     }
 
-    /**
-     * Creates a simple tilted plane for connectivity testing, scaled to [0, resolution].
-     */
-    private Mesh createScaledTiltedPlane(int resolution) {
-        double scale = resolution;
-        Vector3[] vertices = {
-            new Vector3(0, 0, 0),
-            new Vector3(scale, 0, 0),
-            new Vector3(scale, scale, scale / 2),
-            new Vector3(0, scale, scale / 2)
-        };
-
-        List<Triangle> triangles = List.of(
-            new Triangle(vertices[0], vertices[2], vertices[1]),
-            new Triangle(vertices[0], vertices[3], vertices[2])
-        );
-
-        return new Mesh(triangles);
-    }
-
-    /**
-     * Creates a single 2-triangle plane for minimal test, scaled to [0, resolution].
-     */
     private Mesh createScaledSimplePlane(int resolution) {
         double scale = resolution;
         Vector3[] vertices = {

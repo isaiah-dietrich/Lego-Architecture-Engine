@@ -131,29 +131,29 @@ class BrickPlacerTest {
 
         // Verify deterministic placement
         assertEquals(4, bricks.size());
-        
-        // First brick: layer 0, y=0, x=0 -> 2x1
+
+        // First brick: height layer y=0, z=0, x=0 -> 2x1
         assertEquals(0, bricks.get(0).x());
         assertEquals(0, bricks.get(0).y());
         assertEquals(0, bricks.get(0).z());
         assertEquals(2, bricks.get(0).studX());
 
-        // Second brick: layer 0, y=2, x=0 -> 2x1
-        assertEquals(0, bricks.get(1).x());
-        assertEquals(2, bricks.get(1).y());
-        assertEquals(0, bricks.get(1).z());
-        assertEquals(2, bricks.get(1).studX());
-        
-        // Third brick: layer 0, y=2, x=2 -> 1x1
-        assertEquals(2, bricks.get(2).x());
+        // Second brick: height layer y=1, z=1, x=1 -> 1x1 (y=1 comes before y=2)
+        assertEquals(1, bricks.get(1).x());
+        assertEquals(1, bricks.get(1).y());
+        assertEquals(1, bricks.get(1).z());
+        assertEquals(1, bricks.get(1).studX());
+
+        // Third brick: height layer y=2, z=0, x=0 -> 2x1
+        assertEquals(0, bricks.get(2).x());
         assertEquals(2, bricks.get(2).y());
         assertEquals(0, bricks.get(2).z());
-        assertEquals(1, bricks.get(2).studX());
-        
-        // Fourth brick: layer 1, y=1, x=1 -> 1x1
-        assertEquals(1, bricks.get(3).x());
-        assertEquals(1, bricks.get(3).y());
-        assertEquals(1, bricks.get(3).z());
+        assertEquals(2, bricks.get(2).studX());
+
+        // Fourth brick: height layer y=2, z=0, x=2 -> 1x1
+        assertEquals(2, bricks.get(3).x());
+        assertEquals(2, bricks.get(3).y());
+        assertEquals(0, bricks.get(3).z());
         assertEquals(1, bricks.get(3).studX());
     }
 
@@ -277,11 +277,12 @@ class BrickPlacerTest {
 
     @Test
     void testExact2x2Patch_ReturnsSingle2x2Brick() {
-        VoxelGrid surface = new VoxelGrid(4, 4, 2);
+        // 2x2 patch in the X-Z plane at height layer y=1
+        VoxelGrid surface = new VoxelGrid(4, 4, 4);
         surface.setFilled(1, 1, 0, true);
         surface.setFilled(2, 1, 0, true);
-        surface.setFilled(1, 2, 0, true);
-        surface.setFilled(2, 2, 0, true);
+        surface.setFilled(1, 1, 1, true);
+        surface.setFilled(2, 1, 1, true);
 
         List<Brick> bricks = BrickPlacer.placeBricks(surface);
 
@@ -297,15 +298,15 @@ class BrickPlacerTest {
 
     @Test
     void testMixedPattern_Uses2x2ThenDeterministicFallbacks() {
-        VoxelGrid surface = new VoxelGrid(5, 5, 1);
+        VoxelGrid surface = new VoxelGrid(5, 1, 2);
 
-        // 2x2 patch at origin
+        // 2x2 patch in X-Z plane at y=0 (studX=2, studY=2)
         surface.setFilled(0, 0, 0, true);
         surface.setFilled(1, 0, 0, true);
-        surface.setFilled(0, 1, 0, true);
-        surface.setFilled(1, 1, 0, true);
+        surface.setFilled(0, 0, 1, true);
+        surface.setFilled(1, 0, 1, true);
 
-        // Extra voxels become one 2x1 and one 1x1 in scan order
+        // Extra voxels in X direction at z=0, y=0 — become one 2x1 and one 1x1
         surface.setFilled(2, 0, 0, true);
         surface.setFilled(3, 0, 0, true);
         surface.setFilled(4, 0, 0, true);
@@ -377,10 +378,11 @@ class BrickPlacerTest {
 
     @Test
     void testPriorityPolicy_Prefers2x4OverSmallerCandidates() {
-        VoxelGrid surface = new VoxelGrid(4, 6, 1);
+        // 2x4 patch in X-Z plane at y=0 (studX=2, studY=4)
+        VoxelGrid surface = new VoxelGrid(4, 1, 6);
         for (int x = 0; x < 2; x++) {
-            for (int y = 0; y < 4; y++) {
-                surface.setFilled(x, y, 0, true);
+            for (int z = 0; z < 4; z++) {
+                surface.setFilled(x, 0, z, true);
             }
         }
 
@@ -404,10 +406,11 @@ class BrickPlacerTest {
 
     @Test
     void testPriorityPolicy_Uses2x2When2x4DoesNotFit() {
-        VoxelGrid surface = new VoxelGrid(4, 4, 1);
+        // 2x2 patch in X-Z plane at y=0 (not enough Z depth for 2x4)
+        VoxelGrid surface = new VoxelGrid(4, 1, 4);
         for (int x = 0; x < 2; x++) {
-            for (int y = 0; y < 2; y++) {
-                surface.setFilled(x, y, 0, true);
+            for (int z = 0; z < 2; z++) {
+                surface.setFilled(x, 0, z, true);
             }
         }
 
@@ -466,15 +469,16 @@ class BrickPlacerTest {
 
     @Test
     void testPriorityPolicy_DeterminismRemainsUnchanged() {
-        VoxelGrid surface = new VoxelGrid(6, 6, 1);
+        // 2x4 patch in X-Z plane plus scattered voxels
+        VoxelGrid surface = new VoxelGrid(6, 1, 6);
         for (int x = 0; x < 2; x++) {
-            for (int y = 0; y < 4; y++) {
-                surface.setFilled(x, y, 0, true);
+            for (int z = 0; z < 4; z++) {
+                surface.setFilled(x, 0, z, true);
             }
         }
         surface.setFilled(3, 0, 0, true);
         surface.setFilled(4, 0, 0, true);
-        surface.setFilled(5, 5, 0, true);
+        surface.setFilled(5, 0, 5, true);
 
         List<Dimension> dims = Arrays.asList(
             new Dimension(2, 4),
@@ -555,13 +559,13 @@ class BrickPlacerTest {
 
     @Test
     void testRegressionCatalogToggle_2x2CanCreateLargerPatterns() {
-        // When 2x2 is available, a 2x2 pattern should be placed as single brick
-        VoxelGrid surface = new VoxelGrid(5, 5, 1);
+        // When 2x2 is available, a 2x2 pattern in X-Z should be placed as single brick
+        VoxelGrid surface = new VoxelGrid(5, 1, 5);
 
         surface.setFilled(0, 0, 0, true);
         surface.setFilled(1, 0, 0, true);
-        surface.setFilled(0, 1, 0, true);
-        surface.setFilled(1, 1, 0, true);
+        surface.setFilled(0, 0, 1, true);
+        surface.setFilled(1, 0, 1, true);
 
         // With 2x2 enabled
         List<Dimension> full = Arrays.asList(
@@ -581,13 +585,13 @@ class BrickPlacerTest {
 
     @Test
     void testRegressionCatalogToggle_2x2Disabled_UsesFallback() {
-        // When 2x2 is disabled, a 2x2 pattern should fall back to smaller bricks
-        VoxelGrid surface = new VoxelGrid(5, 5, 1);
+        // When 2x2 is disabled, a 2x2 X-Z pattern should fall back to smaller bricks
+        VoxelGrid surface = new VoxelGrid(5, 1, 5);
 
         surface.setFilled(0, 0, 0, true);
         surface.setFilled(1, 0, 0, true);
-        surface.setFilled(0, 1, 0, true);
-        surface.setFilled(1, 1, 0, true);
+        surface.setFilled(0, 0, 1, true);
+        surface.setFilled(1, 0, 1, true);
 
         // Without 2x2, only 2x1 and 1x1 available
         List<Dimension> limited = Arrays.asList(
@@ -630,12 +634,12 @@ class BrickPlacerTest {
     @Test
     void testRegressionNoDuplicateDimensionsInPlacement() {
         // Verify no duplicate dimensions cause issues
-        VoxelGrid surface = new VoxelGrid(5, 5, 1);
+        VoxelGrid surface = new VoxelGrid(5, 1, 5);
 
-        // Fill 4x4 patch for testing
+        // Fill a 4x4 patch in X-Z plane at y=0
         for (int x = 0; x < 4; x++) {
-            for (int y = 0; y < 4; y++) {
-                surface.setFilled(x, y, 0, true);
+            for (int z = 0; z < 4; z++) {
+                surface.setFilled(x, 0, z, true);
             }
         }
 

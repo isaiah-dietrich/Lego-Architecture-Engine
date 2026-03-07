@@ -66,14 +66,15 @@ public final class LDrawExporter {
 
             // Center in studs (our brick coords are min-corner on the stud grid).
             double centerXStuds = brick.x() + (brick.studX() / 2.0);
-            // Project convention uses Y-up source meshes; swap brick Y/Z for LDraw placement.
+            // Source meshes use Y-up convention (Blender OBJ default).
+            // brick.z() is the OBJ Z axis (wolf front-to-back depth); maps to LDraw Z.
             double centerZStuds = brick.z() + (brick.studY() / 2.0);
 
             double x = centerXStuds * STUD_PITCH_LDU;
             double z = centerZStuds * STUD_PITCH_LDU;
 
-            // LDraw parts are typically defined with Y=0 at the top surface and extend down to +24.
-            // With Y-up source convention, brick.y() is treated as vertical layer index.
+            // LDraw parts are defined with Y=0 at the top surface and extend down to +24.
+            // brick.y() is the OBJ Y axis (wolf height, Y-up); stacking upward decreases LDraw Y.
             double y = -((brick.y() + brick.heightUnits()) * BRICK_HEIGHT_LDU);
 
             out.append("1 ")
@@ -134,15 +135,21 @@ public final class LDrawExporter {
     }
 
     private static PartPlacement resolvePart(Map<StudKey, String> index, int studX, int studY) {
-        String direct = index.get(new StudKey(studX, studY));
-        if (direct != null) {
-            return PartPlacement.identity(direct);
+        // In LDraw part files, catalog stud_y = studs along the part's local X axis.
+        // Identity placement: part X aligns with world X.
+        //   → need catalog stud_y = studX (world X span) and stud_x = studY
+        //   → key is StudKey(studY, studX)
+        String forIdentity = index.get(new StudKey(studY, studX));
+        if (forIdentity != null) {
+            return PartPlacement.identity(forIdentity);
         }
 
-        // Try swapped with a 90-degree rotation around Y to swap X/Z.
-        String swapped = index.get(new StudKey(studY, studX));
-        if (swapped != null) {
-            return PartPlacement.rotateY90(swapped);
+        // rotateY90 placement: part X maps to world -Z, part Z maps to world X.
+        //   → need catalog stud_x = studX (world X span) and stud_y = studY (world Z span)
+        //   → key is StudKey(studX, studY)
+        String forRotated = index.get(new StudKey(studX, studY));
+        if (forRotated != null) {
+            return PartPlacement.rotateY90(forRotated);
         }
 
         throw new IllegalStateException(

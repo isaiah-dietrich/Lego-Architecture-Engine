@@ -9,20 +9,20 @@ import com.lego.model.Triangle;
 import com.lego.model.Vector3;
 
 /**
- * Topological surface voxelizer using segment-triangle intersection.
+ * Topological surface voxelizer using triangle-AABB overlap detection.
  *
  * <p>Implementation notes:
  * - Triangle-driven candidate traversal (no full-grid sweep)
  * - Sparse occupancy via packed voxel keys
- * - Connectivity targets:
- *   - TWENTY_SIX: 3 center crosshair lines through each voxel
- *   - SIX: 12 voxel edge lines
+ * - Triangle-AABB overlap tested via the Separating Axis Theorem (SAT,
+ *   Akenine-Möller 2001): 13 axes tested — 3 AABB face normals, 1 triangle
+ *   face normal, 9 edge cross-products. Any triangle that overlaps a voxel
+ *   AABB is guaranteed to be detected.
  * </p>
  */
 public final class TopologicalVoxelizer {
 
     private static final double DEFAULT_EPSILON = 1e-9;
-    private static final Connectivity DEFAULT_CONNECTIVITY = Connectivity.TWENTY_SIX;
 
     private TopologicalVoxelizer() {
         // Utility class
@@ -35,11 +35,7 @@ public final class TopologicalVoxelizer {
         }
 
         TopologicalVoxelizerConfig config = new TopologicalVoxelizerConfig(
-            1.0,
-            1.0,
-            1.0,
-            DEFAULT_CONNECTIVITY,
-            DEFAULT_EPSILON
+            1.0, 1.0, 1.0, DEFAULT_EPSILON
         );
 
         return voxelizeSurfaceWithConfig(mesh, resolution, config);
@@ -62,9 +58,12 @@ public final class TopologicalVoxelizer {
 
         Bounds rawBounds = computeMeshBounds(mesh);
         AlignedBounds alignedBounds = computeAlignedBounds(rawBounds, config, resolution);
-        SegmentTemplate[] targets = createTargets(config.connectivity());
 
         TopologicalVoxelGrid sparseGrid = new TopologicalVoxelGrid(resolution, resolution, resolution);
+
+        double hx = config.voxelSizeX() * 0.5;
+        double hy = config.voxelSizeY() * 0.5;
+        double hz = config.voxelSizeZ() * 0.5;
 
         for (Triangle triangle : mesh.triangles()) {
             int[] range = triangleToCandidateRange(triangle, alignedBounds, config, resolution);
@@ -79,26 +78,155 @@ public final class TopologicalVoxelizer {
                         double cy = alignedBounds.minY + (j + 0.5) * config.voxelSizeY();
                         double cz = alignedBounds.minZ + (k + 0.5) * config.voxelSizeZ();
 
-                        for (SegmentTemplate t : targets) {
-                            double p1x = cx + t.dx1 * config.voxelSizeX();
-                            double p1y = cy + t.dy1 * config.voxelSizeY();
-                            double p1z = cz + t.dz1 * config.voxelSizeZ();
-
-                            double p2x = cx + t.dx2 * config.voxelSizeX();
-                            double p2y = cy + t.dy2 * config.voxelSizeY();
-                            double p2z = cz + t.dz2 * config.voxelSizeZ();
-
-                            if (segmentIntersectsTriangle(p1x, p1y, p1z, p2x, p2y, p2z, triangle, config.epsilon())) {
-                                sparseGrid.setSurfaceFilled(i, j, k);
-                                break;
-                            }
+                        if (triangleOverlapsVoxel(triangle, cx, cy, cz, hx, hy, hz)) {
+                            sparseGrid.setSurfaceFilled(i, j, k);
                         }
                     }
                 }
             }
         }
 
-        return sparseGrid.toVoxelGrid();
+        VoxelGrid result = sparseGrid.toVoxelGrid();
+        return fillAxisAlignedGaps(result, 2);
+    }
+
+    /**
+     * Closes single-voxel gaps in a surface grid by filling any empty voxel that is
+     * sandwiched between two filled voxels along at least one coordinate axis (±X, ±Y,
+     * or ±Z). Two passes are run so adjacent gaps in thin structures are also closed.
+     *
+     * @param grid   the surface voxel grid to process
+     * @param passes number of fill passes to run
+     * @return a new VoxelGrid with gaps filled (the input grid is not modified)
+     */
+    private static VoxelGrid fillAxisAlignedGaps(VoxelGrid grid, int passes) {
+        int w = grid.width();
+        int h = grid.height();
+        int d = grid.depth();
+
+        VoxelGrid current = grid;
+        for (int pass = 0; pass < passes; pass++) {
+            VoxelGrid next = new VoxelGrid(w, h, d);
+            boolean anyFilled = false;
+            for (int x = 0; x < w; x++) {
+                for (int y = 0; y < h; y++) {
+                    for (int z = 0; z < d; z++) {
+                        if (current.isFilled(x, y, z)) {
+                            next.setFilled(x, y, z, true);
+                        } else if (
+                            (current.isFilled(x - 1, y, z) && current.isFilled(x + 1, y, z)) ||
+                            (current.isFilled(x, y - 1, z) && current.isFilled(x, y + 1, z)) ||
+                            (current.isFilled(x, y, z - 1) && current.isFilled(x, y, z + 1))
+                        ) {
+                            next.setFilled(x, y, z, true);
+                            anyFilled = true;
+                        }
+                    }
+                }
+            }
+            current = next;
+            if (!anyFilled) break;
+        }
+        return current;
+    }
+
+    /**
+     * Tests whether a triangle overlaps an axis-aligned voxel box using the
+     * Separating Axis Theorem (SAT). Tests 13 candidate separating axes:
+     * 3 AABB face normals, 1 triangle face normal, and 9 edge cross-products.
+     *
+     * @param tri the triangle
+     * @param cx  voxel center X
+     * @param cy  voxel center Y
+     * @param cz  voxel center Z
+     * @param hx  voxel half-extent on X
+     * @param hy  voxel half-extent on Y
+     * @param hz  voxel half-extent on Z
+     * @return true if the triangle overlaps the voxel
+     */
+    private static boolean triangleOverlapsVoxel(
+        Triangle tri,
+        double cx, double cy, double cz,
+        double hx, double hy, double hz
+    ) {
+        // Translate triangle vertices so AABB is centered at origin
+        double v0x = tri.v1().x() - cx, v0y = tri.v1().y() - cy, v0z = tri.v1().z() - cz;
+        double v1x = tri.v2().x() - cx, v1y = tri.v2().y() - cy, v1z = tri.v2().z() - cz;
+        double v2x = tri.v3().x() - cx, v2y = tri.v3().y() - cy, v2z = tri.v3().z() - cz;
+
+        // Axes 1–3: AABB face normals (coordinate axes)
+        if (separatingOnAxis(v0x, v1x, v2x, hx)) return false;
+        if (separatingOnAxis(v0y, v1y, v2y, hy)) return false;
+        if (separatingOnAxis(v0z, v1z, v2z, hz)) return false;
+
+        double e0x = v1x - v0x, e0y = v1y - v0y, e0z = v1z - v0z;
+        double e1x = v2x - v1x, e1y = v2y - v1y, e1z = v2z - v1z;
+        double e2x = v0x - v2x, e2y = v0y - v2y, e2z = v0z - v2z;
+
+        // Axis 4: triangle face normal  n = e0 × (v2 - v0)
+        double nx = e0y * (v2z - v0z) - e0z * (v2y - v0y);
+        double ny = e0z * (v2x - v0x) - e0x * (v2z - v0z);
+        double nz = e0x * (v2y - v0y) - e0y * (v2x - v0x);
+        double d = nx * v0x + ny * v0y + nz * v0z;
+        double rn = hx * Math.abs(nx) + hy * Math.abs(ny) + hz * Math.abs(nz);
+        if (d > rn || d < -rn) return false;
+
+        // Axes 5–13: 9 edge × AABB-axis cross products
+        // e × X = (0, ez, -ey);  e × Y = (-ez, 0, ex);  e × Z = (ey, -ex, 0)
+        if (axisEdgeCrossX(v0y, v0z, v1y, v1z, v2y, v2z, e0y, e0z, hy, hz)) return false;
+        if (axisEdgeCrossY(v0x, v0z, v1x, v1z, v2x, v2z, e0x, e0z, hx, hz)) return false;
+        if (axisEdgeCrossZ(v0x, v0y, v1x, v1y, v2x, v2y, e0x, e0y, hx, hy)) return false;
+
+        if (axisEdgeCrossX(v0y, v0z, v1y, v1z, v2y, v2z, e1y, e1z, hy, hz)) return false;
+        if (axisEdgeCrossY(v0x, v0z, v1x, v1z, v2x, v2z, e1x, e1z, hx, hz)) return false;
+        if (axisEdgeCrossZ(v0x, v0y, v1x, v1y, v2x, v2y, e1x, e1y, hx, hy)) return false;
+
+        if (axisEdgeCrossX(v0y, v0z, v1y, v1z, v2y, v2z, e2y, e2z, hy, hz)) return false;
+        if (axisEdgeCrossY(v0x, v0z, v1x, v1z, v2x, v2z, e2x, e2z, hx, hz)) return false;
+        if (axisEdgeCrossZ(v0x, v0y, v1x, v1y, v2x, v2y, e2x, e2y, hx, hy)) return false;
+
+        return true;
+    }
+
+    /** Returns true if the AABB interval [-h, h] does not overlap the triangle's projection. */
+    private static boolean separatingOnAxis(double p0, double p1, double p2, double h) {
+        return Math.min(p0, Math.min(p1, p2)) > h || Math.max(p0, Math.max(p1, p2)) < -h;
+    }
+
+    /** SAT test for axis = e × X = (0, ez, -ey); r = hy|ez| + hz|ey|. */
+    private static boolean axisEdgeCrossX(
+        double v0y, double v0z, double v1y, double v1z, double v2y, double v2z,
+        double ey, double ez, double hy, double hz
+    ) {
+        double p0 = ez * v0y - ey * v0z;
+        double p1 = ez * v1y - ey * v1z;
+        double p2 = ez * v2y - ey * v2z;
+        double r = hy * Math.abs(ez) + hz * Math.abs(ey);
+        return Math.min(p0, Math.min(p1, p2)) > r || Math.max(p0, Math.max(p1, p2)) < -r;
+    }
+
+    /** SAT test for axis = e × Y = (-ez, 0, ex); r = hx|ez| + hz|ex|. */
+    private static boolean axisEdgeCrossY(
+        double v0x, double v0z, double v1x, double v1z, double v2x, double v2z,
+        double ex, double ez, double hx, double hz
+    ) {
+        double p0 = -ez * v0x + ex * v0z;
+        double p1 = -ez * v1x + ex * v1z;
+        double p2 = -ez * v2x + ex * v2z;
+        double r = hx * Math.abs(ez) + hz * Math.abs(ex);
+        return Math.min(p0, Math.min(p1, p2)) > r || Math.max(p0, Math.max(p1, p2)) < -r;
+    }
+
+    /** SAT test for axis = e × Z = (ey, -ex, 0); r = hx|ey| + hy|ex|. */
+    private static boolean axisEdgeCrossZ(
+        double v0x, double v0y, double v1x, double v1y, double v2x, double v2y,
+        double ex, double ey, double hx, double hy
+    ) {
+        double p0 = ey * v0x - ex * v0y;
+        double p1 = ey * v1x - ex * v1y;
+        double p2 = ey * v2x - ex * v2y;
+        double r = hx * Math.abs(ey) + hy * Math.abs(ex);
+        return Math.min(p0, Math.min(p1, p2)) > r || Math.max(p0, Math.max(p1, p2)) < -r;
     }
 
     private static Bounds computeMeshBounds(Mesh mesh) {
@@ -110,8 +238,7 @@ public final class TopologicalVoxelizer {
         double maxZ = Double.NEGATIVE_INFINITY;
 
         for (Triangle t : mesh.triangles()) {
-            Vector3[] vs = {t.v1(), t.v2(), t.v3()};
-            for (Vector3 v : vs) {
+            for (Vector3 v : new Vector3[]{t.v1(), t.v2(), t.v3()}) {
                 minX = Math.min(minX, v.x());
                 minY = Math.min(minY, v.y());
                 minZ = Math.min(minZ, v.z());
@@ -170,202 +297,23 @@ public final class TopologicalVoxelizer {
         return new int[] {iMin, iMax, jMin, jMax, kMin, kMax};
     }
 
-    private static SegmentTemplate[] createTargets(Connectivity connectivity) {
-        return switch (connectivity) {
-            case TWENTY_SIX -> createTwentySixTargets();
-            case SIX -> createSixTargets();
-        };
-    }
-
-    // 26-connectivity target family: 3 full axis lines through voxel center.
-    private static SegmentTemplate[] createTwentySixTargets() {
-        return new SegmentTemplate[] {
-            new SegmentTemplate(-0.5, 0.0, 0.0, 0.5, 0.0, 0.0),
-            new SegmentTemplate(0.0, -0.5, 0.0, 0.0, 0.5, 0.0),
-            new SegmentTemplate(0.0, 0.0, -0.5, 0.0, 0.0, 0.5)
-        };
-    }
-
-    // 6-connectivity target family: 12 voxel outline edges.
-    private static SegmentTemplate[] createSixTargets() {
-        return new SegmentTemplate[] {
-            // 4 edges parallel to X
-            new SegmentTemplate(-0.5, -0.5, -0.5, 0.5, -0.5, -0.5),
-            new SegmentTemplate(-0.5, -0.5, 0.5, 0.5, -0.5, 0.5),
-            new SegmentTemplate(-0.5, 0.5, -0.5, 0.5, 0.5, -0.5),
-            new SegmentTemplate(-0.5, 0.5, 0.5, 0.5, 0.5, 0.5),
-
-            // 4 edges parallel to Y
-            new SegmentTemplate(-0.5, -0.5, -0.5, -0.5, 0.5, -0.5),
-            new SegmentTemplate(-0.5, -0.5, 0.5, -0.5, 0.5, 0.5),
-            new SegmentTemplate(0.5, -0.5, -0.5, 0.5, 0.5, -0.5),
-            new SegmentTemplate(0.5, -0.5, 0.5, 0.5, 0.5, 0.5),
-
-            // 4 edges parallel to Z
-            new SegmentTemplate(-0.5, -0.5, -0.5, -0.5, -0.5, 0.5),
-            new SegmentTemplate(-0.5, 0.5, -0.5, -0.5, 0.5, 0.5),
-            new SegmentTemplate(0.5, -0.5, -0.5, 0.5, -0.5, 0.5),
-            new SegmentTemplate(0.5, 0.5, -0.5, 0.5, 0.5, 0.5)
-        };
-    }
-
-    private static boolean segmentIntersectsTriangle(
-        double p1x,
-        double p1y,
-        double p1z,
-        double p2x,
-        double p2y,
-        double p2z,
-        Triangle tri,
-        double epsilon
-    ) {
-        Vector3 v0 = tri.v1();
-        Vector3 v1 = tri.v2();
-        Vector3 v2 = tri.v3();
-
-        double dirX = p2x - p1x;
-        double dirY = p2y - p1y;
-        double dirZ = p2z - p1z;
-
-        double edge1X = v1.x() - v0.x();
-        double edge1Y = v1.y() - v0.y();
-        double edge1Z = v1.z() - v0.z();
-
-        double edge2X = v2.x() - v0.x();
-        double edge2Y = v2.y() - v0.y();
-        double edge2Z = v2.z() - v0.z();
-
-        double hX = (dirY * edge2Z) - (dirZ * edge2Y);
-        double hY = (dirZ * edge2X) - (dirX * edge2Z);
-        double hZ = (dirX * edge2Y) - (dirY * edge2X);
-
-        double a = (edge1X * hX) + (edge1Y * hY) + (edge1Z * hZ);
-
-        if (Math.abs(a) < epsilon) {
-            return pointOnTriangle(p1x, p1y, p1z, tri, epsilon)
-                || pointOnTriangle(p2x, p2y, p2z, tri, epsilon);
-        }
-
-        double f = 1.0 / a;
-
-        double sX = p1x - v0.x();
-        double sY = p1y - v0.y();
-        double sZ = p1z - v0.z();
-
-        double u = f * ((sX * hX) + (sY * hY) + (sZ * hZ));
-        if (u < -epsilon || u > 1.0 + epsilon) {
-            return false;
-        }
-
-        double qX = (sY * edge1Z) - (sZ * edge1Y);
-        double qY = (sZ * edge1X) - (sX * edge1Z);
-        double qZ = (sX * edge1Y) - (sY * edge1X);
-
-        double v = f * ((dirX * qX) + (dirY * qY) + (dirZ * qZ));
-        if (v < -epsilon || (u + v) > 1.0 + epsilon) {
-            return false;
-        }
-
-        double t = f * ((edge2X * qX) + (edge2Y * qY) + (edge2Z * qZ));
-        return t >= -epsilon && t <= 1.0 + epsilon;
-    }
-
-    private static boolean pointOnTriangle(double px, double py, double pz, Triangle tri, double epsilon) {
-        Vector3 a = tri.v1();
-        Vector3 b = tri.v2();
-        Vector3 c = tri.v3();
-
-        double abx = b.x() - a.x();
-        double aby = b.y() - a.y();
-        double abz = b.z() - a.z();
-        double acx = c.x() - a.x();
-        double acy = c.y() - a.y();
-        double acz = c.z() - a.z();
-
-        double nx = aby * acz - abz * acy;
-        double ny = abz * acx - abx * acz;
-        double nz = abx * acy - aby * acx;
-
-        double lenN = Math.sqrt(nx * nx + ny * ny + nz * nz);
-        if (lenN < epsilon) {
-            return false;
-        }
-
-        double apx = px - a.x();
-        double apy = py - a.y();
-        double apz = pz - a.z();
-        double dist = Math.abs(nx * apx + ny * apy + nz * apz) / lenN;
-        if (dist > epsilon) {
-            return false;
-        }
-
-        double dot00 = acx * acx + acy * acy + acz * acz;
-        double dot01 = acx * abx + acy * aby + acz * abz;
-        double dot02 = acx * apx + acy * apy + acz * apz;
-        double dot11 = abx * abx + aby * aby + abz * abz;
-        double dot12 = abx * apx + aby * apy + abz * apz;
-
-        double denom = dot00 * dot11 - dot01 * dot01;
-        if (Math.abs(denom) < epsilon) {
-            return false;
-        }
-
-        double invDenom = 1.0 / denom;
-        double u = (dot11 * dot02 - dot01 * dot12) * invDenom;
-        double v = (dot00 * dot12 - dot01 * dot02) * invDenom;
-
-        return u >= -epsilon && v >= -epsilon && (u + v) <= 1.0 + epsilon;
-    }
-
     private static int clamp(int value, int min, int max) {
-        if (value < min) {
-            return min;
-        }
-        if (value > max) {
-            return max;
-        }
+        if (value < min) return min;
+        if (value > max) return max;
         return value;
     }
 
-    private static final class SegmentTemplate {
-        final double dx1;
-        final double dy1;
-        final double dz1;
-        final double dx2;
-        final double dy2;
-        final double dz2;
-
-        SegmentTemplate(double dx1, double dy1, double dz1, double dx2, double dy2, double dz2) {
-            this.dx1 = dx1;
-            this.dy1 = dy1;
-            this.dz1 = dz1;
-            this.dx2 = dx2;
-            this.dy2 = dy2;
-            this.dz2 = dz2;
-        }
-    }
-
     private static final class Bounds {
-        final double minX;
-        final double minY;
-        final double minZ;
-        final double maxX;
-        final double maxY;
-        final double maxZ;
+        final double minX, minY, minZ, maxX, maxY, maxZ;
 
         Bounds(double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
-            this.minX = minX;
-            this.minY = minY;
-            this.minZ = minZ;
-            this.maxX = maxX;
-            this.maxY = maxY;
-            this.maxZ = maxZ;
+            this.minX = minX; this.minY = minY; this.minZ = minZ;
+            this.maxX = maxX; this.maxY = maxY; this.maxZ = maxZ;
         }
     }
 
     private static final class AxisAligned {
-        final double min;
-        final double max;
+        final double min, max;
 
         AxisAligned(double min, double max) {
             this.min = min;
@@ -374,27 +322,16 @@ public final class TopologicalVoxelizer {
     }
 
     private static final class AlignedBounds {
-        final double minX;
-        final double minY;
-        final double minZ;
-        final double maxX;
-        final double maxY;
-        final double maxZ;
+        final double minX, minY, minZ, maxX, maxY, maxZ;
 
         AlignedBounds(double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
-            this.minX = minX;
-            this.minY = minY;
-            this.minZ = minZ;
-            this.maxX = maxX;
-            this.maxY = maxY;
-            this.maxZ = maxZ;
+            this.minX = minX; this.minY = minY; this.minZ = minZ;
+            this.maxX = maxX; this.maxY = maxY; this.maxZ = maxZ;
         }
     }
 
     private static final class TopologicalVoxelGrid {
-        private final int width;
-        private final int height;
-        private final int depth;
+        private final int width, height, depth;
         private final Set<Long> surface = new HashSet<>();
 
         TopologicalVoxelGrid(int width, int height, int depth) {
@@ -404,19 +341,14 @@ public final class TopologicalVoxelizer {
         }
 
         void setSurfaceFilled(int i, int j, int k) {
-            if (i < 0 || i >= width || j < 0 || j >= height || k < 0 || k >= depth) {
-                return;
-            }
+            if (i < 0 || i >= width || j < 0 || j >= height || k < 0 || k >= depth) return;
             surface.add(pack(i, j, k));
         }
 
         VoxelGrid toVoxelGrid() {
             VoxelGrid grid = new VoxelGrid(width, height, depth);
             for (long key : surface) {
-                int i = unpackX(key);
-                int j = unpackY(key);
-                int k = unpackZ(key);
-                grid.setFilled(i, j, k, true);
+                grid.setFilled(unpackX(key), unpackY(key), unpackZ(key), true);
             }
             return grid;
         }
@@ -425,16 +357,8 @@ public final class TopologicalVoxelizer {
             return ((long) x << 42) | ((long) y << 21) | (long) z;
         }
 
-        private static int unpackX(long key) {
-            return (int) (key >>> 42);
-        }
-
-        private static int unpackY(long key) {
-            return (int) ((key >>> 21) & 0x1FFFFF);
-        }
-
-        private static int unpackZ(long key) {
-            return (int) (key & 0x1FFFFF);
-        }
+        private static int unpackX(long key) { return (int) (key >>> 42); }
+        private static int unpackY(long key) { return (int) ((key >>> 21) & 0x1FFFFF); }
+        private static int unpackZ(long key) { return (int) (key & 0x1FFFFF); }
     }
 }

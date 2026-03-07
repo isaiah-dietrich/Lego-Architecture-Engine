@@ -35,3 +35,9 @@ output/runs/*
 !output/runs/.gitkeep
 !output/runs/sets/
 !output/runs/sets/**
+
+# Ignore OBJ/LDraw files everywhere except runs artifacts
+**/*.obj
+**/*.ldr
+!**/runs/**/*.obj
+!**/runs/**/*.ldr

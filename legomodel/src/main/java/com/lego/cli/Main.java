@@ -83,7 +83,7 @@ public final class Main {
         Path outputObjPath = positional.size() >= 3 ? Path.of(positional.get(2)) : null;
 
         String exportMode = "brick";
-        String voxelizerModeArg = "legacy";
+        String voxelizerModeArg = "topological";
 
         if (positional.size() >= 4) {
             String arg3 = positional.get(3);
@@ -262,7 +262,7 @@ public final class Main {
     private static void printUsage(PrintStream err) {
         err.println("Usage: java -jar legomodel.jar <objPath> <resolution> [outputObjPath] [exportMode] [voxelizerMode] [options]");
         err.println("  exportMode: 'brick' (default), 'voxel-surface', 'voxel-solid', or 'ldraw'");
-        err.println("  voxelizerMode: 'legacy' (default) or 'topological'");
+        err.println("  voxelizerMode: 'topological' (default) or 'legacy'");
         err.println("  options:");
         err.println("    --analyze-stepping             Write stepping analysis files");
         err.println("    --analysis-dir=<path>          Output directory for analysis artifacts");

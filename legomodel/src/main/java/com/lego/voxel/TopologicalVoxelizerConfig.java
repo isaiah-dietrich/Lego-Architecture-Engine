@@ -10,18 +10,16 @@ public final class TopologicalVoxelizerConfig {
     private final double voxelSizeX;
     private final double voxelSizeY;
     private final double voxelSizeZ;
-    private final Connectivity connectivity;
     private final double epsilon;
 
     /**
      * Creates a configuration with isotropic voxel sizes (cubic voxels).
      *
      * @param voxelSize size of each voxel edge
-     * @param connectivity 6 or 26-connectivity
-     * @param epsilon tolerance for segment-triangle intersection
+     * @param epsilon   tolerance (reserved for future use)
      */
-    public TopologicalVoxelizerConfig(double voxelSize, Connectivity connectivity, double epsilon) {
-        this(voxelSize, voxelSize, voxelSize, connectivity, epsilon);
+    public TopologicalVoxelizerConfig(double voxelSize, double epsilon) {
+        this(voxelSize, voxelSize, voxelSize, epsilon);
     }
 
     /**
@@ -30,14 +28,12 @@ public final class TopologicalVoxelizerConfig {
      * @param voxelSizeX X dimension voxel size
      * @param voxelSizeY Y dimension voxel size
      * @param voxelSizeZ Z dimension voxel size
-     * @param connectivity 6 or 26-connectivity
-     * @param epsilon tolerance for segment-triangle intersection
+     * @param epsilon    tolerance (reserved for future use)
      */
     public TopologicalVoxelizerConfig(
         double voxelSizeX,
         double voxelSizeY,
         double voxelSizeZ,
-        Connectivity connectivity,
         double epsilon
     ) {
         if (voxelSizeX <= 0 || voxelSizeY <= 0 || voxelSizeZ <= 0) {
@@ -50,27 +46,11 @@ public final class TopologicalVoxelizerConfig {
         this.voxelSizeX = voxelSizeX;
         this.voxelSizeY = voxelSizeY;
         this.voxelSizeZ = voxelSizeZ;
-        this.connectivity = connectivity;
         this.epsilon = epsilon;
     }
 
-    public double voxelSizeX() {
-        return voxelSizeX;
-    }
-
-    public double voxelSizeY() {
-        return voxelSizeY;
-    }
-
-    public double voxelSizeZ() {
-        return voxelSizeZ;
-    }
-
-    public Connectivity connectivity() {
-        return connectivity;
-    }
-
-    public double epsilon() {
-        return epsilon;
-    }
+    public double voxelSizeX() { return voxelSizeX; }
+    public double voxelSizeY() { return voxelSizeY; }
+    public double voxelSizeZ() { return voxelSizeZ; }
+    public double epsilon()    { return epsilon; }
 }
