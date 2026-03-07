@@ -36,8 +36,10 @@ output/runs/*
 !output/runs/sets/
 !output/runs/sets/**
 
-# Ignore OBJ/LDraw files everywhere except runs artifacts
+# Ignore OBJ/LDraw/GLB files everywhere except runs artifacts
 **/*.obj
 **/*.ldr
+**/*.glb
 !**/runs/**/*.obj
 !**/runs/**/*.ldr
+!**/runs/**/*.glb

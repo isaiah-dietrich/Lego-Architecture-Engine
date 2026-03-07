@@ -169,16 +169,7 @@ public class Cleaning {
         boolean valid = parsedRows + rejectedRows == totalRows;
         double successPercent = totalRows == 0 ? 0.0 : (parsedRows * 100.0 / totalRows);
 
-        System.out.println("Summary:");
-        System.out.println("- total input rows: " + totalRows);
-        System.out.println("- parsed successfully: " + parsedRows);
-        System.out.println("- rejected rows: " + rejectedRows);
-        System.out.println("- success %: " + String.format("%.2f", successPercent));
-        System.out.println("- parts catalog path: " + catalogPath.toAbsolutePath());
-        System.out.println("- rejected rows path: " + rejectedPath.toAbsolutePath());
-        System.out.println("- verification (parsed + rejected == total): " + valid);
-        printPreview("First 10 kept names:", keptNames);
-        printPreview("First 10 rejected names:", rejectedNames);
+
 
         if (!valid) {
             throw new IllegalStateException("Row count mismatch: parsed + rejected != total");

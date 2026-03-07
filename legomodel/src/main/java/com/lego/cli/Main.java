@@ -10,13 +10,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import com.lego.color.ColorSampler;
+import com.lego.color.LegoPaletteMapper;
 import com.lego.export.BrickObjExporter;
 import com.lego.export.LDrawExporter;
 import com.lego.export.VoxelObjExporter;
+import com.lego.mesh.GlbLoader;
+import com.lego.mesh.LoadedModel;
+import com.lego.mesh.ModelLoader;
 import com.lego.mesh.MeshNormalizer;
-import com.lego.mesh.ObjLoader;
+import com.lego.mesh.ObjModelLoader;
 import com.lego.model.Brick;
+import com.lego.model.ColorRgb;
 import com.lego.model.Mesh;
+import com.lego.model.Triangle;
 import com.lego.optimize.AllowedBrickDimensions;
 import com.lego.optimize.BrickPlacer;
 import com.lego.voxel.SurfaceExtractor;
@@ -131,8 +138,22 @@ public final class Main {
             return 1;
         }
 
+        String colorMode = parsedOptions.colorMode();
+        int colorFallback = parsedOptions.colorFallback();
+
+        // Validate: --color-mode=glb-color with .obj input is an error
+        if ("glb-color".equals(colorMode)) {
+            String filename = objPath.getFileName().toString().toLowerCase();
+            if (filename.endsWith(".obj")) {
+                err.println("Error: --color-mode=glb-color is not supported with .obj input. OBJ files have no color channel.");
+                return 1;
+            }
+        }
+
         try {
-            Mesh mesh = ObjLoader.load(objPath);
+            ModelLoader loader = resolveLoader(objPath);
+            LoadedModel loaded = loader.load(objPath);
+            Mesh mesh = loaded.mesh();
             Mesh normalized = MeshNormalizer.normalize(mesh, resolution);
             VoxelGrid solid = Voxelizer.voxelize(normalized, resolution, voxelizationStrategy);
 
@@ -183,7 +204,30 @@ public final class Main {
                             out.println("Visual OBJ exported (voxel-solid): " + outputObjPath.toAbsolutePath());
                             break;
                         case "ldraw":
-                            LDrawExporter.export(bricks, outputObjPath, catalogBaseDir);
+                            Map<Brick, Integer> brickColorCodes = null;
+                            if ("glb-color".equals(colorMode) && loaded.colorMap().isPresent()) {
+                                Map<Triangle, ColorRgb> triColorMap = loaded.colorMap().get();
+                                Map<Brick, ColorRgb> brickRgbColors = ColorSampler.sampleBrickColors(
+                                    mesh, normalized, triColorMap, surface, bricks, resolution
+                                );
+                                LegoPaletteMapper palette = catalogBaseDir != null
+                                    ? LegoPaletteMapper.load(catalogBaseDir.resolve("raw/rebrickable/colors.csv"))
+                                    : LegoPaletteMapper.loadDefault();
+                                brickColorCodes = new HashMap<>();
+                                for (Map.Entry<Brick, ColorRgb> entry : brickRgbColors.entrySet()) {
+                                    brickColorCodes.put(entry.getKey(), palette.nearestLDrawColor(entry.getValue()));
+                                }
+                                // Apply fallback for bricks without color
+                                if (colorFallback >= 0) {
+                                    for (Brick brick : bricks) {
+                                        brickColorCodes.putIfAbsent(brick, colorFallback);
+                                    }
+                                }
+                                out.println("Color mode: glb-color (" + brickRgbColors.size()
+                                    + "/" + bricks.size() + " bricks colored, "
+                                    + palette.opaqueEntryCount() + " opaque palette entries)");
+                            }
+                            LDrawExporter.export(bricks, outputObjPath, catalogBaseDir, brickColorCodes);
                             out.println("LDraw exported: " + outputObjPath.toAbsolutePath());
                             break;
                     }
@@ -260,7 +304,8 @@ public final class Main {
     }
 
     private static void printUsage(PrintStream err) {
-        err.println("Usage: java -jar legomodel.jar <objPath> <resolution> [outputObjPath] [exportMode] [voxelizerMode] [options]");
+        err.println("Usage: java -jar legomodel.jar <modelPath> <resolution> [outputObjPath] [exportMode] [voxelizerMode] [options]");
+        err.println("  modelPath: path to a .obj or .glb model file");
         err.println("  exportMode: 'brick' (default), 'voxel-surface', 'voxel-solid', or 'ldraw'");
         err.println("  voxelizerMode: 'topological' (default) or 'legacy'");
         err.println("  options:");
@@ -268,6 +313,36 @@ public final class Main {
         err.println("    --analysis-dir=<path>          Output directory for analysis artifacts");
         err.println("    --jump-threshold=<int>         Large jump threshold (default: 25)");
         err.println("    --sweep=<r1,r2,...>            Analyze multiple resolutions (e.g., 10,20,30)");
+        err.println("    --color-mode=<mode>            Color mode: 'none' (default) or 'glb-color'");
+        err.println("    --color-fallback=<code>        LDraw color code for bricks without sampled color");
+    }
+
+    /**
+     * Selects the appropriate {@link ModelLoader} for the given model path based on file extension.
+     *
+     * <p>Supported extensions:
+     * <ul>
+     *   <li>{@code .obj} — uses {@link ObjModelLoader}</li>
+     *   <li>{@code .glb} — uses {@link GlbLoader}</li>
+     *   <li>{@code .gltf} — rejected with a clear error (convert to {@code .glb})</li>
+     * </ul>
+     *
+     * @param path the model file path
+     * @return the appropriate loader
+     * @throws IllegalArgumentException for unsupported or rejected extensions
+     */
+    private static ModelLoader resolveLoader(Path path) {
+        String name = path.getFileName().toString().toLowerCase();
+        if (name.endsWith(".gltf")) {
+            throw new IllegalArgumentException(
+                "Unsupported format: .gltf files are not accepted. Convert to .glb first."
+            );
+        }
+        if (name.endsWith(".glb")) {
+            return new GlbLoader();
+        }
+        // Default: treat as .obj
+        return new ObjModelLoader();
     }
 
     private static ParsedOptions parseCliOptions(String[] args) {
@@ -276,6 +351,8 @@ public final class Main {
         Path analysisDir = null;
         int jumpThreshold = 25;
         List<Integer> sweepResolutions = new ArrayList<>();
+        String colorMode = "none";
+        int colorFallback = -1; // -1 = no fallback (use default color 16)
 
         for (int i = 0; i < args.length; i++) {
             String arg = args[i];
@@ -294,12 +371,24 @@ public final class Main {
             } else if (arg.startsWith("--sweep=")) {
                 String value = arg.substring("--sweep=".length());
                 sweepResolutions = parseSweepResolutions(value);
+            } else if (arg.startsWith("--color-mode=")) {
+                colorMode = arg.substring("--color-mode=".length());
+                if (!"none".equals(colorMode) && !"glb-color".equals(colorMode)) {
+                    throw new IllegalArgumentException(
+                        "Invalid --color-mode: " + colorMode + ". Use 'none' or 'glb-color'."
+                    );
+                }
+            } else if (arg.startsWith("--color-fallback=")) {
+                colorFallback = parseNonNegativeInt(
+                    arg.substring("--color-fallback=".length()), "color-fallback"
+                );
             } else {
                 positional.add(arg);
             }
         }
 
-        return new ParsedOptions(positional, analyzeStepping, analysisDir, jumpThreshold, sweepResolutions);
+        return new ParsedOptions(positional, analyzeStepping, analysisDir, jumpThreshold,
+            sweepResolutions, colorMode, colorFallback);
     }
 
     private static Path resolveAnalysisDir(Path explicitAnalysisDir, Path outputObjPath) {
@@ -348,7 +437,9 @@ public final class Main {
         boolean analyzeStepping,
         Path analysisDir,
         int largeJumpThreshold,
-        List<Integer> sweepResolutions
+        List<Integer> sweepResolutions,
+        String colorMode,
+        int colorFallback
     ) {}
 
     /**

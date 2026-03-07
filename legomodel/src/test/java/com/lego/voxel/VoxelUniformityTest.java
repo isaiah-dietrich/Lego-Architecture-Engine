@@ -119,11 +119,11 @@ class VoxelUniformityTest {
         // Compute uniformity metric
         double stdDev = computeDeltaStdDev(deltas);
         
-        // Print diagnostic info
-        System.out.println("=== Pyramid Uniformity Analysis (res=20) ===");
-        System.out.println("Layer areas: " + areas);
-        System.out.println("Layer deltas: " + deltas);
-        System.out.println("Delta std dev: " + String.format("%.2f", stdDev));
+        // // Print diagnostic info
+        // System.out.println("=== Pyramid Uniformity Analysis (res=20) ===");
+        // System.out.println("Layer areas: " + areas);
+        // System.out.println("Layer deltas: " + deltas);
+        // System.out.println("Delta std dev: " + String.format("%.2f", stdDev));
         
         // Note: Perfect pyramids with 45° slopes exhibit geometric quantization
         // (paired layers) due to diagonal alignment with voxel grid. This is inherent

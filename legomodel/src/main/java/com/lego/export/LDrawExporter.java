@@ -41,7 +41,7 @@ public final class LDrawExporter {
     }
 
     public static void export(List<Brick> bricks, Path outputPath) throws IOException {
-        export(bricks, outputPath, null);
+        export(bricks, outputPath, null, null);
     }
 
     /**
@@ -49,6 +49,24 @@ public final class LDrawExporter {
      * If {@code catalogBaseDir} is non-null, it is used to resolve the curated catalog path.
      */
     public static void export(List<Brick> bricks, Path outputPath, Path catalogBaseDir) throws IOException {
+        export(bricks, outputPath, catalogBaseDir, null);
+    }
+
+    /**
+     * Exports bricks with optional per-brick LDraw color codes.
+     *
+     * @param bricks         placed bricks
+     * @param outputPath     output .ldr path
+     * @param catalogBaseDir optional catalog base directory (test-only)
+     * @param brickColorCodes optional per-brick LDraw color code map; {@code null} or absent
+     *                        entries use {@link #DEFAULT_COLOR} (16, "current color")
+     */
+    public static void export(
+        List<Brick> bricks,
+        Path outputPath,
+        Path catalogBaseDir,
+        Map<Brick, Integer> brickColorCodes
+    ) throws IOException {
         Objects.requireNonNull(bricks, "bricks must not be null");
         Objects.requireNonNull(outputPath, "outputPath must not be null");
 
@@ -64,6 +82,15 @@ public final class LDrawExporter {
         for (Brick brick : bricks) {
             PartPlacement placement = resolvePart(studKeyToPartFile, brick.studX(), brick.studY());
 
+            // Determine color: use per-brick code if available, else default (16)
+            int color = DEFAULT_COLOR;
+            if (brickColorCodes != null) {
+                Integer code = brickColorCodes.get(brick);
+                if (code != null) {
+                    color = code;
+                }
+            }
+
             // Center in studs (our brick coords are min-corner on the stud grid).
             double centerXStuds = brick.x() + (brick.studX() / 2.0);
             // Source meshes use Y-up convention (Blender OBJ default).
@@ -78,7 +105,7 @@ public final class LDrawExporter {
             double y = -((brick.y() + brick.heightUnits()) * BRICK_HEIGHT_LDU);
 
             out.append("1 ")
-                .append(DEFAULT_COLOR).append(' ')
+                .append(color).append(' ')
                 .append(formatLdu(x)).append(' ')
                 .append(formatLdu(y)).append(' ')
                 .append(formatLdu(z)).append(' ')
