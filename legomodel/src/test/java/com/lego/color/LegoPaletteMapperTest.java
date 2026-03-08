@@ -16,8 +16,10 @@ class LegoPaletteMapperTest {
     @Test
     void loadsRebrickableColors() throws IOException {
         LegoPaletteMapper mapper = LegoPaletteMapper.loadDefault();
-        assertTrue(mapper.opaqueEntryCount() > 100,
-            "Expected >100 opaque entries, got " + mapper.opaqueEntryCount());
+        // After filtering transparent and effect colors (Pearl, Chrome, Metallic,
+        // Speckle, Glow, Milky, Satin, Glitter), expect ~70-90 standard opaque entries.
+        assertTrue(mapper.opaqueEntryCount() > 50,
+            "Expected >50 opaque entries, got " + mapper.opaqueEntryCount());
     }
 
     @Test
@@ -154,5 +156,89 @@ class LegoPaletteMapperTest {
         int code1 = mapper.nearestLDrawColor(color);
         int code2 = mapper.nearestLDrawColor(color);
         assertEquals(code1, code2, "Same input should always produce the same nearest color");
+    }
+
+    @Test
+    void getColorNameReturnsCorrectName() throws IOException {
+        LegoPaletteMapper mapper = LegoPaletteMapper.loadDefault();
+        String blackName = mapper.getColorName(0);
+        assertEquals("Black", blackName);
+
+        String whiteName = mapper.getColorName(15);
+        assertEquals("White", whiteName);
+
+        String redName = mapper.getColorName(4);
+        assertEquals("Red", redName);
+    }
+
+    @Test
+    void getColorNameReturnsUnknownForInvalidCode() throws IOException {
+        LegoPaletteMapper mapper = LegoPaletteMapper.loadDefault();
+        String unknownName = mapper.getColorName(9999);
+        assertEquals("Unknown", unknownName);
+    }
+
+    @Test
+    void ignoresOutOfRangeRebrickableIds() throws IOException {
+        Path csv = Files.createTempFile("colors-out-of-range", ".csv");
+        Files.writeString(csv,
+            "id,name,rgb,is_trans\n"
+                + "4,Red,C91A09,FALSE\n"
+                + "1137,UnstableDark,050505,FALSE\n"
+                + "15,White,FFFFFF,FALSE\n");
+
+        LegoPaletteMapper mapper = LegoPaletteMapper.load(csv);
+        int code = mapper.nearestLDrawColor(new ColorRgb(0.01f, 0.01f, 0.01f));
+
+        // 1137 should be filtered out; nearest among [4,15] should be red for near-black
+        // in this minimal palette.
+        assertEquals(4, code);
+    }
+
+    @Test
+    void effectColorsExcludedFromMatching() throws IOException {
+        Path csv = Files.createTempFile("colors-effects", ".csv");
+        Files.writeString(csv,
+            "id,name,rgb,is_trans\n"
+                + "15,White,FFFFFF,FALSE\n"
+                + "183,Pearl White,F2F3F2,FALSE\n"
+                + "383,Chrome Silver,E0E0E0,FALSE\n"
+                + "21,Glow In Dark Opaque,D4D5C9,FALSE\n"
+                + "80,Metallic Silver,A5A9B4,FALSE\n");
+
+        LegoPaletteMapper mapper = LegoPaletteMapper.load(csv);
+        // Near-white linear input: Pearl White (F2F3F2) is closest in raw ΔE,
+        // but it should be excluded as an effect color, leaving White.
+        ColorRgb nearWhite = new ColorRgb(0.888f, 0.888f, 0.888f);
+        int code = mapper.nearestLDrawColor(nearWhite);
+        assertEquals(15, code, "Should match White, not Pearl White");
+    }
+
+    @Test
+    void isEffectColorDetectsEffectNames() {
+        assertTrue(LegoPaletteMapper.isEffectColor("Pearl White"));
+        assertTrue(LegoPaletteMapper.isEffectColor("Chrome Silver"));
+        assertTrue(LegoPaletteMapper.isEffectColor("Metallic Gold"));
+        assertTrue(LegoPaletteMapper.isEffectColor("Speckle Black-Copper"));
+        assertTrue(LegoPaletteMapper.isEffectColor("Glow In Dark Opaque"));
+        assertTrue(LegoPaletteMapper.isEffectColor("Milky White"));
+        assertFalse(LegoPaletteMapper.isEffectColor("White"));
+        assertFalse(LegoPaletteMapper.isEffectColor("Red"));
+        assertFalse(LegoPaletteMapper.isEffectColor("Dark Bluish Gray"));
+    }
+
+    @Test
+    void getColorNameFindsEffectColorsByCode() throws IOException {
+        // Effect colors should still be findable by name lookup
+        // even though they're excluded from matching
+        Path csv = Files.createTempFile("colors-name-lookup", ".csv");
+        Files.writeString(csv,
+            "id,name,rgb,is_trans\n"
+                + "15,White,FFFFFF,FALSE\n"
+                + "183,Pearl White,F2F3F2,FALSE\n");
+
+        LegoPaletteMapper mapper = LegoPaletteMapper.load(csv);
+        assertEquals("Pearl White", mapper.getColorName(183));
+        assertEquals("White", mapper.getColorName(15));
     }
 }

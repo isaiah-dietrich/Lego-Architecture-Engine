@@ -389,6 +389,33 @@ class GlbLoaderTest {
         assertEquals(0f, color.b(), 0.01f);
     }
 
+    @Test
+    void textureSamplingFlipsVFromGltfToImageSpace() throws IOException {
+        float[] positions = {
+            0f, 0f, 0f,
+            1f, 0f, 0f,
+            0f, 1f, 0f
+        };
+        int[] indices = { 0, 1, 2 };
+        // In glTF UV space, v=0 is the bottom of the texture.
+        // With a 1x2 image [top=red, bottom=blue], v=0 should sample blue.
+        float[] texCoords = { 0.5f, 0.0f, 0.5f, 0.0f, 0.5f, 0.0f };
+        byte[] png = createVerticalTwoColorPng(0xFF0000, 0x0000FF);
+
+        Path glb = writeGlbWithTexture(
+            tempDir.resolve("tex_vflip.glb"), positions, indices, texCoords, png, null
+        );
+
+        GlbLoader loader = new GlbLoader();
+        LoadedModel loaded = loader.load(glb);
+
+        assertTrue(loaded.colorMap().isPresent());
+        ColorRgb color = loaded.colorMap().get().values().iterator().next();
+        assertEquals(0f, color.r(), 0.01f);
+        assertEquals(0f, color.g(), 0.01f);
+        assertEquals(1f, color.b(), 0.01f);
+    }
+
     // ---- GLB binary file builder for tests ----
 
     /**
@@ -624,6 +651,15 @@ class GlbLoaderTest {
         BufferedImage img = new BufferedImage(2, 1, BufferedImage.TYPE_INT_RGB);
         img.setRGB(0, 0, rgbLeft);
         img.setRGB(1, 0, rgbRight);
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ImageIO.write(img, "png", baos);
+        return baos.toByteArray();
+    }
+
+    private byte[] createVerticalTwoColorPng(int rgbTop, int rgbBottom) throws IOException {
+        BufferedImage img = new BufferedImage(1, 2, BufferedImage.TYPE_INT_RGB);
+        img.setRGB(0, 0, rgbTop);
+        img.setRGB(0, 1, rgbBottom);
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         ImageIO.write(img, "png", baos);
         return baos.toByteArray();

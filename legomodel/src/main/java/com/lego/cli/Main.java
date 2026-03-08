@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import com.lego.color.ColorSampler;
+import com.lego.color.ColorSmoother;
 import com.lego.color.LegoPaletteMapper;
 import com.lego.export.BrickObjExporter;
 import com.lego.export.LDrawExporter;
@@ -205,12 +206,13 @@ public final class Main {
                             break;
                         case "ldraw":
                             Map<Brick, Integer> brickColorCodes = null;
+                            LegoPaletteMapper palette = null;
                             if ("glb-color".equals(colorMode) && loaded.colorMap().isPresent()) {
                                 Map<Triangle, ColorRgb> triColorMap = loaded.colorMap().get();
                                 Map<Brick, ColorRgb> brickRgbColors = ColorSampler.sampleBrickColors(
                                     mesh, normalized, triColorMap, surface, bricks, resolution
                                 );
-                                LegoPaletteMapper palette = catalogBaseDir != null
+                                palette = catalogBaseDir != null
                                     ? LegoPaletteMapper.load(catalogBaseDir.resolve("raw/rebrickable/colors.csv"))
                                     : LegoPaletteMapper.loadDefault();
                                 brickColorCodes = new HashMap<>();
@@ -223,12 +225,19 @@ public final class Main {
                                         brickColorCodes.putIfAbsent(brick, colorFallback);
                                     }
                                 }
+                                // Spatial smoothing: eliminate isolated outlier colors
+                                int smoothed = ColorSmoother.smoothIterative(brickColorCodes, bricks, 3);
                                 out.println("Color mode: glb-color (" + brickRgbColors.size()
                                     + "/" + bricks.size() + " bricks colored, "
-                                    + palette.opaqueEntryCount() + " opaque palette entries)");
+                                    + palette.opaqueEntryCount() + " opaque palette entries"
+                                    + (smoothed > 0 ? ", " + smoothed + " smoothed" : "") + ")");
                             }
                             LDrawExporter.export(bricks, outputObjPath, catalogBaseDir, brickColorCodes);
                             out.println("LDraw exported: " + outputObjPath.toAbsolutePath());
+                            
+                            if (parsedOptions.colorList()) {
+                                printColorList(brickColorCodes, palette, out);
+                            }
                             break;
                     }
                 } catch (IOException e) {
@@ -315,6 +324,7 @@ public final class Main {
         err.println("    --sweep=<r1,r2,...>            Analyze multiple resolutions (e.g., 10,20,30)");
         err.println("    --color-mode=<mode>            Color mode: 'none' (default) or 'glb-color'");
         err.println("    --color-fallback=<code>        LDraw color code for bricks without sampled color");
+        err.println("    --color-list                   Output list of unique color codes used in LDraw export");
     }
 
     /**
@@ -353,6 +363,7 @@ public final class Main {
         List<Integer> sweepResolutions = new ArrayList<>();
         String colorMode = "none";
         int colorFallback = -1; // -1 = no fallback (use default color 16)
+        boolean colorList = false;
 
         for (int i = 0; i < args.length; i++) {
             String arg = args[i];
@@ -382,13 +393,15 @@ public final class Main {
                 colorFallback = parseNonNegativeInt(
                     arg.substring("--color-fallback=".length()), "color-fallback"
                 );
+            } else if ("--color-list".equals(arg)) {
+                colorList = true;
             } else {
                 positional.add(arg);
             }
         }
 
         return new ParsedOptions(positional, analyzeStepping, analysisDir, jumpThreshold,
-            sweepResolutions, colorMode, colorFallback);
+            sweepResolutions, colorMode, colorFallback, colorList);
     }
 
     private static Path resolveAnalysisDir(Path explicitAnalysisDir, Path outputObjPath) {
@@ -439,8 +452,35 @@ public final class Main {
         int largeJumpThreshold,
         List<Integer> sweepResolutions,
         String colorMode,
-        int colorFallback
+        int colorFallback,
+        boolean colorList
     ) {}
+
+    /**
+     * Prints a list of unique color codes present in the LDraw export, sorted numerically.
+     *
+     * @param brickColorCodes map of bricks to their color codes
+     * @param palette         the palette mapper for looking up color names
+     * @param out             the output stream to print to
+     */
+    static void printColorList(Map<Brick, Integer> brickColorCodes, LegoPaletteMapper palette, PrintStream out) {
+        if (brickColorCodes == null || brickColorCodes.isEmpty()) {
+            out.println("Color list: (no colors - using default color 16)");
+            return;
+        }
+
+        List<Integer> uniqueColors = brickColorCodes.values().stream()
+            .distinct()
+            .sorted()
+            .collect(Collectors.toList());
+
+        out.println("Color list (" + uniqueColors.size() + " unique colors):");
+        for (int color : uniqueColors) {
+            long count = brickColorCodes.values().stream().filter(c -> c == color).count();
+            String colorName = palette != null ? palette.getColorName(color) : "Unknown";
+            out.printf("  %3d %-25s (%d bricks)%n", color, colorName, count);
+        }
+    }
 
     /**
      * Prints a summary of block types used, grouped by dimensions and sorted by volume.

@@ -6,6 +6,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 import com.lego.model.ColorRgb;
 
@@ -18,17 +20,43 @@ import com.lego.model.ColorRgb;
  * perceptual color difference better than Euclidean RGB distance.
  *
  * <p>The {@code id} field from the CSV is used directly as the LDraw color code
- * in {@code .ldr} output.
+ * in {@code .ldr} output, restricted to the standard range {@code [0, 511]}.
  */
 public final class LegoPaletteMapper {
+
+    private static final int MAX_STANDARD_LDRAW_CODE = 511;
+
+    /**
+     * Name prefixes that indicate specialty surface finishes.
+     * These colors represent metallic/pearl/chrome/etc. effects rather than
+     * standard matte colors, and are excluded from nearest-color matching.
+     */
+    private static final Set<String> EFFECT_PREFIXES = Set.of(
+        "pearl", "chrome", "metallic", "speckle", "milky",
+        "satin", "glitter", "glow in dark", "flat silver",
+        "copper"
+    );
 
     /** A single entry from the palette. */
     public record PaletteEntry(int ldrawCode, String name, double labL, double labA, double labB, boolean isTrans) {}
 
     private final List<PaletteEntry> opaqueEntries;
+    private final List<PaletteEntry> allEntries;
 
-    private LegoPaletteMapper(List<PaletteEntry> allEntries) {
-        this.opaqueEntries = allEntries.stream().filter(e -> !e.isTrans()).toList();
+    private LegoPaletteMapper(List<PaletteEntry> entries) {
+        this.allEntries = List.copyOf(entries);
+        this.opaqueEntries = entries.stream()
+            .filter(e -> !e.isTrans())
+            .filter(e -> !isEffectColor(e.name()))
+            .toList();
+    }
+
+    /**
+     * Returns true if the color name indicates a specialty surface finish.
+     */
+    static boolean isEffectColor(String name) {
+        String lower = name.toLowerCase(Locale.ROOT);
+        return EFFECT_PREFIXES.stream().anyMatch(lower::startsWith);
     }
 
     /**
@@ -59,6 +87,10 @@ public final class LegoPaletteMapper {
                 String name = parts[1].trim();
                 String hex = parts[2].trim();
                 boolean isTrans = "TRUE".equalsIgnoreCase(parts[3].trim());
+
+                if (id < 0 || id > MAX_STANDARD_LDRAW_CODE) {
+                    continue;
+                }
 
                 // Parse sRGB hex → linear → L*a*b*
                 float sR = Integer.parseInt(hex.substring(0, 2), 16) / 255f;
@@ -115,6 +147,21 @@ public final class LegoPaletteMapper {
         return opaqueEntries.size();
     }
 
+    /**
+     * Looks up the color name for a given LDraw color code.
+     * Searches all loaded entries (including effect colors).
+     *
+     * @param ldrawCode the color code to look up
+     * @return the color name, or "Unknown" if not found
+     */
+    public String getColorName(int ldrawCode) {
+        return allEntries.stream()
+            .filter(e -> e.ldrawCode() == ldrawCode)
+            .map(PaletteEntry::name)
+            .findFirst()
+            .orElse("Unknown");
+    }
+
     // ---- Color space conversion ----
 
     /** CIE76 ΔE: Euclidean distance in L*a*b*. */
@@ -123,6 +170,95 @@ public final class LegoPaletteMapper {
         double da = a1 - a2;
         double db = b1 - b2;
         return Math.sqrt(dl * dl + da * da + db * db);
+    }
+
+    /**
+     * CIEDE2000 color difference formula.
+     *
+     * <p>This is the modern perceptual color difference metric that properly
+     * weights lightness, chroma, and hue differences. It dramatically reduces
+     * cross-hue mismatches compared to ΔE76 (e.g., dark brown shadows being
+     * matched to Dark Red or Magenta).
+     *
+     * <p>Reference: Sharma, Wu, Dalal (2005), "The CIEDE2000 Color-Difference
+     * Formula: Implementation Notes, Supplementary Test Data, and Mathematical
+     * Observations", Color Research & Application, 30(1), 21-30.
+     *
+     * @return CIEDE2000 ΔE value (lower = more similar)
+     */
+    static double deltaE2000(double l1, double a1, double b1, double l2, double a2, double b2) {
+        // Step 1: Calculate C' and h'
+        double c1 = Math.sqrt(a1 * a1 + b1 * b1);
+        double c2 = Math.sqrt(a2 * a2 + b2 * b2);
+        double cBar = (c1 + c2) / 2.0;
+
+        double cBar7 = Math.pow(cBar, 7);
+        double g = 0.5 * (1 - Math.sqrt(cBar7 / (cBar7 + 6103515625.0))); // 25^7
+
+        double a1p = a1 * (1 + g);
+        double a2p = a2 * (1 + g);
+
+        double c1p = Math.sqrt(a1p * a1p + b1 * b1);
+        double c2p = Math.sqrt(a2p * a2p + b2 * b2);
+
+        double h1p = Math.toDegrees(Math.atan2(b1, a1p));
+        if (h1p < 0) h1p += 360;
+        double h2p = Math.toDegrees(Math.atan2(b2, a2p));
+        if (h2p < 0) h2p += 360;
+
+        // Step 2: Calculate ΔL', ΔC', ΔH'
+        double dLp = l2 - l1;
+        double dCp = c2p - c1p;
+
+        double dhp;
+        if (c1p * c2p == 0) {
+            dhp = 0;
+        } else if (Math.abs(h2p - h1p) <= 180) {
+            dhp = h2p - h1p;
+        } else if (h2p - h1p > 180) {
+            dhp = h2p - h1p - 360;
+        } else {
+            dhp = h2p - h1p + 360;
+        }
+
+        double dHp = 2 * Math.sqrt(c1p * c2p) * Math.sin(Math.toRadians(dhp / 2));
+
+        // Step 3: Calculate CIEDE2000 weighting functions
+        double lBarP = (l1 + l2) / 2.0;
+        double cBarP = (c1p + c2p) / 2.0;
+
+        double hBarP;
+        if (c1p * c2p == 0) {
+            hBarP = h1p + h2p;
+        } else if (Math.abs(h1p - h2p) <= 180) {
+            hBarP = (h1p + h2p) / 2.0;
+        } else if (h1p + h2p < 360) {
+            hBarP = (h1p + h2p + 360) / 2.0;
+        } else {
+            hBarP = (h1p + h2p - 360) / 2.0;
+        }
+
+        double t = 1
+            - 0.17 * Math.cos(Math.toRadians(hBarP - 30))
+            + 0.24 * Math.cos(Math.toRadians(2 * hBarP))
+            + 0.32 * Math.cos(Math.toRadians(3 * hBarP + 6))
+            - 0.20 * Math.cos(Math.toRadians(4 * hBarP - 63));
+
+        double lBarPm50sq = (lBarP - 50) * (lBarP - 50);
+        double sl = 1 + 0.015 * lBarPm50sq / Math.sqrt(20 + lBarPm50sq);
+        double sc = 1 + 0.045 * cBarP;
+        double sh = 1 + 0.015 * cBarP * t;
+
+        double cBarP7 = Math.pow(cBarP, 7);
+        double rt = -2 * Math.sqrt(cBarP7 / (cBarP7 + 6103515625.0))
+            * Math.sin(Math.toRadians(60 * Math.exp(-Math.pow((hBarP - 275) / 25.0, 2))));
+
+        // Parametric weighting factors (all 1.0 for standard CIEDE2000)
+        double dlTerm = dLp / sl;
+        double dcTerm = dCp / sc;
+        double dhTerm = dHp / sh;
+
+        return Math.sqrt(dlTerm * dlTerm + dcTerm * dcTerm + dhTerm * dhTerm + rt * dcTerm * dhTerm);
     }
 
     /** sRGB gamma-encoded [0,1] → linear [0,1]. */

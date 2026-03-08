@@ -882,4 +882,49 @@ class MainTest {
         return 0;
     }
 
+    @Test
+    void testColorListFlagWithLDrawExport() throws IOException {
+        Path objPath = tempDir.resolve("triangle.obj");
+        Path ldrPath = tempDir.resolve("output.ldr");
+        Files.writeString(objPath, """
+            v 0 0 0
+            v 1 0 0
+            v 0 1 0
+            f 1 2 3
+            """);
+
+        createFullCatalog(tempDir);
+        createTestPalette(tempDir);
+
+        ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
+        ByteArrayOutputStream errBuffer = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(outBuffer);
+        PrintStream err = new PrintStream(errBuffer);
+
+        int exitCode = Main.run(new String[] {
+            objPath.toString(), "4", ldrPath.toString(), "ldraw",
+            "--color-list"
+        }, out, err, tempDir);
+
+        assertEquals(0, exitCode);
+        String output = outBuffer.toString();
+        assertTrue(output.contains("Color list"), 
+            "Should output color list. Got: " + output);
+        assertTrue(output.contains("bricks)"), 
+            "Should show brick count per color. Got: " + output);
+    }
+
+    private void createTestPalette(Path baseDir) throws IOException {
+        Path paletteDir = baseDir.resolve("raw/rebrickable");
+        Files.createDirectories(paletteDir);
+        String csv = "id,name,rgb,is_trans\n" +
+            "0,Black,05131D,FALSE\n" +
+            "1,Blue,0055BF,FALSE\n" +
+            "4,Red,C91A09,FALSE\n" +
+            "14,Yellow,F2CD37,FALSE\n" +
+            "15,White,FFFFFF,FALSE\n" +
+            "16,Main Colour,000000,FALSE\n";
+        Files.writeString(paletteDir.resolve("colors.csv"), csv);
+    }
+
 }

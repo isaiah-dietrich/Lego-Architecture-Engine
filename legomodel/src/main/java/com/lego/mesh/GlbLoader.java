@@ -383,11 +383,11 @@ public final class GlbLoader implements ModelLoader {
      * UV coordinates are wrapped to [0,1] (glTF default repeat mode).
      */
     private ColorRgb sampleTexture(BufferedImage image, float u, float v) {
-        u = u - (float) Math.floor(u);
-        v = v - (float) Math.floor(v);
+        u = wrapUv(u);
+        v = wrapUv(v);
 
         int x = Math.min((int) (u * image.getWidth()), image.getWidth() - 1);
-        int y = Math.min((int) (v * image.getHeight()), image.getHeight() - 1);
+        int y = uvToPixelY(v, image.getHeight());
 
         int argb = image.getRGB(x, y);
         float sR = ((argb >> 16) & 0xFF) / 255f;
@@ -407,11 +407,11 @@ public final class GlbLoader implements ModelLoader {
      * Non-padding pixels are converted from sRGB to linear RGB.
      */
     private ColorRgb sampleTextureFiltered(BufferedImage image, float u, float v) {
-        u = u - (float) Math.floor(u);
-        v = v - (float) Math.floor(v);
+        u = wrapUv(u);
+        v = wrapUv(v);
 
         int x = Math.min((int) (u * image.getWidth()), image.getWidth() - 1);
-        int y = Math.min((int) (v * image.getHeight()), image.getHeight() - 1);
+        int y = uvToPixelY(v, image.getHeight());
 
         int argb = image.getRGB(x, y);
         int sR = (argb >> 16) & 0xFF;
@@ -437,6 +437,19 @@ public final class GlbLoader implements ModelLoader {
             return c / 12.92;
         }
         return Math.pow((c + 0.055) / 1.055, 2.4);
+    }
+
+    /** Wraps UV coordinate into [0,1). */
+    private static float wrapUv(float uv) {
+        return uv - (float) Math.floor(uv);
+    }
+
+    /**
+     * Converts glTF V (origin at bottom) to image Y (origin at top).
+     */
+    private static int uvToPixelY(float v, int imageHeight) {
+        float flippedV = 1f - v;
+        return Math.min((int) (flippedV * imageHeight), imageHeight - 1);
     }
 
     /**
