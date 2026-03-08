@@ -12,6 +12,8 @@ import java.util.stream.Collectors;
 
 import com.lego.color.ColorSampler;
 import com.lego.color.ColorSmoother;
+import com.lego.color.ColorStrategy;
+import com.lego.color.ColorStrategyRegistry;
 import com.lego.color.LegoPaletteMapper;
 import com.lego.export.BrickObjExporter;
 import com.lego.export.LDrawExporter;
@@ -141,6 +143,25 @@ public final class Main {
 
         String colorMode = parsedOptions.colorMode();
         int colorFallback = parsedOptions.colorFallback();
+        String colorAlgorithm = parsedOptions.colorAlgorithm();
+
+        // Handle --color-algorithm=list
+        ColorStrategyRegistry strategyRegistry = ColorStrategyRegistry.createDefault();
+        if ("list".equals(colorAlgorithm)) {
+            out.println("Available color algorithms:");
+            for (var entry : strategyRegistry.all().entrySet()) {
+                String marker = entry.getKey().equals(strategyRegistry.defaultName()) ? " (default)" : "";
+                out.printf("  %-20s %s%s%n", entry.getKey(), entry.getValue().description(), marker);
+            }
+            return 0;
+        }
+
+        // Validate color algorithm name early (before expensive mesh processing)
+        if (!strategyRegistry.availableNames().contains(colorAlgorithm.toLowerCase())) {
+            err.println("Error: Unknown color algorithm: '" + colorAlgorithm
+                + "'. Available: " + strategyRegistry.availableNames());
+            return 1;
+        }
 
         // Validate: --color-mode=glb-color with .obj input is an error
         if ("glb-color".equals(colorMode)) {
@@ -215,10 +236,9 @@ public final class Main {
                                 palette = catalogBaseDir != null
                                     ? LegoPaletteMapper.load(catalogBaseDir.resolve("raw/rebrickable/colors.csv"))
                                     : LegoPaletteMapper.loadDefault();
-                                brickColorCodes = new HashMap<>();
-                                for (Map.Entry<Brick, ColorRgb> entry : brickRgbColors.entrySet()) {
-                                    brickColorCodes.put(entry.getKey(), palette.nearestLDrawColor(entry.getValue()));
-                                }
+                                // Apply color algorithm strategy
+                                ColorStrategy strategy = strategyRegistry.get(colorAlgorithm);
+                                brickColorCodes = strategy.apply(brickRgbColors, palette);
                                 // Apply fallback for bricks without color
                                 if (colorFallback >= 0) {
                                     for (Brick brick : bricks) {
@@ -230,6 +250,7 @@ public final class Main {
                                 out.println("Color mode: glb-color (" + brickRgbColors.size()
                                     + "/" + bricks.size() + " bricks colored, "
                                     + palette.opaqueEntryCount() + " opaque palette entries"
+                                    + ", algorithm=" + strategy.name()
                                     + (smoothed > 0 ? ", " + smoothed + " smoothed" : "") + ")");
                             }
                             LDrawExporter.export(bricks, outputObjPath, catalogBaseDir, brickColorCodes);
@@ -325,6 +346,7 @@ public final class Main {
         err.println("    --color-mode=<mode>            Color mode: 'none' (default) or 'glb-color'");
         err.println("    --color-fallback=<code>        LDraw color code for bricks without sampled color");
         err.println("    --color-list                   Output list of unique color codes used in LDraw export");
+        err.println("    --color-algorithm=<name>       Color mapping algorithm (default: direct). Use 'list' to see all.");
     }
 
     /**
@@ -364,6 +386,7 @@ public final class Main {
         String colorMode = "none";
         int colorFallback = -1; // -1 = no fallback (use default color 16)
         boolean colorList = false;
+        String colorAlgorithm = "direct";
 
         for (int i = 0; i < args.length; i++) {
             String arg = args[i];
@@ -395,13 +418,15 @@ public final class Main {
                 );
             } else if ("--color-list".equals(arg)) {
                 colorList = true;
+            } else if (arg.startsWith("--color-algorithm=")) {
+                colorAlgorithm = arg.substring("--color-algorithm=".length());
             } else {
                 positional.add(arg);
             }
         }
 
         return new ParsedOptions(positional, analyzeStepping, analysisDir, jumpThreshold,
-            sweepResolutions, colorMode, colorFallback, colorList);
+            sweepResolutions, colorMode, colorFallback, colorList, colorAlgorithm);
     }
 
     private static Path resolveAnalysisDir(Path explicitAnalysisDir, Path outputObjPath) {
@@ -453,7 +478,8 @@ public final class Main {
         List<Integer> sweepResolutions,
         String colorMode,
         int colorFallback,
-        boolean colorList
+        boolean colorList,
+        String colorAlgorithm
     ) {}
 
     /**
