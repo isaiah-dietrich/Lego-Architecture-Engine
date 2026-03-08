@@ -148,6 +148,14 @@ public final class LegoPaletteMapper {
     }
 
     /**
+     * Returns the list of opaque, non-effect palette entries used for matching.
+     * The returned list is unmodifiable.
+     */
+    public List<PaletteEntry> opaqueEntries() {
+        return opaqueEntries;
+    }
+
+    /**
      * Looks up the color name for a given LDraw color code.
      * Searches all loaded entries (including effect colors).
      *

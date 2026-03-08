@@ -83,6 +83,17 @@ public final class Main {
             return 1;
         }
 
+        // Handle --color-algorithm=list early (no positional args required)
+        ColorStrategyRegistry strategyRegistry = ColorStrategyRegistry.createDefault();
+        if ("list".equals(parsedOptions.colorAlgorithm())) {
+            out.println("Available color algorithms:");
+            for (var entry : strategyRegistry.all().entrySet()) {
+                String marker = entry.getKey().equals(strategyRegistry.defaultName()) ? " (default)" : "";
+                out.printf("  %-20s %s%s%n", entry.getKey(), entry.getValue().description(), marker);
+            }
+            return 0;
+        }
+
         List<String> positional = parsedOptions.positionalArgs();
         if (positional.size() < 2 || positional.size() > 5) {
             printUsage(err);
@@ -144,17 +155,6 @@ public final class Main {
         String colorMode = parsedOptions.colorMode();
         int colorFallback = parsedOptions.colorFallback();
         String colorAlgorithm = parsedOptions.colorAlgorithm();
-
-        // Handle --color-algorithm=list
-        ColorStrategyRegistry strategyRegistry = ColorStrategyRegistry.createDefault();
-        if ("list".equals(colorAlgorithm)) {
-            out.println("Available color algorithms:");
-            for (var entry : strategyRegistry.all().entrySet()) {
-                String marker = entry.getKey().equals(strategyRegistry.defaultName()) ? " (default)" : "";
-                out.printf("  %-20s %s%s%n", entry.getKey(), entry.getValue().description(), marker);
-            }
-            return 0;
-        }
 
         // Validate color algorithm name early (before expensive mesh processing)
         if (!strategyRegistry.availableNames().contains(colorAlgorithm.toLowerCase())) {

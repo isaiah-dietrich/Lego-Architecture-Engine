@@ -29,9 +29,8 @@ public final class ColorStrategyRegistry {
     public static ColorStrategyRegistry createDefault() {
         Map<String, ColorStrategy> map = new LinkedHashMap<>();
         register(map, new DirectMatchStrategy());
+        register(map, new UVLabPaletteProjection());
         // Future algorithms go here:
-        // register(map, new ShadowRemovalStrategy());
-        // register(map, new Ciede2000Strategy());
         // register(map, new HueWeightedStrategy());
         return new ColorStrategyRegistry(map);
     }
