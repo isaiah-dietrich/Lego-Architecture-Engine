@@ -2,8 +2,10 @@ package com.lego.color;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import com.lego.model.Brick;
 
@@ -83,39 +85,16 @@ public final class ColorSmoother {
 
             // Only replace if the dominant color has a clear majority (>50% of colored neighbors)
             if (dominant != null && dominant.getValue() > totalNeighborsWithColor / 2) {
-                corrections.put(brick, dominant.getValue());
+                corrections.put(brick, dominant.getKey());
             }
         }
 
-        // Apply corrections
-        int changed = 0;
+        // Apply all corrections atomically (don't mutate during iteration)
         for (Map.Entry<Brick, Integer> entry : corrections.entrySet()) {
-            // Re-find dominant: we stored the count, now find the color
-            Brick brick = entry.getKey();
-            List<Brick> neighbors = findNeighbors(brick, voxelToBrick);
-            Map<Integer, Integer> colorCounts = new HashMap<>();
-            for (Brick neighbor : neighbors) {
-                Integer neighborColor = brickColorCodes.get(neighbor);
-                if (neighborColor != null) {
-                    colorCounts.merge(neighborColor, 1, Integer::sum);
-                }
-            }
-            // Find max-count color
-            int bestColor = -1;
-            int bestCount = 0;
-            for (Map.Entry<Integer, Integer> cc : colorCounts.entrySet()) {
-                if (cc.getValue() > bestCount) {
-                    bestCount = cc.getValue();
-                    bestColor = cc.getKey();
-                }
-            }
-            if (bestColor >= 0) {
-                brickColorCodes.put(brick, bestColor);
-                changed++;
-            }
+            brickColorCodes.put(entry.getKey(), entry.getValue());
         }
 
-        return changed;
+        return corrections.size();
     }
 
     /**
@@ -125,11 +104,102 @@ public final class ColorSmoother {
      */
     public static int smoothIterative(Map<Brick, Integer> brickColorCodes, List<Brick> bricks, int maxPasses) {
         int totalChanged = 0;
+
+        // Pass 1: frequency-based smoothing — replace rare colors with common neighbor colors.
+        // This catches patches of wrong-hue artifacts (e.g., Sand Purple surrounded by browns)
+        // that the outlier detector can't fix because bricks within the patch have same-color neighbors.
+        totalChanged += smoothRareColors(brickColorCodes, bricks, 0.02, 3);
+
+        // Pass 2: outlier smoothing — remove isolated single-brick color speckle
         for (int pass = 0; pass < maxPasses; pass++) {
             int changed = smooth(brickColorCodes, bricks);
             totalChanged += changed;
             if (changed == 0) break;
         }
+        return totalChanged;
+    }
+
+    /**
+     * Replaces bricks whose color is globally rare (used by fewer than
+     * {@code threshold} fraction of total bricks) with the most common
+     * non-rare neighbor color. Runs iteratively until convergence.
+     *
+     * <p>This targets patches of wrong-hue artifacts caused by baked lighting
+     * in textures. Within such a patch, neighboring bricks share the same
+     * wrong color, so the standard outlier detector doesn't flag them. But
+     * the wrong color appears in very few bricks overall — this pass detects
+     * and corrects those minority-color clusters.
+     *
+     * @param brickColorCodes mutable map from brick to LDraw color code
+     * @param bricks          all bricks in the model
+     * @param threshold       colors used by fewer than this fraction of total colored bricks are "rare"
+     * @param maxPasses        maximum iterations
+     * @return number of bricks whose color was changed
+     */
+    static int smoothRareColors(Map<Brick, Integer> brickColorCodes, List<Brick> bricks,
+                                double threshold, int maxPasses) {
+        Map<Long, Brick> voxelToBrick = buildVoxelIndex(bricks);
+        int totalChanged = 0;
+
+        for (int pass = 0; pass < maxPasses; pass++) {
+            // Compute color frequencies
+            Map<Integer, Integer> colorFreq = new HashMap<>();
+            for (Integer code : brickColorCodes.values()) {
+                colorFreq.merge(code, 1, Integer::sum);
+            }
+            int totalColored = brickColorCodes.size();
+            int minCount = (int) (totalColored * threshold);
+
+            // Identify rare colors
+            Set<Integer> rareColors = new HashSet<>();
+            for (Map.Entry<Integer, Integer> entry : colorFreq.entrySet()) {
+                if (entry.getValue() <= minCount) {
+                    rareColors.add(entry.getKey());
+                }
+            }
+            if (rareColors.isEmpty()) break;
+
+            // For each brick with a rare color, try to replace with non-rare neighbor majority
+            Map<Brick, Integer> corrections = new HashMap<>();
+            for (Brick brick : bricks) {
+                Integer myColor = brickColorCodes.get(brick);
+                if (myColor == null || !rareColors.contains(myColor)) continue;
+
+                List<Brick> neighbors = findNeighbors(brick, voxelToBrick);
+                if (neighbors.isEmpty()) continue;
+
+                // Find the most common NON-RARE neighbor color
+                Map<Integer, Integer> neighborCounts = new HashMap<>();
+                for (Brick neighbor : neighbors) {
+                    Integer nc = brickColorCodes.get(neighbor);
+                    if (nc != null && !rareColors.contains(nc)) {
+                        neighborCounts.merge(nc, 1, Integer::sum);
+                    }
+                }
+                if (neighborCounts.isEmpty()) continue;
+
+                // Pick the most frequent non-rare neighbor color
+                int bestColor = -1;
+                int bestCount = 0;
+                for (Map.Entry<Integer, Integer> entry : neighborCounts.entrySet()) {
+                    if (entry.getValue() > bestCount) {
+                        bestCount = entry.getValue();
+                        bestColor = entry.getKey();
+                    }
+                }
+                if (bestColor >= 0) {
+                    corrections.put(brick, bestColor);
+                }
+            }
+
+            if (corrections.isEmpty()) break;
+
+            for (Map.Entry<Brick, Integer> entry : corrections.entrySet()) {
+                brickColorCodes.put(entry.getKey(), entry.getValue());
+            }
+            totalChanged += corrections.size();
+        }
+
         return totalChanged;
     }
 
@@ -156,7 +226,7 @@ public final class ColorSmoother {
      */
     private static List<Brick> findNeighbors(Brick brick, Map<Long, Brick> voxelToBrick) {
         List<Brick> neighbors = new ArrayList<>();
-        java.util.Set<Brick> seen = new java.util.HashSet<>();
+        Set<Brick> seen = new HashSet<>();
         seen.add(brick);
 
         // Check all 6 faces (one voxel outside each face)

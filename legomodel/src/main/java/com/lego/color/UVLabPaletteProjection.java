@@ -249,7 +249,16 @@ public final class UVLabPaletteProjection implements ColorStrategy {
     // ---- CIEDE2000 matching ----
 
     /**
-     * Finds the nearest palette entry using CIEDE2000 distance.
+     * Lightness parametric weight for CIEDE2000 matching.
+     * Values > 1.0 de-weight lightness differences, making hue/chroma
+     * more important. This prevents dark shadow samples from matching
+     * wrong-hue palette entries that happen to have similar darkness.
+     */
+    static final double KL = 1.0;
+
+    /**
+     * Finds the nearest palette entry using CIEDE2000 distance with
+     * a lightness de-weight (kL={@value #KL}) to prioritize hue fidelity.
      */
     static int nearestCiede2000(double l, double a, double b, List<PaletteEntry> entries) {
         PaletteEntry best = null;
@@ -257,7 +266,7 @@ public final class UVLabPaletteProjection implements ColorStrategy {
 
         for (PaletteEntry entry : entries) {
             double dist = LegoPaletteMapper.deltaE2000(l, a, b,
-                entry.labL(), entry.labA(), entry.labB());
+                entry.labL(), entry.labA(), entry.labB(), KL);
             if (dist < bestDist) {
                 bestDist = dist;
                 best = entry;

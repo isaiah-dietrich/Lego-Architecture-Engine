@@ -269,6 +269,90 @@ public final class LegoPaletteMapper {
         return Math.sqrt(dlTerm * dlTerm + dcTerm * dcTerm + dhTerm * dhTerm + rt * dcTerm * dhTerm);
     }
 
+    /**
+     * CIEDE2000 with a custom lightness weight (kL).
+     *
+     * <p>Higher kL de-weights lightness differences, making hue and chroma
+     * more important in the match. This is useful for textured models with
+     * baked lighting where dark shadows should still match same-hue palette
+     * entries rather than wrong-hue entries at similar darkness.
+     *
+     * @param kL lightness parametric factor (1.0 = standard, 2.0 = half lightness weight)
+     * @return CIEDE2000 ΔE value
+     */
+    static double deltaE2000(double l1, double a1, double b1,
+                             double l2, double a2, double b2,
+                             double kL) {
+        double c1 = Math.sqrt(a1 * a1 + b1 * b1);
+        double c2 = Math.sqrt(a2 * a2 + b2 * b2);
+        double cBar = (c1 + c2) / 2.0;
+
+        double cBar7 = Math.pow(cBar, 7);
+        double g = 0.5 * (1 - Math.sqrt(cBar7 / (cBar7 + 6103515625.0)));
+
+        double a1p = a1 * (1 + g);
+        double a2p = a2 * (1 + g);
+
+        double c1p = Math.sqrt(a1p * a1p + b1 * b1);
+        double c2p = Math.sqrt(a2p * a2p + b2 * b2);
+
+        double h1p = Math.toDegrees(Math.atan2(b1, a1p));
+        if (h1p < 0) h1p += 360;
+        double h2p = Math.toDegrees(Math.atan2(b2, a2p));
+        if (h2p < 0) h2p += 360;
+
+        double dLp = l2 - l1;
+        double dCp = c2p - c1p;
+
+        double dhp;
+        if (c1p * c2p == 0) {
+            dhp = 0;
+        } else if (Math.abs(h2p - h1p) <= 180) {
+            dhp = h2p - h1p;
+        } else if (h2p - h1p > 180) {
+            dhp = h2p - h1p - 360;
+        } else {
+            dhp = h2p - h1p + 360;
+        }
+
+        double dHp = 2 * Math.sqrt(c1p * c2p) * Math.sin(Math.toRadians(dhp / 2));
+
+        double lBarP = (l1 + l2) / 2.0;
+        double cBarP = (c1p + c2p) / 2.0;
+
+        double hBarP;
+        if (c1p * c2p == 0) {
+            hBarP = h1p + h2p;
+        } else if (Math.abs(h1p - h2p) <= 180) {
+            hBarP = (h1p + h2p) / 2.0;
+        } else if (h1p + h2p < 360) {
+            hBarP = (h1p + h2p + 360) / 2.0;
+        } else {
+            hBarP = (h1p + h2p - 360) / 2.0;
+        }
+
+        double t = 1
+            - 0.17 * Math.cos(Math.toRadians(hBarP - 30))
+            + 0.24 * Math.cos(Math.toRadians(2 * hBarP))
+            + 0.32 * Math.cos(Math.toRadians(3 * hBarP + 6))
+            - 0.20 * Math.cos(Math.toRadians(4 * hBarP - 63));
+
+        double lBarPm50sq = (lBarP - 50) * (lBarP - 50);
+        double sl = 1 + 0.015 * lBarPm50sq / Math.sqrt(20 + lBarPm50sq);
+        double sc = 1 + 0.045 * cBarP;
+        double sh = 1 + 0.015 * cBarP * t;
+
+        double cBarP7 = Math.pow(cBarP, 7);
+        double rt = -2 * Math.sqrt(cBarP7 / (cBarP7 + 6103515625.0))
+            * Math.sin(Math.toRadians(60 * Math.exp(-Math.pow((hBarP - 275) / 25.0, 2))));
+
+        double dlTerm = dLp / (kL * sl);
+        double dcTerm = dCp / sc;
+        double dhTerm = dHp / sh;
+
+        return Math.sqrt(dlTerm * dlTerm + dcTerm * dcTerm + dhTerm * dhTerm + rt * dcTerm * dhTerm);
+    }
+
     /** sRGB gamma-encoded [0,1] → linear [0,1]. */
     static double srgbToLinear(double c) {
         if (c <= 0.04045) {
