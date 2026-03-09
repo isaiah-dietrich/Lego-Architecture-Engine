@@ -14,14 +14,15 @@ import com.lego.color.ColorSampler;
 import com.lego.color.ColorSmoother;
 import com.lego.color.ColorStrategy;
 import com.lego.color.ColorStrategyRegistry;
+import com.lego.color.DominantVoteStrategy;
 import com.lego.color.LegoPaletteMapper;
 import com.lego.export.BrickObjExporter;
 import com.lego.export.LDrawExporter;
 import com.lego.export.VoxelObjExporter;
 import com.lego.mesh.GlbLoader;
 import com.lego.mesh.LoadedModel;
-import com.lego.mesh.ModelLoader;
 import com.lego.mesh.MeshNormalizer;
+import com.lego.mesh.ModelLoader;
 import com.lego.mesh.ObjModelLoader;
 import com.lego.model.Brick;
 import com.lego.model.ColorRgb;
@@ -230,15 +231,28 @@ public final class Main {
                             LegoPaletteMapper palette = null;
                             if ("glb-color".equals(colorMode) && loaded.colorMap().isPresent()) {
                                 Map<Triangle, ColorRgb> triColorMap = loaded.colorMap().get();
-                                Map<Brick, ColorRgb> brickRgbColors = ColorSampler.sampleBrickColors(
-                                    mesh, normalized, triColorMap, surface, bricks, resolution
-                                );
                                 palette = catalogBaseDir != null
                                     ? LegoPaletteMapper.load(catalogBaseDir.resolve("raw/rebrickable/colors.csv"))
                                     : LegoPaletteMapper.loadDefault();
-                                // Apply color algorithm strategy
                                 ColorStrategy strategy = strategyRegistry.get(colorAlgorithm);
-                                brickColorCodes = strategy.apply(brickRgbColors, palette);
+                                int coloredCount;
+
+                                // Dominant vote strategy uses per-voxel colors (no averaging)
+                                if (strategy instanceof DominantVoteStrategy dominantStrategy) {
+                                    Map<Brick, java.util.List<ColorRgb>> brickVoxelColors =
+                                        ColorSampler.sampleBrickVoxelColors(
+                                            mesh, normalized, triColorMap, surface, bricks, resolution
+                                        );
+                                    brickColorCodes = dominantStrategy.applyWithVoxelColors(brickVoxelColors, palette);
+                                    coloredCount = brickVoxelColors.size();
+                                } else {
+                                    Map<Brick, ColorRgb> brickRgbColors = ColorSampler.sampleBrickColors(
+                                        mesh, normalized, triColorMap, surface, bricks, resolution
+                                    );
+                                    brickColorCodes = strategy.apply(brickRgbColors, palette);
+                                    coloredCount = brickRgbColors.size();
+                                }
+
                                 // Apply fallback for bricks without color
                                 if (colorFallback >= 0) {
                                     for (Brick brick : bricks) {
@@ -246,8 +260,12 @@ public final class Main {
                                     }
                                 }
                                 // Spatial smoothing: eliminate isolated outlier colors
-                                int smoothed = ColorSmoother.smoothIterative(brickColorCodes, bricks, 3);
-                                out.println("Color mode: glb-color (" + brickRgbColors.size()
+                                // Skip smoothing for "direct" strategy to give raw unprocessed output
+                                int smoothed = 0;
+                                if (!"direct".equals(strategy.name())) {
+                                    smoothed = ColorSmoother.smoothIterative(brickColorCodes, bricks, 3);
+                                }
+                                out.println("Color mode: glb-color (" + coloredCount
                                     + "/" + bricks.size() + " bricks colored, "
                                     + palette.opaqueEntryCount() + " opaque palette entries"
                                     + ", algorithm=" + strategy.name()

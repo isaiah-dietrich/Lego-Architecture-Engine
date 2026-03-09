@@ -76,6 +76,53 @@ public final class ColorSampler {
     }
 
     /**
+     * Returns per-voxel colors for each brick without any brick-level averaging.
+     *
+     * <p>At the voxel level, each voxel gets the color of the triangle with the
+     * highest area overlap (dominant color), rather than an area-weighted average.
+     * This preserves sharp color boundaries that would be lost by averaging.
+     *
+     * @return map from brick to its list of per-voxel colors (one per filled voxel)
+     */
+    public static Map<Brick, List<ColorRgb>> sampleBrickVoxelColors(
+        Mesh originalMesh,
+        Mesh normalizedMesh,
+        Map<Triangle, ColorRgb> colorMap,
+        VoxelGrid surface,
+        List<Brick> bricks,
+        int resolution
+    ) {
+        Map<Triangle, ColorRgb> normalizedColorMap = remapColors(
+            originalMesh, normalizedMesh, colorMap
+        );
+
+        // For each voxel, pick the dominant (highest-area) triangle color
+        ColorRgb[][][] voxelColors = sampleVoxelColorsDominant(normalizedMesh, normalizedColorMap, surface, resolution);
+
+        // Collect per-voxel colors for each brick (no averaging)
+        Map<Brick, List<ColorRgb>> result = new HashMap<>();
+        for (Brick brick : bricks) {
+            List<ColorRgb> colors = new ArrayList<>();
+            for (int x = brick.x(); x < brick.maxX(); x++) {
+                for (int y = brick.y(); y < brick.maxY(); y++) {
+                    for (int z = brick.z(); z < brick.maxZ(); z++) {
+                        if (x < voxelColors.length && y < voxelColors[0].length && z < voxelColors[0][0].length) {
+                            ColorRgb c = voxelColors[x][y][z];
+                            if (c != null) {
+                                colors.add(c);
+                            }
+                        }
+                    }
+                }
+            }
+            if (!colors.isEmpty()) {
+                result.put(brick, colors);
+            }
+        }
+        return result;
+    }
+
+    /**
      * Transfers color entries from pre-normalization to post-normalization triangles
      * using index position (triangle order is preserved by MeshNormalizer).
      */
@@ -103,9 +150,55 @@ public final class ColorSampler {
         VoxelGrid surface,
         int resolution
     ) {
-        int w = surface.width();
-        int h = surface.height();
-        int d = surface.depth();
+        Map<Long, List<WeightedColor>> voxelVotes = collectVoxelTriangleOverlaps(normalizedMesh, colorMap, surface, resolution);
+
+        // Area-weighted average color per voxel
+        ColorRgb[][][] result = new ColorRgb[surface.width()][surface.height()][surface.depth()];
+        for (Map.Entry<Long, List<WeightedColor>> entry : voxelVotes.entrySet()) {
+            long key = entry.getKey();
+            result[unpackX(key)][unpackY(key)][unpackZ(key)] = weightedAverageColor(entry.getValue());
+        }
+        return result;
+    }
+
+    /**
+     * For each filled voxel, picks the color of the triangle with the highest area overlap.
+     * This preserves sharp color boundaries that averaging would blur.
+     */
+    private static ColorRgb[][][] sampleVoxelColorsDominant(
+        Mesh normalizedMesh,
+        Map<Triangle, ColorRgb> colorMap,
+        VoxelGrid surface,
+        int resolution
+    ) {
+        Map<Long, List<WeightedColor>> voxelVotes = collectVoxelTriangleOverlaps(normalizedMesh, colorMap, surface, resolution);
+
+        // Pick the highest-area triangle color per voxel
+        ColorRgb[][][] result = new ColorRgb[surface.width()][surface.height()][surface.depth()];
+        for (Map.Entry<Long, List<WeightedColor>> entry : voxelVotes.entrySet()) {
+            long key = entry.getKey();
+            List<WeightedColor> samples = entry.getValue();
+            WeightedColor best = samples.get(0);
+            for (int i = 1; i < samples.size(); i++) {
+                if (samples.get(i).weight() > best.weight()) {
+                    best = samples.get(i);
+                }
+            }
+            result[unpackX(key)][unpackY(key)][unpackZ(key)] = best.color();
+        }
+        return result;
+    }
+
+    /**
+     * Collects all triangle-voxel overlaps with area weights.
+     * Shared by both averaging and dominant-vote voxel sampling.
+     */
+    private static Map<Long, List<WeightedColor>> collectVoxelTriangleOverlaps(
+        Mesh normalizedMesh,
+        Map<Triangle, ColorRgb> colorMap,
+        VoxelGrid surface,
+        int resolution
+    ) {
         Map<Long, List<WeightedColor>> voxelVotes = new HashMap<>();
 
         for (Triangle tri : normalizedMesh.triangles()) {
@@ -150,16 +243,7 @@ public final class ColorSampler {
             }
         }
 
-        // Area-weighted average color per voxel
-        ColorRgb[][][] result = new ColorRgb[w][h][d];
-        for (Map.Entry<Long, List<WeightedColor>> entry : voxelVotes.entrySet()) {
-            long key = entry.getKey();
-            int x = unpackX(key);
-            int y = unpackY(key);
-            int z = unpackZ(key);
-            result[x][y][z] = weightedAverageColor(entry.getValue());
-        }
-        return result;
+        return voxelVotes;
     }
 
     /**

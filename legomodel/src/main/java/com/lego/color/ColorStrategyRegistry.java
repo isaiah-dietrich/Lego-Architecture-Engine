@@ -30,8 +30,8 @@ public final class ColorStrategyRegistry {
         Map<String, ColorStrategy> map = new LinkedHashMap<>();
         register(map, new DirectMatchStrategy());
         register(map, new UVLabPaletteProjection());
+        register(map, new DominantVoteStrategy());
         // Future algorithms go here:
-        // register(map, new HueWeightedStrategy());
         return new ColorStrategyRegistry(map);
     }
 
