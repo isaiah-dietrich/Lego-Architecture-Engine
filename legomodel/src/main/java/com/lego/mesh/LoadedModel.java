@@ -1,5 +1,6 @@
 package com.lego.mesh;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -19,21 +20,33 @@ import com.lego.model.Triangle;
  */
 public record LoadedModel(
     Mesh mesh,
-    Optional<Map<Triangle, ColorRgb>> colorMap
+    Optional<Map<Triangle, ColorRgb>> colorMap,
+    Optional<List<TexturedTriangle>> texturedTriangles
 ) {
     public LoadedModel {
         java.util.Objects.requireNonNull(mesh, "mesh");
         java.util.Objects.requireNonNull(colorMap, "colorMap");
+        java.util.Objects.requireNonNull(texturedTriangles, "texturedTriangles");
     }
 
     /** Convenience factory: geometry only, no color. */
     public static LoadedModel geometryOnly(Mesh mesh) {
-        return new LoadedModel(mesh, Optional.empty());
+        return new LoadedModel(mesh, Optional.empty(), Optional.empty());
     }
 
-    /** Convenience factory: geometry with color. */
+    /** Convenience factory: geometry with per-triangle color (legacy pipeline). */
     public static LoadedModel withColor(Mesh mesh, Map<Triangle, ColorRgb> colorMap) {
         java.util.Objects.requireNonNull(colorMap, "colorMap");
-        return new LoadedModel(mesh, Optional.of(colorMap));
+        return new LoadedModel(mesh, Optional.of(colorMap), Optional.empty());
+    }
+
+    /** Convenience factory: geometry with both per-triangle color and raw texture data. */
+    public static LoadedModel withColorAndTexture(
+            Mesh mesh,
+            Map<Triangle, ColorRgb> colorMap,
+            List<TexturedTriangle> texturedTriangles) {
+        java.util.Objects.requireNonNull(colorMap, "colorMap");
+        java.util.Objects.requireNonNull(texturedTriangles, "texturedTriangles");
+        return new LoadedModel(mesh, Optional.of(colorMap), Optional.of(texturedTriangles));
     }
 }

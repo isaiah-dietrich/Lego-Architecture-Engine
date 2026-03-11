@@ -31,7 +31,7 @@ public final class ColorStrategyRegistry {
         register(map, new DirectMatchStrategy());
         register(map, new UVLabPaletteProjection());
         register(map, new DominantVoteStrategy());
-        // Future algorithms go here:
+        register(map, new SupersampledVoxelColorPipeline());
         return new ColorStrategyRegistry(map);
     }
 

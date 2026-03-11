@@ -16,6 +16,7 @@ import com.lego.color.ColorStrategy;
 import com.lego.color.ColorStrategyRegistry;
 import com.lego.color.DominantVoteStrategy;
 import com.lego.color.LegoPaletteMapper;
+import com.lego.color.SupersampledVoxelColorPipeline;
 import com.lego.export.BrickObjExporter;
 import com.lego.export.LDrawExporter;
 import com.lego.export.VoxelObjExporter;
@@ -237,8 +238,15 @@ public final class Main {
                                 ColorStrategy strategy = strategyRegistry.get(colorAlgorithm);
                                 int coloredCount;
 
+                                // Supersampled pipeline: BVH + per-sample texture lookup
+                                if (strategy instanceof SupersampledVoxelColorPipeline supersampledPipeline
+                                        && loaded.texturedTriangles().isPresent()) {
+                                    brickColorCodes = supersampledPipeline.colorize(
+                                        normalized, loaded.texturedTriangles().get(),
+                                        surface, bricks, resolution, palette, 64);
+                                    coloredCount = brickColorCodes.size();
                                 // Dominant vote strategy uses per-voxel colors (no averaging)
-                                if (strategy instanceof DominantVoteStrategy dominantStrategy) {
+                                } else if (strategy instanceof DominantVoteStrategy dominantStrategy) {
                                     Map<Brick, java.util.List<ColorRgb>> brickVoxelColors =
                                         ColorSampler.sampleBrickVoxelColors(
                                             mesh, normalized, triColorMap, surface, bricks, resolution
@@ -262,7 +270,7 @@ public final class Main {
                                 // Spatial smoothing: eliminate isolated outlier colors
                                 // Skip smoothing for "direct" strategy to give raw unprocessed output
                                 int smoothed = 0;
-                                if (!"direct".equals(strategy.name())) {
+                                if (!"direct".equals(strategy.name()) && !"supersampled".equals(strategy.name())) {
                                     smoothed = ColorSmoother.smoothIterative(brickColorCodes, bricks, 3);
                                 }
                                 out.println("Color mode: glb-color (" + coloredCount

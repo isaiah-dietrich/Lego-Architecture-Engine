@@ -24,14 +24,14 @@ import de.javagl.jgltf.model.AccessorModel;
 import de.javagl.jgltf.model.AccessorShortData;
 import de.javagl.jgltf.model.GltfModel;
 import de.javagl.jgltf.model.ImageModel;
+import de.javagl.jgltf.model.MaterialModel;
 import de.javagl.jgltf.model.MeshModel;
 import de.javagl.jgltf.model.MeshPrimitiveModel;
-import de.javagl.jgltf.model.MaterialModel;
 import de.javagl.jgltf.model.NodeModel;
 import de.javagl.jgltf.model.SceneModel;
 import de.javagl.jgltf.model.TextureModel;
-import de.javagl.jgltf.model.v2.MaterialModelV2;
 import de.javagl.jgltf.model.io.GltfModelReader;
+import de.javagl.jgltf.model.v2.MaterialModelV2;
 
 /**
  * Loads {@code .glb} files using the {@code de.javagl:jgltf-model} library.
@@ -80,18 +80,19 @@ public final class GlbLoader implements ModelLoader {
 
         List<Triangle> triangles = new ArrayList<>();
         Map<Triangle, ColorRgb> colorMap = new HashMap<>();
+        List<TexturedTriangle> texturedTriangles = new ArrayList<>();
         boolean hasAnyColor = false;
 
         List<SceneModel> scenes = gltfModel.getSceneModels();
         if (scenes.isEmpty()) {
             // Fall back to all nodes if no scenes defined
             for (NodeModel node : gltfModel.getNodeModels()) {
-                hasAnyColor |= processNode(node, triangles, colorMap);
+                hasAnyColor |= processNode(node, triangles, colorMap, texturedTriangles);
             }
         } else {
             for (SceneModel scene : scenes) {
                 for (NodeModel rootNode : scene.getNodeModels()) {
-                    hasAnyColor |= processNode(rootNode, triangles, colorMap);
+                    hasAnyColor |= processNode(rootNode, triangles, colorMap, texturedTriangles);
                 }
             }
         }
@@ -104,7 +105,7 @@ public final class GlbLoader implements ModelLoader {
 
         Mesh mesh = new Mesh(triangles);
         if (hasAnyColor) {
-            return LoadedModel.withColor(mesh, colorMap);
+            return LoadedModel.withColorAndTexture(mesh, colorMap, texturedTriangles);
         }
         return LoadedModel.geometryOnly(mesh);
     }
@@ -117,7 +118,8 @@ public final class GlbLoader implements ModelLoader {
     private boolean processNode(
         NodeModel node,
         List<Triangle> triangles,
-        Map<Triangle, ColorRgb> colorMap
+        Map<Triangle, ColorRgb> colorMap,
+        List<TexturedTriangle> texturedTriangles
     ) {
         boolean hasColor = false;
 
@@ -126,12 +128,12 @@ public final class GlbLoader implements ModelLoader {
 
         for (MeshModel meshModel : node.getMeshModels()) {
             for (MeshPrimitiveModel primitive : meshModel.getMeshPrimitiveModels()) {
-                hasColor |= processPrimitive(primitive, globalTransform, triangles, colorMap);
+                hasColor |= processPrimitive(primitive, globalTransform, triangles, colorMap, texturedTriangles);
             }
         }
 
         for (NodeModel child : node.getChildren()) {
-            hasColor |= processNode(child, triangles, colorMap);
+            hasColor |= processNode(child, triangles, colorMap, texturedTriangles);
         }
 
         return hasColor;
@@ -144,7 +146,8 @@ public final class GlbLoader implements ModelLoader {
         MeshPrimitiveModel primitive,
         float[] globalTransform,
         List<Triangle> triangles,
-        Map<Triangle, ColorRgb> colorMap
+        Map<Triangle, ColorRgb> colorMap,
+        List<TexturedTriangle> texturedTriangles
     ) {
         int mode = primitive.getMode();
         if (mode != GL_TRIANGLES) {
@@ -198,6 +201,8 @@ public final class GlbLoader implements ModelLoader {
 
                 Triangle tri = createTriangle(positions, globalTransform, i0, i1, i2);
                 triangles.add(tri);
+                texturedTriangles.add(buildTexturedTriangle(
+                    texCoords, textureImage, materialColor, colors, colorComponents, i0, i1, i2));
 
                 ColorRgb triColor = resolveTriangleColor(
                     colors, colorComponents, i0, i1, i2,
@@ -213,6 +218,8 @@ public final class GlbLoader implements ModelLoader {
             for (int f = 0; f + 2 < vertexCount; f += 3) {
                 Triangle tri = createTriangle(positions, globalTransform, f, f + 1, f + 2);
                 triangles.add(tri);
+                texturedTriangles.add(buildTexturedTriangle(
+                    texCoords, textureImage, materialColor, colors, colorComponents, f, f + 1, f + 2));
 
                 ColorRgb triColor = resolveTriangleColor(
                     colors, colorComponents, f, f + 1, f + 2,
@@ -484,6 +491,35 @@ public final class GlbLoader implements ModelLoader {
             "Expected float accessor data for " + accessor.getElementType()
             + ", got: " + data.getClass().getSimpleName()
         );
+    }
+
+    /**
+     * Creates a TexturedTriangle record capturing per-vertex UV, vertex color,
+     * texture reference, and material color for the supersampled pipeline.
+     */
+    private TexturedTriangle buildTexturedTriangle(
+            AccessorFloatData texCoords,
+            BufferedImage textureImage,
+            ColorRgb materialColor,
+            AccessorFloatData colors,
+            int colorComponents,
+            int i0, int i1, int i2) {
+        float u0 = 0, v0 = 0, u1 = 0, v1 = 0, u2 = 0, v2 = 0;
+        if (texCoords != null) {
+            u0 = texCoords.get(i0, 0); v0 = texCoords.get(i0, 1);
+            u1 = texCoords.get(i1, 0); v1 = texCoords.get(i1, 1);
+            u2 = texCoords.get(i2, 0); v2 = texCoords.get(i2, 1);
+        }
+
+        ColorRgb vc0 = null, vc1 = null, vc2 = null;
+        if (colors != null && colorComponents >= 3) {
+            vc0 = new ColorRgb(clamp01(colors.get(i0, 0)), clamp01(colors.get(i0, 1)), clamp01(colors.get(i0, 2)));
+            vc1 = new ColorRgb(clamp01(colors.get(i1, 0)), clamp01(colors.get(i1, 1)), clamp01(colors.get(i1, 2)));
+            vc2 = new ColorRgb(clamp01(colors.get(i2, 0)), clamp01(colors.get(i2, 1)), clamp01(colors.get(i2, 2)));
+        }
+
+        return new TexturedTriangle(u0, v0, u1, v1, u2, v2,
+            textureImage, vc0, vc1, vc2, materialColor);
     }
 
     private static float clamp01(float v) {
