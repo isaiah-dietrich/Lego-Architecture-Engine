@@ -266,6 +266,83 @@ class PlacementPolicyTest {
         assertEquals(5, countCoveredVoxels(greedyBricks));
     }
 
+    // ========== Scoring: orientation exploration ==========
+
+    @Test
+    void testScoring_TriesBothOrientations_4x2() {
+        // 4-wide × 2-deep filled region.
+        // Greedy only sees (2,4) orientation — doesn't fit (depth too shallow).
+        // Falls back to two 2×2 bricks = 2 bricks.
+        // Scoring tries rotated (4,2) orientation — fits perfectly = 1 brick.
+        VoxelGrid surface = new VoxelGrid(4, 1, 2);
+        for (int x = 0; x < 4; x++) {
+            for (int z = 0; z < 2; z++) {
+                surface.setFilled(x, 0, z, true);
+            }
+        }
+
+        List<Brick> scoringBricks = BrickPlacer.placeBricks(surface, STANDARD_DIMS, new ScoringPlacementPolicy());
+        List<Brick> greedyBricks = BrickPlacer.placeBricks(surface, STANDARD_DIMS, new GreedyAreaPolicy());
+
+        // Scoring finds the rotated 4×2 placement
+        assertEquals(1, scoringBricks.size(), "Scoring should use 1 rotated 4x2 brick");
+        assertEquals(4, scoringBricks.get(0).studX());
+        assertEquals(2, scoringBricks.get(0).studY());
+
+        // Greedy uses two 2×2 bricks (can't see the rotated orientation)
+        assertEquals(2, greedyBricks.size(), "Greedy should use 2 bricks (no rotation)");
+    }
+
+    @Test
+    void testScoring_RotatedOrientation_1x2Column() {
+        // 1-wide × 2-deep filled column.
+        // Greedy has (2,1) in list — needs 2 wide, doesn't fit at width=1.
+        // Falls back to two 1×1 bricks.
+        // Scoring tries rotated (1,2) — fits! Uses 1 brick.
+        VoxelGrid surface = new VoxelGrid(1, 1, 2);
+        surface.setFilled(0, 0, 0, true);
+        surface.setFilled(0, 0, 1, true);
+
+        List<Brick> scoringBricks = BrickPlacer.placeBricks(surface, STANDARD_DIMS, new ScoringPlacementPolicy());
+        List<Brick> greedyBricks = BrickPlacer.placeBricks(surface, STANDARD_DIMS, new GreedyAreaPolicy());
+
+        assertEquals(1, scoringBricks.size(), "Scoring should use 1 rotated 1x2 brick");
+        assertEquals(1, scoringBricks.get(0).studX());
+        assertEquals(2, scoringBricks.get(0).studY());
+
+        assertEquals(2, greedyBricks.size(), "Greedy should use 2 × 1x1 bricks");
+    }
+
+    @Test
+    void testScoring_OrientationReducesBrickCount() {
+        // Irregular region where orientation exploration produces fewer bricks.
+        // 4-wide × 3-deep:
+        //   Z=0: [x][x][x][x]
+        //   Z=1: [x][x][x][x]
+        //   Z=2: [x][x][ ][ ]
+        // Greedy: 2x2 at (0,0,0), 2x2 at (2,0,0)... but (2,0) has depth 2
+        //         so 2x2 needs z=0,1,  at (2,0,0): ok. Then z=2: 2x1 at (0,0,2) = 3 bricks.
+        // Scoring: 4x2 at (0,0,0) covers x=0..3,z=0..1 = 1 brick. Then 2x1
+        //         at (0,0,2) = 2 bricks total. Fewer!
+        VoxelGrid surface = new VoxelGrid(4, 1, 3);
+        for (int x = 0; x < 4; x++) {
+            surface.setFilled(x, 0, 0, true);
+            surface.setFilled(x, 0, 1, true);
+        }
+        surface.setFilled(0, 0, 2, true);
+        surface.setFilled(1, 0, 2, true);
+
+        List<Brick> scoringBricks = BrickPlacer.placeBricks(surface, STANDARD_DIMS, new ScoringPlacementPolicy());
+        List<Brick> greedyBricks = BrickPlacer.placeBricks(surface, STANDARD_DIMS, new GreedyAreaPolicy());
+
+        assertEquals(10, countCoveredVoxels(scoringBricks));
+        assertEquals(10, countCoveredVoxels(greedyBricks));
+
+        assertTrue(scoringBricks.size() < greedyBricks.size(),
+            "Scoring (" + scoringBricks.size() + ") should use fewer bricks than greedy (" +
+            greedyBricks.size() + ") via orientation exploration");
+    }
+
     // ========== BrickPlacer API: null policy rejected ==========
 
     @Test

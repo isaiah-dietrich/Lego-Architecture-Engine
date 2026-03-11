@@ -28,10 +28,11 @@ import com.lego.voxel.VoxelGrid;
  *       remainders for subsequent bricks.</li>
  * </ol>
  *
- * <p>This policy produces identical results to {@link GreedyAreaPolicy} on
- * uniform rectangular surfaces, but makes better choices at irregular edges
- * and will naturally extend to mixed-height scenarios where accuracy &lt; 1.0
- * candidates become relevant.</p>
+ * <p><strong>Orientation exploration:</strong> unlike {@link GreedyAreaPolicy},
+ * this policy tries both orientations of each non-square dimension (e.g.
+ * 2×4 and 4×2). This expands the search space and finds placements that the
+ * fixed-orientation greedy policy misses, typically producing fewer total
+ * bricks on irregular surfaces.</p>
  */
 public final class ScoringPlacementPolicy implements PlacementPolicy {
 
@@ -43,26 +44,40 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
     @Override
     public Brick selectBrick(VoxelGrid surface, boolean[][][] covered,
                               int x, int y, int z, List<Dimension> allowedDimensions) {
-        Dimension best = null;
+        int bestStudX = 0;
+        int bestStudY = 0;
         double bestScore = Double.NEGATIVE_INFINITY;
 
         for (Dimension dim : allowedDimensions) {
+            // Try catalog orientation
             double score = scorePlacement(surface, covered, x, y, z,
                                           dim.studX(), dim.studY());
             if (score > bestScore) {
                 bestScore = score;
-                best = dim;
+                bestStudX = dim.studX();
+                bestStudY = dim.studY();
+            }
+
+            // Try rotated orientation (skip square bricks — identical)
+            if (dim.studX() != dim.studY()) {
+                score = scorePlacement(surface, covered, x, y, z,
+                                       dim.studY(), dim.studX());
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestStudX = dim.studY();
+                    bestStudY = dim.studX();
+                }
             }
         }
 
-        if (best == null) {
+        if (bestScore == Double.NEGATIVE_INFINITY) {
             throw new IllegalStateException(
                 "Cannot place any brick at (" + x + "," + y + "," + z + "). " +
                 "Allowed dimensions must include 1x1 as fallback."
             );
         }
 
-        return new Brick(x, y, z, best.studX(), best.studY(), 1);
+        return new Brick(x, y, z, bestStudX, bestStudY, 1);
     }
 
     /**

@@ -360,12 +360,16 @@ class BrickPlacerTest {
                 ", studY=" + brick.studY());
         }
 
-        // Verify only catalog-allowed dimensions are used (2x4, 2x2, 2x1, 1x1)
+        // Verify only catalog-allowed dimensions or valid rotations are used
+        // Catalog dims: (2,4), (2,2), (2,1), (1,1)
+        // Scoring policy also explores rotations: (4,2), (1,2)
         for (Brick brick : bricks) {
             assertTrue(
                 (brick.studX() == 2 && brick.studY() == 4) ||
+                (brick.studX() == 4 && brick.studY() == 2) ||
                 (brick.studX() == 2 && brick.studY() == 2) ||
                 (brick.studX() == 2 && brick.studY() == 1) ||
+                (brick.studX() == 1 && brick.studY() == 2) ||
                 (brick.studX() == 1 && brick.studY() == 1),
                 "Found invalid brick dimension at (" + brick.x() + "," +
                 brick.y() + "," + brick.z() + "): studX=" + brick.studX() +
