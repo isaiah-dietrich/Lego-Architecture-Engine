@@ -192,6 +192,16 @@ public final class Main {
             // Resolve placement policy
             PlacementPolicy placementPolicy = resolvePolicy(parsedOptions.placementPolicy());
 
+            // Color-aware scoring: sample voxel colors before placement so the
+            // scoring policy can prefer smaller bricks at color boundaries.
+            if (placementPolicy instanceof ScoringPlacementPolicy
+                    && "glb-color".equals(colorMode)
+                    && loaded.colorMap().isPresent()) {
+                ColorRgb[][][] voxelColors = ColorSampler.sampleVoxelColorGrid(
+                    mesh, normalized, loaded.colorMap().get(), surface, resolution);
+                placementPolicy = new ScoringPlacementPolicy(voxelColors);
+            }
+
             // Load dimensions from catalog (test-friendly with optional base dir)
             var allowedDims = catalogBaseDir != null
                 ? AllowedBrickDimensions.loadFromCatalog(catalogBaseDir)

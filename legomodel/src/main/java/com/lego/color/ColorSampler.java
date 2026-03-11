@@ -55,13 +55,7 @@ public final class ColorSampler {
         List<Brick> bricks,
         int resolution
     ) {
-        // Remap color from original triangles to normalized triangles (by index)
-        Map<Triangle, ColorRgb> normalizedColorMap = remapColors(
-            originalMesh, normalizedMesh, colorMap
-        );
-
-        // Step 1: For each filled voxel, average color from overlapping triangles
-        ColorRgb[][][] voxelColors = sampleVoxelColors(normalizedMesh, normalizedColorMap, surface, resolution);
+        ColorRgb[][][] voxelColors = sampleVoxelColorGrid(originalMesh, normalizedMesh, colorMap, surface, resolution);
 
         // Step 2: For each brick, average color across its voxels
         Map<Brick, ColorRgb> brickColors = new HashMap<>();
@@ -73,6 +67,33 @@ public final class ColorSampler {
         }
 
         return brickColors;
+    }
+
+    /**
+     * Samples per-voxel colors from triangle data.
+     *
+     * <p>For each filled voxel, computes an area-weighted average color from
+     * overlapping triangles. This can be called independently of brick placement
+     * to provide color data for color-aware placement policies.</p>
+     *
+     * @param originalMesh    mesh before normalization (triangle keys match {@code colorMap})
+     * @param normalizedMesh  mesh after normalization (same triangle count and order)
+     * @param colorMap        triangle → color from the loader
+     * @param surface         filled surface voxel grid
+     * @param resolution      voxel grid resolution
+     * @return 3D array of per-voxel colors (null where no color data)
+     */
+    public static ColorRgb[][][] sampleVoxelColorGrid(
+        Mesh originalMesh,
+        Mesh normalizedMesh,
+        Map<Triangle, ColorRgb> colorMap,
+        VoxelGrid surface,
+        int resolution
+    ) {
+        Map<Triangle, ColorRgb> normalizedColorMap = remapColors(
+            originalMesh, normalizedMesh, colorMap
+        );
+        return sampleVoxelColors(normalizedMesh, normalizedColorMap, surface, resolution);
     }
 
     /**

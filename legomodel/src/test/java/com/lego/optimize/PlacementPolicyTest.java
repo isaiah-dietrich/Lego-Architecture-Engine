@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
 import com.lego.model.Brick;
+import com.lego.model.ColorRgb;
 import com.lego.optimize.AllowedBrickDimensions.Dimension;
 import com.lego.voxel.VoxelGrid;
 
@@ -378,6 +379,97 @@ class PlacementPolicyTest {
             assertEquals(b1.studX(), b2.studX());
             assertEquals(b1.studY(), b2.studY());
         }
+    }
+
+    // ========== Color-aware scoring ==========
+
+    @Test
+    void testScoring_NullColorsDefaultsToAreaPreference() {
+        // Without color data, scoring should still prefer larger bricks
+        VoxelGrid surface = new VoxelGrid(4, 1, 2);
+        for (int x = 0; x < 4; x++) {
+            for (int z = 0; z < 2; z++) {
+                surface.setFilled(x, 0, z, true);
+            }
+        }
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, STANDARD_DIMS,
+            new ScoringPlacementPolicy(null));
+
+        assertEquals(1, bricks.size(), "Null color grid should behave like no-color mode");
+    }
+
+    @Test
+    void testScoring_UniformColorPrefersLargeBrick() {
+        // 4×2 region with identical red voxels — should place a single 4×2
+        VoxelGrid surface = new VoxelGrid(4, 1, 2);
+        ColorRgb[][][] colors = new ColorRgb[4][1][2];
+        ColorRgb red = new ColorRgb(1.0f, 0.0f, 0.0f);
+        for (int x = 0; x < 4; x++) {
+            for (int z = 0; z < 2; z++) {
+                surface.setFilled(x, 0, z, true);
+                colors[x][0][z] = red;
+            }
+        }
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, STANDARD_DIMS,
+            new ScoringPlacementPolicy(colors));
+
+        assertEquals(1, bricks.size(), "Uniform color should still prefer 1 large brick");
+        assertEquals(4, bricks.get(0).studX());
+        assertEquals(2, bricks.get(0).studY());
+    }
+
+    @Test
+    void testScoring_SharpColorBoundaryProducesMoreBricks() {
+        // 2×2 region: top row red, bottom row blue (very different colors).
+        // With color awareness: the 2×2 brick straddles the boundary (low uniformity),
+        // so the policy should prefer 2×1 bricks that each cover a single color.
+        VoxelGrid surface = new VoxelGrid(2, 1, 2);
+        ColorRgb[][][] colors = new ColorRgb[2][1][2];
+        ColorRgb red = new ColorRgb(1.0f, 0.0f, 0.0f);
+        ColorRgb blue = new ColorRgb(0.0f, 0.0f, 1.0f);
+        for (int x = 0; x < 2; x++) {
+            surface.setFilled(x, 0, 0, true);
+            surface.setFilled(x, 0, 1, true);
+            colors[x][0][0] = red;
+            colors[x][0][1] = blue;
+        }
+
+        List<Brick> colorAware = BrickPlacer.placeBricks(surface, STANDARD_DIMS,
+            new ScoringPlacementPolicy(colors));
+        List<Brick> noColor = BrickPlacer.placeBricks(surface, STANDARD_DIMS,
+            new ScoringPlacementPolicy());
+
+        // Without color: 1 brick (2×2). With color: 2 bricks (each 2×1, single color).
+        assertEquals(1, noColor.size(), "No-color mode should use 1 × 2x2 brick");
+        assertEquals(2, colorAware.size(), "Color-aware should split at boundary into 2 bricks");
+
+        // Verify each color-aware brick is 2×1 (covers one color row)
+        for (Brick b : colorAware) {
+            assertTrue(b.studX() * b.studY() <= 2,
+                "Color-boundary bricks should be small: " + b.studX() + "x" + b.studY());
+        }
+    }
+
+    @Test
+    void testScoring_ColorAwareStillCoversAllVoxels() {
+        // Checkerboard-ish color pattern on a 4×4 surface
+        VoxelGrid surface = new VoxelGrid(4, 1, 4);
+        ColorRgb[][][] colors = new ColorRgb[4][1][4];
+        ColorRgb white = new ColorRgb(1.0f, 1.0f, 1.0f);
+        ColorRgb black = new ColorRgb(0.0f, 0.0f, 0.0f);
+        for (int x = 0; x < 4; x++) {
+            for (int z = 0; z < 4; z++) {
+                surface.setFilled(x, 0, z, true);
+                colors[x][0][z] = (x + z) % 2 == 0 ? white : black;
+            }
+        }
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, STANDARD_DIMS,
+            new ScoringPlacementPolicy(colors));
+
+        assertEquals(16, countCoveredVoxels(bricks), "All 16 voxels must be covered");
     }
 
     // ========== Helpers ==========

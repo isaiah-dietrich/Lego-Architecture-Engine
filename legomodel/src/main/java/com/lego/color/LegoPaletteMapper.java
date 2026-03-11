@@ -186,7 +186,7 @@ public final class LegoPaletteMapper {
     // ---- Color space conversion ----
 
     /** CIE76 ΔE: Euclidean distance in L*a*b*. */
-    static double deltaE(double l1, double a1, double b1, double l2, double a2, double b2) {
+    public static double deltaE(double l1, double a1, double b1, double l2, double a2, double b2) {
         double dl = l1 - l2;
         double da = a1 - a2;
         double db = b1 - b2;
@@ -375,7 +375,7 @@ public final class LegoPaletteMapper {
     }
 
     /** Linear RGB [0,1] → CIE L*a*b* (D65 illuminant). */
-    static double[] linearRgbToLab(double r, double g, double b) {
+    public static double[] linearRgbToLab(double r, double g, double b) {
         // Linear sRGB → XYZ (D65)
         double x = 0.4124564 * r + 0.3575761 * g + 0.1804375 * b;
         double y = 0.2126729 * r + 0.7151522 * g + 0.0721750 * b;
