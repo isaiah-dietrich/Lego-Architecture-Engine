@@ -31,6 +31,9 @@ import com.lego.model.Mesh;
 import com.lego.model.Triangle;
 import com.lego.optimize.AllowedBrickDimensions;
 import com.lego.optimize.BrickPlacer;
+import com.lego.optimize.GreedyAreaPolicy;
+import com.lego.optimize.PlacementPolicy;
+import com.lego.optimize.ScoringPlacementPolicy;
 import com.lego.voxel.SurfaceExtractor;
 import com.lego.voxel.VoxelGrid;
 import com.lego.voxel.VoxelSteppingAnalyzer;
@@ -186,10 +189,14 @@ public final class Main {
                 ? solid
                 : SurfaceExtractor.extractSurface(solid);
             
+            // Resolve placement policy
+            PlacementPolicy placementPolicy = resolvePolicy(parsedOptions.placementPolicy());
+
             // Load dimensions from catalog (test-friendly with optional base dir)
-            List<Brick> bricks = catalogBaseDir != null
-                ? BrickPlacer.placeBricks(surface, AllowedBrickDimensions.loadFromCatalog(catalogBaseDir))
-                : BrickPlacer.placeBricks(surface);
+            var allowedDims = catalogBaseDir != null
+                ? AllowedBrickDimensions.loadFromCatalog(catalogBaseDir)
+                : AllowedBrickDimensions.loadFromCatalog();
+            List<Brick> bricks = BrickPlacer.placeBricks(surface, allowedDims, placementPolicy);
 
             int triangleCount = mesh.triangleCount();
             int totalVoxels = resolution * resolution * resolution;
@@ -201,7 +208,7 @@ public final class Main {
             out.println("Total voxels: " + totalVoxels);
             out.println("Filled voxels (solid): " + solid.countFilledVoxels());
             out.println("Surface voxels: " + surfaceVoxels);
-            out.println("Bricks generated: " + brickCount);
+            out.println("Bricks generated: " + brickCount + " (policy=" + placementPolicy.name() + ")");
 
             // Print block type summary
             printBlockTypeSummary(bricks, out);
@@ -373,6 +380,7 @@ public final class Main {
         err.println("    --color-fallback=<code>        LDraw color code for bricks without sampled color");
         err.println("    --color-list                   Output list of unique color codes used in LDraw export");
         err.println("    --color-algorithm=<name>       Color mapping algorithm (default: direct). Use 'list' to see all.");
+        err.println("    --placement-policy=<name>      Brick placement policy: 'scoring' (default) or 'greedy-area'");
     }
 
     /**
@@ -403,6 +411,16 @@ public final class Main {
         return new ObjModelLoader();
     }
 
+    private static PlacementPolicy resolvePolicy(String name) {
+        return switch (name.toLowerCase()) {
+            case "scoring" -> new ScoringPlacementPolicy();
+            case "greedy-area" -> new GreedyAreaPolicy();
+            default -> throw new IllegalArgumentException(
+                "Unknown placement policy: '" + name + "'. Use 'scoring' or 'greedy-area'."
+            );
+        };
+    }
+
     private static ParsedOptions parseCliOptions(String[] args) {
         List<String> positional = new ArrayList<>();
         boolean analyzeStepping = false;
@@ -413,6 +431,7 @@ public final class Main {
         int colorFallback = -1; // -1 = no fallback (use default color 16)
         boolean colorList = false;
         String colorAlgorithm = "direct";
+        String placementPolicy = "scoring";
 
         for (int i = 0; i < args.length; i++) {
             String arg = args[i];
@@ -446,13 +465,16 @@ public final class Main {
                 colorList = true;
             } else if (arg.startsWith("--color-algorithm=")) {
                 colorAlgorithm = arg.substring("--color-algorithm=".length());
+            } else if (arg.startsWith("--placement-policy=")) {
+                placementPolicy = arg.substring("--placement-policy=".length());
             } else {
                 positional.add(arg);
             }
         }
 
         return new ParsedOptions(positional, analyzeStepping, analysisDir, jumpThreshold,
-            sweepResolutions, colorMode, colorFallback, colorList, colorAlgorithm);
+            sweepResolutions, colorMode, colorFallback, colorList, colorAlgorithm,
+            placementPolicy);
     }
 
     private static Path resolveAnalysisDir(Path explicitAnalysisDir, Path outputObjPath) {
@@ -505,7 +527,8 @@ public final class Main {
         String colorMode,
         int colorFallback,
         boolean colorList,
-        String colorAlgorithm
+        String colorAlgorithm,
+        String placementPolicy
     ) {}
 
     /**

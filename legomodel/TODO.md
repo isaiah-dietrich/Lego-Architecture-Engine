@@ -10,4 +10,7 @@
 
 ## Known Bugs
  - the_cats_body model front legs are connected
+
+ ## Brick placing algorithm
+  - Change from greedy piece minimizing algorithm to voxel space accuracy maximizing
  

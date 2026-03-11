@@ -502,7 +502,7 @@ class MainTest {
                 String[] parts = line.split(":");
                 if (parts.length == 2) {
                     try {
-                        generatedBrickCount = Integer.parseInt(parts[1].trim());
+                        generatedBrickCount = Integer.parseInt(parts[1].trim().split("\\s+")[0]);
                     } catch (NumberFormatException e) {
                         // Ignore
                     }
@@ -872,7 +872,7 @@ class MainTest {
             line = line.trim();
             if (line.startsWith("Bricks generated:")) {
                 try {
-                    String numStr = line.replace("Bricks generated:", "").trim();
+                    String numStr = line.replace("Bricks generated:", "").trim().split("\\s+")[0];
                     return Integer.parseInt(numStr);
                 } catch (NumberFormatException e) {
                     return 0;
