@@ -270,8 +270,8 @@ public final class Main {
                                 // Spatial smoothing: eliminate isolated outlier colors
                                 // Skip smoothing for "direct" strategy to give raw unprocessed output
                                 int smoothed = 0;
-                                if (!"direct".equals(strategy.name()) && !"supersampled".equals(strategy.name())) {
-                                    smoothed = ColorSmoother.smoothIterative(brickColorCodes, bricks, 3);
+                                if (!"direct".equals(strategy.name())) {
+                                    smoothed = ColorSmoother.smoothIterative(brickColorCodes, bricks, 3, palette);
                                 }
                                 out.println("Color mode: glb-color (" + coloredCount
                                     + "/" + bricks.size() + " bricks colored, "

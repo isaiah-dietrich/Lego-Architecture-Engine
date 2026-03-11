@@ -191,11 +191,23 @@ public final class UVLabPaletteProjection implements ColorStrategy {
     // ---- Shadow lifting ----
 
     /**
+     * L* floor below which shadow lifting is progressively reduced.
+     * Values below this are likely intentionally dark features (eyes, nose)
+     * rather than shadow-affected colored surfaces. Lift strength scales
+     * linearly from 0 at L*=0 to full at L*=DARK_FEATURE_FLOOR.
+     */
+    static final double DARK_FEATURE_FLOOR = 20.0;
+
+    /**
      * Normalizes a lightness value by lifting shadows and compressing highlights.
      *
      * <p>Uses a smooth ramp: values well below the shadow threshold are lifted
      * proportionally toward the median, while values near the median are untouched.
      * The strength parameter controls the compression ratio.
+     *
+     * <p>Very dark values (L* &lt; {@value #DARK_FEATURE_FLOOR}) receive progressively
+     * less lifting to preserve intentionally dark features like eyes and noses,
+     * which should map to Black rather than Dark Gray.
      */
     static double normalizeLightness(double l, LightnessStats stats) {
         if (stats.iqr() <= 0) return l; // all same lightness, nothing to normalize
@@ -206,7 +218,12 @@ public final class UVLabPaletteProjection implements ColorStrategy {
         if (l < shadowThresh) {
             // Shadow region: lift toward shadow threshold
             double deficit = shadowThresh - l;
-            l = shadowThresh - deficit * (1.0 - SHADOW_LIFT_STRENGTH);
+            // Reduce lift strength for very dark values to preserve intentional dark features
+            double effectiveStrength = SHADOW_LIFT_STRENGTH;
+            if (l < DARK_FEATURE_FLOOR) {
+                effectiveStrength *= (l / DARK_FEATURE_FLOOR);
+            }
+            l = shadowThresh - deficit * (1.0 - effectiveStrength);
         } else if (l > highlightThresh) {
             // Highlight region: compress toward highlight threshold
             double excess = l - highlightThresh;

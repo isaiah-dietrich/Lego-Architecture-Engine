@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.lego.color.LegoPaletteMapper.PaletteEntry;
+import com.lego.color.UVLabPaletteProjection.LightnessStats;
 import com.lego.mesh.TexturedTriangle;
 import com.lego.model.Brick;
 import com.lego.model.ColorRgb;
@@ -32,9 +33,10 @@ import com.lego.voxel.VoxelGrid;
  *       majority vote determines the final assignment.</li>
  * </ol>
  *
- * <p>This pipeline is self-contained: it does not use ColorSampler,
- * shadow lifting, chroma stabilization, or post-process smoothing.
- * It reads texture pixels directly via BVH + barycentric interpolation.
+ * <p>This pipeline reads texture pixels directly via BVH + barycentric
+ * interpolation. After sampling, it applies shadow lifting and chroma
+ * stabilization (from UVLabPaletteProjection) to compensate for baked
+ * lighting in GLB textures before palette matching.
  */
 public final class SupersampledVoxelColorPipeline implements ColorStrategy {
 
@@ -112,8 +114,13 @@ public final class SupersampledVoxelColorPipeline implements ColorStrategy {
         // 3. Compute stratified sample offsets once (reused for every voxel)
         double[][] sampleOffsets = stratifiedOffsets(samplesPerVoxel);
 
-        // 4. For each surface voxel: supersample → average → palette match → vote
-        Map<Brick, Map<Integer, Integer>> brickVotes = new HashMap<>();
+        // 4. For each surface voxel: supersample → collect per-sample L*a*b*
+        // Each sample is independently converted to L*a*b* for per-sample voting.
+        // This preserves sub-voxel features (eyes, nose) that would be destroyed
+        // by averaging samples in RGB before palette matching.
+        record SampleLab(Brick brick, double[] lab) {}
+        java.util.List<SampleLab> allSamples = new java.util.ArrayList<>();
+        java.util.List<Double> allL = new java.util.ArrayList<>();
 
         for (int x = 0; x < resolution; x++) {
             for (int y = 0; y < resolution; y++) {
@@ -122,10 +129,6 @@ public final class SupersampledVoxelColorPipeline implements ColorStrategy {
 
                     Brick brick = voxelToBrick.get(voxelKey(x, y, z));
                     if (brick == null) continue;
-
-                    // Supersample this voxel
-                    double rAcc = 0, gAcc = 0, bAcc = 0;
-                    double totalWeight = 0;
 
                     for (double[] offset : sampleOffsets) {
                         double sx = x + offset[0];
@@ -138,31 +141,36 @@ public final class SupersampledVoxelColorPipeline implements ColorStrategy {
                         ColorRgb color = sampleColorAtHit(hit, texturedTriangles);
                         if (color == null) continue;
 
-                        rAcc += color.r();
-                        gAcc += color.g();
-                        bAcc += color.b();
-                        totalWeight += 1.0;
+                        double[] lab = LegoPaletteMapper.linearRgbToLab(
+                            color.r(), color.g(), color.b());
+                        allSamples.add(new SampleLab(brick, lab));
+                        allL.add(lab[0]);
                     }
-
-                    if (totalWeight == 0) continue;
-
-                    // Average in linear RGB
-                    double avgR = rAcc / totalWeight;
-                    double avgG = gAcc / totalWeight;
-                    double avgB = bAcc / totalWeight;
-
-                    // Convert to L*a*b* and find nearest palette color
-                    double[] lab = LegoPaletteMapper.linearRgbToLab(avgR, avgG, avgB);
-                    int code = nearestCiede2000(lab[0], lab[1], lab[2], entries);
-
-                    // Vote for this brick
-                    brickVotes.computeIfAbsent(brick, k -> new HashMap<>())
-                              .merge(code, 1, Integer::sum);
                 }
             }
         }
 
-        // 5. Majority vote per brick
+        // 5. Shadow lifting + chroma stabilization (per sample)
+        LightnessStats stats = UVLabPaletteProjection.computeLightnessStats(allL);
+        for (SampleLab sl : allSamples) {
+            if (stats != null) {
+                sl.lab[0] = UVLabPaletteProjection.normalizeLightness(sl.lab[0], stats);
+            }
+            UVLabPaletteProjection.stabilizeChroma(sl.lab);
+        }
+
+        // 6. Per-sample palette match → per-brick majority vote
+        // Each sample independently votes for a palette color, preserving
+        // sub-voxel detail: an eye voxel with 40 dark + 24 golden samples
+        // correctly votes Black instead of averaging to muddy brown.
+        Map<Brick, Map<Integer, Integer>> brickVotes = new HashMap<>();
+        for (SampleLab sl : allSamples) {
+            int code = nearestCiede2000(sl.lab[0], sl.lab[1], sl.lab[2], entries);
+            brickVotes.computeIfAbsent(sl.brick, k -> new HashMap<>())
+                      .merge(code, 1, Integer::sum);
+        }
+
+        // 7. Majority vote per brick
         Map<Brick, Integer> result = new HashMap<>(brickVotes.size());
         for (Map.Entry<Brick, Map<Integer, Integer>> entry : brickVotes.entrySet()) {
             int bestCode = -1;

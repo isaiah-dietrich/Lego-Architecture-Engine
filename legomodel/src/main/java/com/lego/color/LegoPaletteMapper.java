@@ -156,6 +156,19 @@ public final class LegoPaletteMapper {
     }
 
     /**
+     * Returns the L*a*b* coordinates for a given LDraw color code,
+     * or {@code null} if the code is not in the palette.
+     */
+    public double[] labForCode(int ldrawCode) {
+        for (PaletteEntry e : allEntries) {
+            if (e.ldrawCode() == ldrawCode) {
+                return new double[] { e.labL(), e.labA(), e.labB() };
+            }
+        }
+        return null;
+    }
+
+    /**
      * Looks up the color name for a given LDraw color code.
      * Searches all loaded entries (including effect colors).
      *

@@ -24,6 +24,15 @@ import com.lego.model.Brick;
  */
 public final class ColorSmoother {
 
+    /**
+     * Minimum perceptual color difference (ΔE76 in L*a*b*) between a brick's
+     * current color and a proposed replacement for smoothing to proceed.
+     * High-contrast features (e.g., black eyes on a yellow face) exceed this
+     * threshold and are preserved; low-contrast noise (e.g., shadow-shifted
+     * tan → sand purple) falls below it and is smoothed away.
+     */
+    static final double CONTRAST_GUARD_DELTA_E = 50.0;
+
     private ColorSmoother() {}
 
     /**
@@ -41,7 +50,8 @@ public final class ColorSmoother {
      * @param bricks          all bricks in the model
      * @return number of bricks whose color was changed
      */
-    public static int smooth(Map<Brick, Integer> brickColorCodes, List<Brick> bricks) {
+    public static int smooth(Map<Brick, Integer> brickColorCodes, List<Brick> bricks,
+                              LegoPaletteMapper palette) {
         // Build spatial index: map from each voxel coordinate to its owning brick
         Map<Long, Brick> voxelToBrick = buildVoxelIndex(bricks);
 
@@ -84,8 +94,11 @@ public final class ColorSmoother {
             }
 
             // Only replace if the dominant color has a clear majority (>50% of colored neighbors)
+            // and the color difference is below the contrast guard (preserves high-contrast features)
             if (dominant != null && dominant.getValue() > totalNeighborsWithColor / 2) {
-                corrections.put(brick, dominant.getKey());
+                if (!exceedsContrastGuard(myColor, dominant.getKey(), palette)) {
+                    corrections.put(brick, dominant.getKey());
+                }
             }
         }
 
@@ -102,17 +115,18 @@ public final class ColorSmoother {
      *
      * @return total number of bricks changed across all passes
      */
-    public static int smoothIterative(Map<Brick, Integer> brickColorCodes, List<Brick> bricks, int maxPasses) {
+    public static int smoothIterative(Map<Brick, Integer> brickColorCodes, List<Brick> bricks,
+                                       int maxPasses, LegoPaletteMapper palette) {
         int totalChanged = 0;
 
         // Pass 1: frequency-based smoothing — replace rare colors with common neighbor colors.
         // This catches patches of wrong-hue artifacts (e.g., Sand Purple surrounded by browns)
         // that the outlier detector can't fix because bricks within the patch have same-color neighbors.
-        totalChanged += smoothRareColors(brickColorCodes, bricks, 0.02, 3);
+        totalChanged += smoothRareColors(brickColorCodes, bricks, 0.02, 3, palette);
 
         // Pass 2: outlier smoothing — remove isolated single-brick color speckle
         for (int pass = 0; pass < maxPasses; pass++) {
-            int changed = smooth(brickColorCodes, bricks);
+            int changed = smooth(brickColorCodes, bricks, palette);
             totalChanged += changed;
             if (changed == 0) break;
         }
@@ -137,7 +151,7 @@ public final class ColorSmoother {
      * @return number of bricks whose color was changed
      */
     static int smoothRareColors(Map<Brick, Integer> brickColorCodes, List<Brick> bricks,
-                                double threshold, int maxPasses) {
+                                double threshold, int maxPasses, LegoPaletteMapper palette) {
         Map<Long, Brick> voxelToBrick = buildVoxelIndex(bricks);
         int totalChanged = 0;
 
@@ -187,7 +201,7 @@ public final class ColorSmoother {
                         bestColor = entry.getKey();
                     }
                 }
-                if (bestColor >= 0) {
+                if (bestColor >= 0 && !exceedsContrastGuard(myColor, bestColor, palette)) {
                     corrections.put(brick, bestColor);
                 }
             }
@@ -281,6 +295,38 @@ public final class ColorSmoother {
         if (neighbor != null && seen.add(neighbor)) {
             out.add(neighbor);
         }
+    }
+
+    /**
+     * Maximum chroma (C* = sqrt(a² + b²)) for a palette color to be
+     * considered achromatic and eligible for contrast guard protection.
+     * Chromatic outliers (Magenta, Sand Purple, Dark Blue) with chroma
+     * above this threshold are never protected — they're wrong-hue noise.
+     * Only achromatic colors (Black, Dark Gray, White) with low chroma
+     * are protected as intentional dark/light features.
+     */
+    static final double ACHROMATIC_CHROMA_LIMIT = 15.0;
+
+    /**
+     * Returns true if the brick's current color should be protected from
+     * smoothing due to high contrast AND achromatic nature.
+     *
+     * <p>High-contrast chromatic outliers (e.g., Magenta on yellow) are
+     * wrong-hue artifacts and should NOT be protected. Only high-contrast
+     * achromatic colors (e.g., Black eyes on yellow face) are genuine
+     * dark/light features worth preserving.
+     */
+    private static boolean exceedsContrastGuard(int fromCode, int toCode, LegoPaletteMapper palette) {
+        double[] fromLab = palette.labForCode(fromCode);
+        double[] toLab = palette.labForCode(toCode);
+        if (fromLab == null || toLab == null) return false;
+        double de = LegoPaletteMapper.deltaE(fromLab[0], fromLab[1], fromLab[2],
+                                             toLab[0], toLab[1], toLab[2]);
+        if (de <= CONTRAST_GUARD_DELTA_E) return false;
+
+        // High contrast: only protect achromatic colors (low chroma)
+        double fromChroma = Math.sqrt(fromLab[1] * fromLab[1] + fromLab[2] * fromLab[2]);
+        return fromChroma < ACHROMATIC_CHROMA_LIMIT;
     }
 
     private static long pack(int x, int y, int z) {
