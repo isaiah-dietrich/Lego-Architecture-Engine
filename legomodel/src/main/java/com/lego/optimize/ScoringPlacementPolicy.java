@@ -7,10 +7,10 @@ import com.lego.optimize.AllowedBrickDimensions.Dimension;
 import com.lego.voxel.VoxelGrid;
 
 /**
- * Accuracy-first scoring placement policy.
+ * Quality-first scoring placement policy.
  *
  * <p>For each candidate brick dimension at a position, computes a score
- * combining surface accuracy and piece count efficiency:</p>
+ * that maximizes surface quality through orientation-aware placement:</p>
  *
  * <ol>
  *   <li><strong>Accuracy</strong> (primary): ratio of filled, uncovered voxels
@@ -19,20 +19,23 @@ import com.lego.voxel.VoxelGrid;
  *       matches the current requirement that every voxel under a brick
  *       must be filled.</li>
  *   <li><strong>Area</strong> (secondary): larger bricks win over smaller
- *       ones, reducing total piece count.</li>
+ *       ones, reducing total piece count and seam count for a more
+ *       cohesive surface.</li>
  *   <li><strong>Neighbor coverage</strong> (tertiary): fraction of the brick's
  *       border voxels (one step outside the footprint) that are also filled.
- *       Higher values indicate the brick is interior to a surface region
- *       rather than at a jagged edge. This breaks ties between same-size
- *       candidates, preferring placements that leave clean rectangular
- *       remainders for subsequent bricks.</li>
+ *       Among same-area candidates (especially rotated orientations), the
+ *       one with higher coverage is preferred — it fits more snugly in the
+ *       surrounding surface.</li>
  * </ol>
  *
  * <p><strong>Orientation exploration:</strong> unlike {@link GreedyAreaPolicy},
  * this policy tries both orientations of each non-square dimension (e.g.
- * 2×4 and 4×2). This expands the search space and finds placements that the
- * fixed-orientation greedy policy misses, typically producing fewer total
- * bricks on irregular surfaces.</p>
+ * 2×4 and 4×2). This is the primary quality feature — it finds better-fitting
+ * rotations that the fixed-orientation greedy policy misses. Coverage then
+ * selects the rotation that meshes best with the surrounding surface.</p>
+ *
+ * <p>Compared to {@link GreedyAreaPolicy}, this policy typically produces
+ * fewer, better-placed bricks through smarter orientation choices.</p>
  */
 public final class ScoringPlacementPolicy implements PlacementPolicy {
 
@@ -86,11 +89,12 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
      * <p>Returns {@link Double#NEGATIVE_INFINITY} if the candidate cannot be
      * placed (any footprint voxel is out of bounds, empty, or already covered).</p>
      *
-     * <p>Score components (in descending importance):</p>
+     * <p>Score = accuracy × 1_000_000_000 + area × 1_000 + neighborCoverage × 100</p>
      * <ul>
-     *   <li>accuracy × 1_000_000_000 — must be 1.0 to be valid</li>
-     *   <li>area × 1_000 — prefers larger bricks (fewer pieces)</li>
-     *   <li>neighborCoverage — tie-break for same-size candidates</li>
+     *   <li>accuracy — must be 1.0 to be valid (gates all candidates)</li>
+     *   <li>area × 1_000 — prefers larger bricks for fewer seams</li>
+     *   <li>neighborCoverage × 100 — among same-area candidates (e.g. rotations),
+     *       selects the orientation with the best surrounding fit</li>
      * </ul>
      */
     private static double scorePlacement(VoxelGrid surface, boolean[][][] covered,
@@ -119,7 +123,7 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
         // Neighbor coverage: how many border-adjacent voxels are filled?
         double neighborCoverage = computeNeighborCoverage(surface, x, y, z, studX, studY);
 
-        return accuracy * 1_000_000_000 + area * 1_000 + neighborCoverage;
+        return accuracy * 1_000_000_000 + area * 1_000 + neighborCoverage * 100;
     }
 
     /**
@@ -188,7 +192,7 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
         }
 
         if (neighborCount == 0) {
-            return 0.0;
+            return 1.0;  // No border = perfect fit (brick fills entire region)
         }
         return (double) filledNeighbors / neighborCount;
     }
