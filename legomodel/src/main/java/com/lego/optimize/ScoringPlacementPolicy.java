@@ -105,7 +105,7 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
         for (BrickSpec spec : allowedSpecs) {
             // Try catalog orientation
             double score = scorePlacement(surface, covered, voxelColors, x, y, z,
-                                          spec.studX(), spec.studY());
+                                          spec.studX(), spec.studY(), spec.heightUnits());
             if (score > bestScore) {
                 bestScore = score;
                 bestStudX = spec.studX();
@@ -117,7 +117,7 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
             // Try rotated orientation (skip square bricks — identical)
             if (spec.studX() != spec.studY()) {
                 score = scorePlacement(surface, covered, voxelColors, x, y, z,
-                                       spec.studY(), spec.studX());
+                                       spec.studY(), spec.studX(), spec.heightUnits());
                 if (score > bestScore) {
                     bestScore = score;
                     bestStudX = spec.studY();
@@ -157,34 +157,33 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
     private static double scorePlacement(VoxelGrid surface, boolean[][][] covered,
                                           ColorRgb[][][] colors,
                                           int x, int y, int z,
-                                          int studX, int studY) {
+                                          int studX, int studY, int heightUnits) {
         int area = studX * studY;
-        int filledCount = 0;
 
-        // Check every voxel in the candidate footprint
-        for (int dx = 0; dx < studX; dx++) {
-            for (int dz = 0; dz < studY; dz++) {
-                int cx = x + dx;
-                int cz = z + dz;
-                if (cx >= surface.width() || cz >= surface.depth()) {
-                    return Double.NEGATIVE_INFINITY;
+        // Check every voxel in the candidate footprint across all height layers
+        for (int dy = 0; dy < heightUnits; dy++) {
+            int cy = y + dy;
+            if (cy >= surface.height()) return Double.NEGATIVE_INFINITY;
+            for (int dx = 0; dx < studX; dx++) {
+                for (int dz = 0; dz < studY; dz++) {
+                    int cx = x + dx;
+                    int cz = z + dz;
+                    if (cx >= surface.width() || cz >= surface.depth()) {
+                        return Double.NEGATIVE_INFINITY;
+                    }
+                    if (!surface.isFilled(cx, cy, cz) || covered[cx][cy][cz]) {
+                        return Double.NEGATIVE_INFINITY;
+                    }
                 }
-                if (!surface.isFilled(cx, y, cz) || covered[cx][y][cz]) {
-                    return Double.NEGATIVE_INFINITY;
-                }
-                filledCount++;
             }
         }
 
-        double accuracy = (double) filledCount / area;
-
-        // Color uniformity: how visually consistent are the voxels under this brick?
+        // Color uniformity and neighbor coverage computed at base layer
         double colorUniformity = computeColorUniformity(colors, x, y, z, studX, studY);
-
-        // Neighbor coverage: how many border-adjacent voxels are filled?
         double neighborCoverage = computeNeighborCoverage(surface, x, y, z, studX, studY);
 
-        return accuracy * 1_000_000_000 + colorUniformity * area * 1_000 + neighborCoverage * 100;
+        // heightUnits multiplier ensures bricks beat plates for the same XZ footprint
+        return 1_000_000_000 + colorUniformity * area * heightUnits * 1_000 + neighborCoverage * 100;
     }
 
     /**

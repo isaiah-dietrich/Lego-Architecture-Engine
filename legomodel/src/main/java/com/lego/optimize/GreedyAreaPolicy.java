@@ -24,7 +24,7 @@ public final class GreedyAreaPolicy implements PlacementPolicy {
     public Brick selectBrick(VoxelGrid surface, boolean[][][] covered,
                               int x, int y, int z, List<BrickSpec> allowedSpecs) {
         for (BrickSpec spec : allowedSpecs) {
-            if (canPlace(surface, covered, x, y, z, spec.studX(), spec.studY())) {
+            if (canPlace(surface, covered, x, y, z, spec.studX(), spec.studY(), spec.heightUnits())) {
                 return new Brick(x, y, z, spec.studX(), spec.studY(), spec.heightUnits(), spec.partId());
             }
         }
@@ -36,16 +36,20 @@ public final class GreedyAreaPolicy implements PlacementPolicy {
     }
 
     private static boolean canPlace(VoxelGrid surface, boolean[][][] covered,
-                                     int x, int y, int z, int studX, int studY) {
-        for (int dx = 0; dx < studX; dx++) {
-            for (int dz = 0; dz < studY; dz++) {
-                int cx = x + dx;
-                int cz = z + dz;
-                if (cx >= surface.width() || cz >= surface.depth()) {
-                    return false;
-                }
-                if (!surface.isFilled(cx, y, cz) || covered[cx][y][cz]) {
-                    return false;
+                                     int x, int y, int z, int studX, int studY, int heightUnits) {
+        for (int dy = 0; dy < heightUnits; dy++) {
+            int cy = y + dy;
+            if (cy >= surface.height()) return false;
+            for (int dx = 0; dx < studX; dx++) {
+                for (int dz = 0; dz < studY; dz++) {
+                    int cx = x + dx;
+                    int cz = z + dz;
+                    if (cx >= surface.width() || cz >= surface.depth()) {
+                        return false;
+                    }
+                    if (!surface.isFilled(cx, cy, cz) || covered[cx][cy][cz]) {
+                        return false;
+                    }
                 }
             }
         }

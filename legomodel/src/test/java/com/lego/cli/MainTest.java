@@ -848,8 +848,8 @@ class MainTest {
 
         // Limited catalog: only 2x1 and 1x1 (no large bricks)
         String content = "part_id,name,category,category_name,stud_x,stud_y,height_units,material,active\n" +
-            "3004,Brick 1x2,11,Bricks,1,2,1,Plastic,true\n" +
-            "3005,Brick 1x1,11,Bricks,1,1,1,Plastic,true\n";
+            "3004,Brick 1x2,11,Bricks,1,2,1/3,Plastic,true\n" +
+            "3005,Brick 1x1,11,Bricks,1,1,1/3,Plastic,true\n";
 
         Path catalogFile = catalogDir.resolve(CatalogConfig.CURATED_CATALOG_FILE);
         Files.writeString(catalogFile, content);
@@ -861,10 +861,10 @@ class MainTest {
 
         // Full catalog with various dimensions
         String content = "part_id,name,category,category_name,stud_x,stud_y,height_units,material,active\n" +
-            "3001,Brick 2x4,11,Bricks,2,4,1,Plastic,true\n" +
-            "3003,Brick 2x2,11,Bricks,2,2,1,Plastic,true\n" +
-            "3004,Brick 1x2,11,Bricks,1,2,1,Plastic,true\n" +
-            "3005,Brick 1x1,11,Bricks,1,1,1,Plastic,true\n";
+            "3001,Brick 2x4,11,Bricks,2,4,1/3,Plastic,true\n" +
+            "3003,Brick 2x2,11,Bricks,2,2,1/3,Plastic,true\n" +
+            "3004,Brick 1x2,11,Bricks,1,2,1/3,Plastic,true\n" +
+            "3005,Brick 1x1,11,Bricks,1,1,1/3,Plastic,true\n";
 
         Path catalogFile = catalogDir.resolve(CatalogConfig.CURATED_CATALOG_FILE);
         Files.writeString(catalogFile, content);

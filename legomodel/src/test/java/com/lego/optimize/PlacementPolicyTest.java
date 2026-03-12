@@ -22,10 +22,10 @@ import com.lego.voxel.VoxelGrid;
 class PlacementPolicyTest {
 
     private static final List<BrickSpec> STANDARD_DIMS = Arrays.asList(
-        new BrickSpec(2, 4, 3, "Bricks", "3001"),
-        new BrickSpec(2, 2, 3, "Bricks", "3003"),
-        new BrickSpec(2, 1, 3, "Bricks", "3004"),
-        new BrickSpec(1, 1, 3, "Bricks", "3005")
+        new BrickSpec(2, 4, 1, "Bricks", "3001"),
+        new BrickSpec(2, 2, 1, "Bricks", "3003"),
+        new BrickSpec(2, 1, 1, "Bricks", "3004"),
+        new BrickSpec(1, 1, 1, "Bricks", "3005")
     );
 
     // ========== Policy name ==========

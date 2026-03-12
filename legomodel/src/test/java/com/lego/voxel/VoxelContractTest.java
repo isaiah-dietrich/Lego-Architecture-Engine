@@ -81,7 +81,7 @@ class VoxelContractTest {
 
         // Verify grid dimensions match resolution
         assertEquals(resolution, grid.width());
-        assertEquals(resolution, grid.height());
+        assertEquals(resolution * 3, grid.height());
         assertEquals(resolution, grid.depth());
 
         // All filled voxels must be in valid range
@@ -279,10 +279,10 @@ class VoxelContractTest {
 
         // Should complete without error and produce valid grids
         assertEquals(2, solid.width());
-        assertEquals(2, solid.height());
+        assertEquals(6, solid.height());
         assertEquals(2, solid.depth());
         assertEquals(2, surface.width());
-        assertEquals(2, surface.height());
+        assertEquals(6, surface.height());
         assertEquals(2, surface.depth());
 
         // Cube at res=2 should have some filled voxels

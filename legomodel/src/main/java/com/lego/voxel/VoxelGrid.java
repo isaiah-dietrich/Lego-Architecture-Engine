@@ -5,8 +5,8 @@ package com.lego.voxel;
  */
 public final class VoxelGrid {
     /**
-     * True - Voxel is filled (Inside the mesh)
-     * False - Voxel is empty (Outside the emsh)
+     * True - Voxel is filled (inside or on the surface of the mesh).
+     * False - Voxel is empty (outside the mesh).
      */
     private final boolean[][][] grid;
     private final int width;

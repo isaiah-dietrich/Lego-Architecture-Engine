@@ -53,9 +53,9 @@ class VoxelizerTest {
 
         VoxelGrid grid = Voxelizer.voxelize(cube, 2);
 
-        assertEquals(8, grid.countFilledVoxels());
+        assertEquals(24, grid.countFilledVoxels());
         assertTrue(grid.isFilled(0, 0, 0));
-        assertTrue(grid.isFilled(1, 1, 1));
+        assertTrue(grid.isFilled(1, 5, 1));
     }
 
     /**
@@ -70,7 +70,7 @@ class VoxelizerTest {
         VoxelGrid grid = Voxelizer.voxelize(cube, resolution);
 
         assertEquals(resolution, grid.width());
-        assertEquals(resolution, grid.height());
+        assertEquals(resolution * 3, grid.height());
         assertEquals(resolution, grid.depth());
     }
 

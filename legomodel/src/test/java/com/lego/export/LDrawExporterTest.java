@@ -135,9 +135,9 @@ class LDrawExporterTest {
         Path catalogDir = baseDir.resolve("data/catalog");
         Files.createDirectories(catalogDir);
         String content = "part_id,name,category,category_name,stud_x,stud_y,height_units,material,active\n" +
-            "3005,Brick 1x1,11,Bricks,1,1,1,Plastic,true\n" +
-            "3004,Brick 1x2,11,Bricks,1,2,1,Plastic,true\n" +
-            "3003,Brick 2x2,11,Bricks,2,2,1,Plastic,true\n";
+            "3005,Brick 1x1,11,Bricks,1,1,1/3,Plastic,true\n" +
+            "3004,Brick 1x2,11,Bricks,1,2,1/3,Plastic,true\n" +
+            "3003,Brick 2x2,11,Bricks,2,2,1/3,Plastic,true\n";
         Files.writeString(catalogDir.resolve(CatalogConfig.CURATED_CATALOG_FILE), content);
     }
 
@@ -146,10 +146,13 @@ class LDrawExporterTest {
         createCatalog(tempDir);
         Path ldr = tempDir.resolve("stacked.ldr");
 
-        // Three 1×1 bricks stacked on consecutive voxel layers
+        // Three 1×1 bricks stacked on separate brick-height voxel layers
+        // In the new architecture, each voxel layer = 1 plate height (8 LDU).
+        // A full brick (heightUnits=3) spans 3 voxel layers = 24 LDU.
+        // Adjacent bricks must therefore be placed 3 voxel layers apart.
         Brick bottom = new Brick(0, 0, 0, 1, 1, 3, "3005");
-        Brick middle = new Brick(0, 1, 0, 1, 1, 3, "3005");
-        Brick top = new Brick(0, 2, 0, 1, 1, 3, "3005");
+        Brick middle = new Brick(0, 3, 0, 1, 1, 3, "3005");
+        Brick top    = new Brick(0, 6, 0, 1, 1, 3, "3005");
 
         LDrawExporter.export(List.of(bottom, middle, top), ldr, tempDir, null);
 

@@ -35,8 +35,8 @@ public final class LDrawExporter {
     private static final double STUD_PITCH_LDU = 20.0;
     /** LDU height per heightUnit. A full brick (heightUnits=3) = 24 LDU, a plate (heightUnits=1) = 8 LDU. */
     private static final double HEIGHT_UNIT_LDU = 8.0;
-    /** LDU per voxel layer. Each voxel layer represents one full brick height (3 × 8 = 24 LDU). */
-    private static final double LAYER_HEIGHT_LDU = 3 * HEIGHT_UNIT_LDU;
+    /** LDU per voxel layer. Each voxel layer represents one plate height (1 × 8 = 8 LDU). */
+    private static final double LAYER_HEIGHT_LDU = HEIGHT_UNIT_LDU;
     private static final int DEFAULT_COLOR = 16; // "current color" in LDraw workflows
 
     private LDrawExporter() {
@@ -110,8 +110,7 @@ public final class LDrawExporter {
             double z = centerZStuds * STUD_PITCH_LDU;
 
             // LDraw parts are defined with Y=0 at the top surface and extend down.
-            // Layer offset: each voxel layer = one full brick height (24 LDU).
-            // Part height: brick.heightUnits() × 8 LDU.
+            // Each voxel layer = 1 plate height (8 LDU). Brick height = heightUnits × 8 LDU.
             double y = -(brick.y() * LAYER_HEIGHT_LDU + brick.heightUnits() * HEIGHT_UNIT_LDU);
 
             out.append("1 ")

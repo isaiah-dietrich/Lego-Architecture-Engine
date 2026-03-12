@@ -100,7 +100,6 @@ public final class BrickPlacer {
         List<Brick> bricks = new ArrayList<>();
         boolean[][][] covered = new boolean[surface.width()][surface.height()][surface.depth()];
 
-        // Process layer by layer (y ascending: VoxelGrid Y = OBJ height axis)
         for (int y = 0; y < surface.height(); y++) {
             for (int z = 0; z < surface.depth(); z++) {
                 for (int x = 0; x < surface.width(); x++) {
@@ -112,7 +111,6 @@ public final class BrickPlacer {
                 }
             }
         }
-
         return bricks;
     }
 

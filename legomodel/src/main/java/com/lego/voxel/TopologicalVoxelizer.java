@@ -35,7 +35,7 @@ public final class TopologicalVoxelizer {
         }
 
         TopologicalVoxelizerConfig config = new TopologicalVoxelizerConfig(
-            1.0, 1.0, 1.0, DEFAULT_EPSILON
+            1.0, 1.0 / 3.0, 1.0, DEFAULT_EPSILON
         );
 
         return voxelizeSurfaceWithConfig(mesh, resolution, config);
@@ -53,20 +53,22 @@ public final class TopologicalVoxelizer {
         }
 
         if (mesh.triangles().isEmpty()) {
-            return new VoxelGrid(resolution, resolution, resolution);
+            int yResolution = (int) Math.round(resolution / config.voxelSizeY());
+            return new VoxelGrid(resolution, yResolution, resolution);
         }
 
         Bounds rawBounds = computeMeshBounds(mesh);
-        AlignedBounds alignedBounds = computeAlignedBounds(rawBounds, config, resolution);
+        int yResolution = (int) Math.round(resolution / config.voxelSizeY());
+        AlignedBounds alignedBounds = computeAlignedBounds(rawBounds, config, resolution, yResolution);
 
-        TopologicalVoxelGrid sparseGrid = new TopologicalVoxelGrid(resolution, resolution, resolution);
+        TopologicalVoxelGrid sparseGrid = new TopologicalVoxelGrid(resolution, yResolution, resolution);
 
         double hx = config.voxelSizeX() * 0.5;
         double hy = config.voxelSizeY() * 0.5;
         double hz = config.voxelSizeZ() * 0.5;
 
         for (Triangle triangle : mesh.triangles()) {
-            int[] range = triangleToCandidateRange(triangle, alignedBounds, config, resolution);
+            int[] range = triangleToCandidateRange(triangle, alignedBounds, config, resolution, yResolution);
             int iMin = range[0], iMax = range[1];
             int jMin = range[2], jMax = range[3];
             int kMin = range[4], kMax = range[5];
@@ -251,9 +253,9 @@ public final class TopologicalVoxelizer {
         return new Bounds(minX, minY, minZ, maxX, maxY, maxZ);
     }
 
-    private static AlignedBounds computeAlignedBounds(Bounds bounds, TopologicalVoxelizerConfig config, int resolution) {
+    private static AlignedBounds computeAlignedBounds(Bounds bounds, TopologicalVoxelizerConfig config, int resolution, int yResolution) {
         AxisAligned x = alignAxis(bounds.minX, bounds.maxX, config.voxelSizeX(), resolution);
-        AxisAligned y = alignAxis(bounds.minY, bounds.maxY, config.voxelSizeY(), resolution);
+        AxisAligned y = alignAxis(bounds.minY, bounds.maxY, config.voxelSizeY(), yResolution);
         AxisAligned z = alignAxis(bounds.minZ, bounds.maxZ, config.voxelSizeZ(), resolution);
         return new AlignedBounds(x.min, y.min, z.min, x.max, y.max, z.max);
     }
@@ -278,7 +280,8 @@ public final class TopologicalVoxelizer {
         Triangle tri,
         AlignedBounds bounds,
         TopologicalVoxelizerConfig config,
-        int resolution
+        int resolution,
+        int yResolution
     ) {
         double triMinX = Math.min(tri.v1().x(), Math.min(tri.v2().x(), tri.v3().x()));
         double triMaxX = Math.max(tri.v1().x(), Math.max(tri.v2().x(), tri.v3().x()));
@@ -289,8 +292,8 @@ public final class TopologicalVoxelizer {
 
         int iMin = clamp((int) Math.floor((triMinX - bounds.minX) / config.voxelSizeX()) - 1, 0, resolution - 1);
         int iMax = clamp((int) Math.ceil((triMaxX - bounds.minX) / config.voxelSizeX()) + 1, 0, resolution - 1);
-        int jMin = clamp((int) Math.floor((triMinY - bounds.minY) / config.voxelSizeY()) - 1, 0, resolution - 1);
-        int jMax = clamp((int) Math.ceil((triMaxY - bounds.minY) / config.voxelSizeY()) + 1, 0, resolution - 1);
+        int jMin = clamp((int) Math.floor((triMinY - bounds.minY) / config.voxelSizeY()) - 1, 0, yResolution - 1);
+        int jMax = clamp((int) Math.ceil((triMaxY - bounds.minY) / config.voxelSizeY()) + 1, 0, yResolution - 1);
         int kMin = clamp((int) Math.floor((triMinZ - bounds.minZ) / config.voxelSizeZ()) - 1, 0, resolution - 1);
         int kMax = clamp((int) Math.ceil((triMaxZ - bounds.minZ) / config.voxelSizeZ()) + 1, 0, resolution - 1);
 

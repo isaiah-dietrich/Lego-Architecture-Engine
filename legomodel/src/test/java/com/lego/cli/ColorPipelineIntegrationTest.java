@@ -186,9 +186,9 @@ class ColorPipelineIntegrationTest {
         Path catalogDir = baseDir.resolve("data/catalog");
         Files.createDirectories(catalogDir);
         String csv = "part_id,name,category,category_name,stud_x,stud_y,height_units,material,active\n" +
-            "3005,Brick 1x1,11,Bricks,1,1,1,Plastic,true\n" +
-            "3004,Brick 1x2,11,Bricks,1,2,1,Plastic,true\n" +
-            "3003,Brick 2x2,11,Bricks,2,2,1,Plastic,true\n";
+            "3005,Brick 1x1,11,Bricks,1,1,1/3,Plastic,true\n" +
+            "3004,Brick 1x2,11,Bricks,1,2,1/3,Plastic,true\n" +
+            "3003,Brick 2x2,11,Bricks,2,2,1/3,Plastic,true\n";
         Files.writeString(catalogDir.resolve(CatalogConfig.CURATED_CATALOG_FILE), csv);
     }
 

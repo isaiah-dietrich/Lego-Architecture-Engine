@@ -65,10 +65,10 @@ public final class LegacyVoxelizer {
             throw new IllegalArgumentException("Resolution must be >= 2");
         }
 
-        VoxelGrid grid = new VoxelGrid(resolution, resolution, resolution);
+        VoxelGrid grid = new VoxelGrid(resolution, resolution * 3, resolution);
 
         for (int z = 0; z < resolution; z++) {
-            for (int y = 0; y < resolution; y++) {
+            for (int y = 0; y < resolution * 3; y++) {
                 for (int x = 0; x < resolution; x++) {
                     // Count how many sample points within this voxel are inside
                     int insideCount = 0;
@@ -77,7 +77,8 @@ public final class LegacyVoxelizer {
                         for (double dy : SAMPLE_OFFSETS) {
                             for (double dx : SAMPLE_OFFSETS) {
                                 double ox = x + dx;
-                                double oy = y + dy;
+                                // Map plate-voxel Y to mesh Y (1 plate = 1/3 brick height)
+                                double oy = (y + dy) / 3.0;
                                 double oz = z + dz;
                                 
                                 if (isInside(mesh, ox, oy, oz)) {

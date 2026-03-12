@@ -43,7 +43,7 @@ class BrickPlacerTest {
         assertEquals(1, brick.z());
         assertEquals(1, brick.studX());
         assertEquals(1, brick.studY());
-        assertEquals(3, brick.heightUnits());
+        assertEquals(1, brick.heightUnits());
     }
 
     @Test
@@ -293,7 +293,7 @@ class BrickPlacerTest {
         assertEquals(0, brick.z());
         assertEquals(2, brick.studX());
         assertEquals(2, brick.studY());
-        assertEquals(3, brick.heightUnits());
+        assertEquals(1, brick.heightUnits());
     }
 
     @Test
@@ -391,10 +391,10 @@ class BrickPlacerTest {
         }
 
         List<BrickSpec> dims = Arrays.asList(
-            new BrickSpec(2, 4, 3, "Bricks", "3001"),
-            new BrickSpec(2, 2, 3, "Bricks", "3003"),
-            new BrickSpec(2, 1, 3, "Bricks", "3004"),
-            new BrickSpec(1, 1, 3, "Bricks", "3005")
+            new BrickSpec(2, 4, 1, "Bricks", "3001"),
+            new BrickSpec(2, 2, 1, "Bricks", "3003"),
+            new BrickSpec(2, 1, 1, "Bricks", "3004"),
+            new BrickSpec(1, 1, 1, "Bricks", "3005")
         );
 
         List<Brick> bricks = BrickPlacer.placeBricks(surface, dims);
@@ -419,10 +419,10 @@ class BrickPlacerTest {
         }
 
         List<BrickSpec> dims = Arrays.asList(
-            new BrickSpec(2, 4, 3, "Bricks", "3001"),
-            new BrickSpec(2, 2, 3, "Bricks", "3003"),
-            new BrickSpec(2, 1, 3, "Bricks", "3004"),
-            new BrickSpec(1, 1, 3, "Bricks", "3005")
+            new BrickSpec(2, 4, 1, "Bricks", "3001"),
+            new BrickSpec(2, 2, 1, "Bricks", "3003"),
+            new BrickSpec(2, 1, 1, "Bricks", "3004"),
+            new BrickSpec(1, 1, 1, "Bricks", "3005")
         );
 
         List<Brick> bricks = BrickPlacer.placeBricks(surface, dims);
@@ -439,10 +439,10 @@ class BrickPlacerTest {
         surface.setFilled(1, 0, 0, true);
 
         List<BrickSpec> dims = Arrays.asList(
-            new BrickSpec(2, 4, 3, "Bricks", "3001"),
-            new BrickSpec(2, 2, 3, "Bricks", "3003"),
-            new BrickSpec(2, 1, 3, "Bricks", "3004"),
-            new BrickSpec(1, 1, 3, "Bricks", "3005")
+            new BrickSpec(2, 4, 1, "Bricks", "3001"),
+            new BrickSpec(2, 2, 1, "Bricks", "3003"),
+            new BrickSpec(2, 1, 1, "Bricks", "3004"),
+            new BrickSpec(1, 1, 1, "Bricks", "3005")
         );
 
         List<Brick> bricks = BrickPlacer.placeBricks(surface, dims);
@@ -458,10 +458,10 @@ class BrickPlacerTest {
         surface.setFilled(1, 1, 0, true);
 
         List<BrickSpec> dims = Arrays.asList(
-            new BrickSpec(2, 4, 3, "Bricks", "3001"),
-            new BrickSpec(2, 2, 3, "Bricks", "3003"),
-            new BrickSpec(2, 1, 3, "Bricks", "3004"),
-            new BrickSpec(1, 1, 3, "Bricks", "3005")
+            new BrickSpec(2, 4, 1, "Bricks", "3001"),
+            new BrickSpec(2, 2, 1, "Bricks", "3003"),
+            new BrickSpec(2, 1, 1, "Bricks", "3004"),
+            new BrickSpec(1, 1, 1, "Bricks", "3005")
         );
 
         List<Brick> bricks = BrickPlacer.placeBricks(surface, dims);
@@ -485,10 +485,10 @@ class BrickPlacerTest {
         surface.setFilled(5, 0, 5, true);
 
         List<BrickSpec> dims = Arrays.asList(
-            new BrickSpec(2, 4, 3, "Bricks", "3001"),
-            new BrickSpec(2, 2, 3, "Bricks", "3003"),
-            new BrickSpec(2, 1, 3, "Bricks", "3004"),
-            new BrickSpec(1, 1, 3, "Bricks", "3005")
+            new BrickSpec(2, 4, 1, "Bricks", "3001"),
+            new BrickSpec(2, 2, 1, "Bricks", "3003"),
+            new BrickSpec(2, 1, 1, "Bricks", "3004"),
+            new BrickSpec(1, 1, 1, "Bricks", "3005")
         );
 
         List<Brick> first = BrickPlacer.placeBricks(surface, dims);
@@ -521,8 +521,8 @@ class BrickPlacerTest {
 
         // Without 2x4, allowed specs are only 2x1 and 1x1
         List<BrickSpec> limited = Arrays.asList(
-            new BrickSpec(2, 1, 3, "Bricks", "3004"),
-            new BrickSpec(1, 1, 3, "Bricks", "3005")
+            new BrickSpec(2, 1, 1, "Bricks", "3004"),
+            new BrickSpec(1, 1, 1, "Bricks", "3005")
         );
 
         List<Brick> bricks = BrickPlacer.placeBricks(surface, limited);
@@ -548,10 +548,10 @@ class BrickPlacerTest {
 
         // With 2x4 enabled (but 4x1 not possible due to grid width)
         List<BrickSpec> full = Arrays.asList(
-            new BrickSpec(2, 4, 3, "Bricks", "3001"),
-            new BrickSpec(2, 2, 3, "Bricks", "3003"),
-            new BrickSpec(2, 1, 3, "Bricks", "3004"),
-            new BrickSpec(1, 1, 3, "Bricks", "3005")
+            new BrickSpec(2, 4, 1, "Bricks", "3001"),
+            new BrickSpec(2, 2, 1, "Bricks", "3003"),
+            new BrickSpec(2, 1, 1, "Bricks", "3004"),
+            new BrickSpec(1, 1, 1, "Bricks", "3005")
         );
 
         List<Brick> bricks = BrickPlacer.placeBricks(surface, full);
@@ -573,10 +573,10 @@ class BrickPlacerTest {
 
         // With 2x2 enabled
         List<BrickSpec> full = Arrays.asList(
-            new BrickSpec(2, 4, 3, "Bricks", "3001"),
-            new BrickSpec(2, 2, 3, "Bricks", "3003"),
-            new BrickSpec(2, 1, 3, "Bricks", "3004"),
-            new BrickSpec(1, 1, 3, "Bricks", "3005")
+            new BrickSpec(2, 4, 1, "Bricks", "3001"),
+            new BrickSpec(2, 2, 1, "Bricks", "3003"),
+            new BrickSpec(2, 1, 1, "Bricks", "3004"),
+            new BrickSpec(1, 1, 1, "Bricks", "3005")
         );
 
         List<Brick> bricks = BrickPlacer.placeBricks(surface, full);
@@ -599,8 +599,8 @@ class BrickPlacerTest {
 
         // Without 2x2, only 2x1 and 1x1 available
         List<BrickSpec> limited = Arrays.asList(
-            new BrickSpec(2, 1, 3, "Bricks", "3004"),
-            new BrickSpec(1, 1, 3, "Bricks", "3005")
+            new BrickSpec(2, 1, 1, "Bricks", "3004"),
+            new BrickSpec(1, 1, 1, "Bricks", "3005")
         );
 
         List<Brick> bricks = BrickPlacer.placeBricks(surface, limited);
@@ -621,8 +621,8 @@ class BrickPlacerTest {
 
         // Only large specs, no 1x1 fallback
         List<BrickSpec> noFallback = Arrays.asList(
-            new BrickSpec(2, 4, 3, "Bricks", "3001"),
-            new BrickSpec(2, 2, 3, "Bricks", "3003")
+            new BrickSpec(2, 4, 1, "Bricks", "3001"),
+            new BrickSpec(2, 2, 1, "Bricks", "3003")
         );
 
         IllegalStateException ex = assertThrows(IllegalStateException.class,
@@ -649,10 +649,10 @@ class BrickPlacerTest {
 
         // Specs with duplicates (should be deduplicated elsewhere, but don't break placement)
         List<BrickSpec> dims = Arrays.asList(
-            new BrickSpec(2, 2, 3, "Bricks", "3003"),
-            new BrickSpec(2, 2, 3, "Bricks", "3003"),  // Duplicate
-            new BrickSpec(2, 1, 3, "Bricks", "3004"),
-            new BrickSpec(1, 1, 3, "Bricks", "3005")
+            new BrickSpec(2, 2, 1, "Bricks", "3003"),
+            new BrickSpec(2, 2, 1, "Bricks", "3003"),  // Duplicate
+            new BrickSpec(2, 1, 1, "Bricks", "3004"),
+            new BrickSpec(1, 1, 1, "Bricks", "3005")
         );
 
         List<Brick> bricks = BrickPlacer.placeBricks(surface, dims);
@@ -674,15 +674,15 @@ class BrickPlacerTest {
         surface.setFilled(2, 2, 0, true);
 
         List<BrickSpec> dims1 = Arrays.asList(
-            new BrickSpec(2, 2, 3, "Bricks", "3003"),
-            new BrickSpec(2, 1, 3, "Bricks", "3004"),
-            new BrickSpec(1, 1, 3, "Bricks", "3005")
+            new BrickSpec(2, 2, 1, "Bricks", "3003"),
+            new BrickSpec(2, 1, 1, "Bricks", "3004"),
+            new BrickSpec(1, 1, 1, "Bricks", "3005")
         );
 
         List<BrickSpec> dims2 = Arrays.asList(
-            new BrickSpec(2, 2, 3, "Bricks", "3003"),
-            new BrickSpec(2, 1, 3, "Bricks", "3004"),
-            new BrickSpec(1, 1, 3, "Bricks", "3005")
+            new BrickSpec(2, 2, 1, "Bricks", "3003"),
+            new BrickSpec(2, 1, 1, "Bricks", "3004"),
+            new BrickSpec(1, 1, 1, "Bricks", "3005")
         );
 
         List<Brick> result1 = BrickPlacer.placeBricks(surface, dims1);

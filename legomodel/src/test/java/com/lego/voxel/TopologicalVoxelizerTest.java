@@ -51,7 +51,7 @@ class TopologicalVoxelizerTest {
 
         assertNotNull(grid);
         assertTrue(grid.countFilledVoxels() > 0, "Cube surface should produce non-zero voxels");
-        assertTrue(grid.countFilledVoxels() < resolution * resolution * resolution,
+        assertTrue(grid.countFilledVoxels() < resolution * resolution * 3 * resolution,
             "Surface-only voxelization should not fill full volume");
     }
 

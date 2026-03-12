@@ -239,8 +239,11 @@ public final class ColorSampler {
 
             int iMin = clamp((int) Math.floor(triMinX) - 1, 0, resolution - 1);
             int iMax = clamp((int) Math.ceil(triMaxX) + 1, 0, resolution - 1);
-            int jMin = clamp((int) Math.floor(triMinY) - 1, 0, resolution - 1);
-            int jMax = clamp((int) Math.ceil(triMaxY) + 1, 0, resolution - 1);
+            // Y voxels are 1/3 the mesh-unit height (one plate per voxel layer).
+            // Map mesh-Y range to voxel-Y range by multiplying by 3.
+            int yResolution = surface.height();
+            int jMin = clamp((int) Math.floor(triMinY * 3) - 1, 0, yResolution - 1);
+            int jMax = clamp((int) Math.ceil(triMaxY * 3) + 1, 0, yResolution - 1);
             int kMin = clamp((int) Math.floor(triMinZ) - 1, 0, resolution - 1);
             int kMax = clamp((int) Math.ceil(triMaxZ) + 1, 0, resolution - 1);
 
@@ -252,10 +255,11 @@ public final class ColorSampler {
                         if (!surface.isFilled(i, j, k)) continue;
 
                         double cx = i + 0.5;
-                        double cy = j + 0.5;
+                        // Voxel j maps to mesh-Y via meshY = (j + 0.5) / 3.0
+                        double cy = (j + 0.5) / 3.0;
                         double cz = k + 0.5;
 
-                        if (triangleOverlapsVoxel(tri, cx, cy, cz, 0.5, 0.5, 0.5)) {
+                        if (triangleOverlapsVoxel(tri, cx, cy, cz, 0.5, 1.0 / 6.0, 0.5)) {
                             long key = pack(i, j, k);
                             voxelVotes.computeIfAbsent(key, x -> new ArrayList<>()).add(wc);
                         }

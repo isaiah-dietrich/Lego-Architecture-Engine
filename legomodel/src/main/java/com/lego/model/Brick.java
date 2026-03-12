@@ -64,11 +64,11 @@ public record Brick(int x, int y, int z, int studX, int studY, int heightUnits, 
 
     /**
      * Returns the maximum y coordinate occupied by this brick (exclusive).
-     * Each brick always occupies exactly one voxel layer in Y, regardless of
-     * {@code heightUnits} (which carries LDraw-relative height for export).
+     * A brick with heightUnits=3 occupies 3 plate-height voxel layers;
+     * a plate with heightUnits=1 occupies 1 layer.
      */
     public int maxY() {
-        return y + 1;
+        return y + heightUnits;
     }
 
     /**

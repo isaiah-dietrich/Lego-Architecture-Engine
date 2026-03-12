@@ -129,9 +129,11 @@ class VoxelUniformityTest {
         // (paired layers) due to diagonal alignment with voxel grid. This is inherent
         // to discrete voxelization, not an algorithm deficiency. Supersampling helps
         // detect boundary voxels but cannot eliminate quantization for aligned geometries.
-        // For this geometry, stdDev < 100 indicates supersampling is active.
+        // With the new 3× plate-height Y resolution, each Z-slice contains 3× more Y voxels,
+        // so cross-sectional areas and deltas scale by ~3×; threshold adjusted accordingly.
+        // stdDev < 300 indicates supersampling is active.
         // Practical shapes with varied slopes will show better uniformity.
-        assertTrue(stdDev < 100.0, 
+        assertTrue(stdDev < 300.0, 
             "Layer-to-layer transitions with supersampling active. Got stdDev=" + stdDev);
     }
 
