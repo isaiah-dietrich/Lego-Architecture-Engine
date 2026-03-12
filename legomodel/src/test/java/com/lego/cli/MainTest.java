@@ -458,9 +458,9 @@ class MainTest {
         assertTrue(output.contains("Block types used:"), 
             "Expected 'Block types used:' in output:\n" + output);
         
-        // Verify that some block type entries appear (format: "2x2x1: 3")
-        assertTrue(output.contains("x") && output.contains(":"),
-            "Expected block type entries like '2x2x1: 3' in output:\n" + output);
+        // Verify that block type entries with partId and count appear
+        assertTrue(output.contains("x"),
+            "Expected block type entries with count in output:\n" + output);
         
         // Verify ordering: "Block types used:" comes after "Bricks generated:"
         int bricksIdx = output.indexOf("Bricks generated:");
@@ -518,21 +518,16 @@ class MainTest {
         for (int i = 0; i < lines.length; i++) {
             if (lines[i].contains("Block types used:")) {
                 foundBlockTypesSection = true;
-                // Parse subsequent lines until we hit a line that doesn't match the pattern
+                // Parse subsequent lines with format: "  partId  name   xCount"
                 for (int j = i + 1; j < lines.length; j++) {
                     String line = lines[j].trim();
-                    if (line.isEmpty() || !line.matches(".*\\d+x\\d+x\\d+:.*")) {
+                    if (line.isEmpty() || !line.contains("x")) {
                         break;
                     }
-                    // Extract the count from lines like "2x2x1: 3"
-                    String[] parts = line.split(":");
-                    if (parts.length == 2) {
-                        try {
-                            int count = Integer.parseInt(parts[1].trim());
-                            totalBlocksFromSummary += count;
-                        } catch (NumberFormatException e) {
-                            // Skip lines that don't have valid counts
-                        }
+                    // Extract count from "x123" at end of line
+                    java.util.regex.Matcher m = java.util.regex.Pattern.compile("x(\\d+)\\s*$").matcher(line);
+                    if (m.find()) {
+                        totalBlocksFromSummary += Integer.parseInt(m.group(1));
                     }
                 }
                 break;

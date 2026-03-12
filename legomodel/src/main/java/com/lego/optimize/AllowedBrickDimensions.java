@@ -37,8 +37,9 @@ public final class AllowedBrickDimensions {
         private final int heightUnits;
         private final String category;
         private final String partId;
+        private final String name;
 
-        public BrickSpec(int studX, int studY, int heightUnits, String category, String partId) {
+        public BrickSpec(int studX, int studY, int heightUnits, String category, String partId, String name) {
             if (studX <= 0 || studY <= 0) {
                 throw new IllegalArgumentException("Dimensions must be positive: " + studX + "x" + studY);
             }
@@ -56,6 +57,12 @@ public final class AllowedBrickDimensions {
             this.heightUnits = heightUnits;
             this.category = category;
             this.partId = partId;
+            this.name = name != null ? name : partId;
+        }
+
+        /** Convenience constructor without name (defaults to partId). */
+        public BrickSpec(int studX, int studY, int heightUnits, String category, String partId) {
+            this(studX, studY, heightUnits, category, partId, partId);
         }
 
         public int studX() {
@@ -76,6 +83,10 @@ public final class AllowedBrickDimensions {
 
         public String partId() {
             return partId;
+        }
+
+        public String name() {
+            return name;
         }
 
         public int area() {
@@ -169,14 +180,14 @@ public final class AllowedBrickDimensions {
             if (studX == 1 && studY == 2) {
                 String key = "2x1";
                 uniqueSpecs.putIfAbsent(key,
-                    new BrickSpec(2, 1, heightUnits, category, part.partId()));
+                    new BrickSpec(2, 1, heightUnits, category, part.partId(), part.name()));
                 continue;
             }
 
             // For all other bricks, add the spec as-is
             String key = studX + "x" + studY;
             uniqueSpecs.putIfAbsent(key,
-                new BrickSpec(studX, studY, heightUnits, category, part.partId()));
+                new BrickSpec(studX, studY, heightUnits, category, part.partId(), part.name()));
         }
 
         if (uniqueSpecs.isEmpty()) {

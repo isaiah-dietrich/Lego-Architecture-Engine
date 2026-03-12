@@ -229,7 +229,7 @@ public final class Main {
             out.println("Bricks generated: " + brickCount + " (policy=" + placementPolicy.name() + ")");
 
             // Print block type summary
-            printBlockTypeSummary(bricks, out);
+            printBlockTypeSummary(bricks, allowedDims, out);
 
             if (surfaceVoxels > 0) {
                 double reductionPercent = 100.0 * (surfaceVoxels - brickCount) / surfaceVoxels;
@@ -579,58 +579,39 @@ public final class Main {
     }
 
     /**
-     * Prints a summary of block types used, grouped by dimensions and sorted by volume.
+     * Prints a summary of block types used, grouped by partId with catalog name.
      *
-     * @param bricks the list of bricks generated
-     * @param out    the output stream to print to
+     * @param bricks      the list of bricks generated
+     * @param allowedSpecs the allowed brick specs (for name lookup)
+     * @param out          the output stream to print to
      */
-    static void printBlockTypeSummary(List<Brick> bricks, PrintStream out) {
-        // Group bricks by their dimensions (studX, studY, heightUnits)
-        Map<String, Integer> blockTypeCounts = new HashMap<>();
-        for (Brick brick : bricks) {
-            String blockType = brick.studX() + "x" + brick.studY() + "x" + brick.heightUnits();
-            blockTypeCounts.put(blockType, blockTypeCounts.getOrDefault(blockType, 0) + 1);
+    static void printBlockTypeSummary(List<Brick> bricks, List<AllowedBrickDimensions.BrickSpec> allowedSpecs,
+                                      PrintStream out) {
+        // Build partId → name lookup from specs
+        Map<String, String> partNames = new HashMap<>();
+        for (AllowedBrickDimensions.BrickSpec spec : allowedSpecs) {
+            partNames.putIfAbsent(spec.partId(), spec.name());
         }
 
-        // Sort the block types by volume (descending), then by studX (descending),
-        // then by studY (descending), then by heightUnits (descending)
-        List<String> sortedBlockTypes = blockTypeCounts.keySet().stream()
-            .sorted((a, b) -> {
-                int[] dimsA = parseDimensions(a);
-                int[] dimsB = parseDimensions(b);
-                
-                int volumeA = dimsA[0] * dimsA[1] * dimsA[2];
-                int volumeB = dimsB[0] * dimsB[1] * dimsB[2];
-                
-                if (volumeA != volumeB) {
-                    return Integer.compare(volumeB, volumeA); // descending
-                }
-                if (dimsA[0] != dimsB[0]) {
-                    return Integer.compare(dimsB[0], dimsA[0]); // studX descending
-                }
-                if (dimsA[1] != dimsB[1]) {
-                    return Integer.compare(dimsB[1], dimsA[1]); // studY descending
-                }
-                return Integer.compare(dimsB[2], dimsA[2]); // heightUnits descending
-            })
+        // Group bricks by partId
+        Map<String, Integer> partCounts = new HashMap<>();
+        for (Brick brick : bricks) {
+            partCounts.merge(brick.partId(), 1, Integer::sum);
+        }
+
+        // Sort by count descending, then partId ascending
+        List<Map.Entry<String, Integer>> sorted = partCounts.entrySet().stream()
+            .sorted(Map.Entry.<String, Integer>comparingByValue().reversed()
+                .thenComparing(Map.Entry.comparingByKey()))
             .collect(Collectors.toList());
 
-        // Print the block type summary
         out.println("Block types used:");
-        for (String blockType : sortedBlockTypes) {
-            int count = blockTypeCounts.get(blockType);
-            out.println(blockType + ": " + count);
+        for (Map.Entry<String, Integer> entry : sorted) {
+            String partId = entry.getKey();
+            int count = entry.getValue();
+            String name = partNames.getOrDefault(partId, partId);
+            out.printf("  %-6s %-30s x%d%n", partId, name, count);
         }
     }
 
-    /**
-     * Parses a block type string (e.g., "2x4x1") into an array of dimensions.
-     *
-     * @param blockType the block type string
-     * @return an array of {studX, studY, heightUnits}
-     */
-    static int[] parseDimensions(String blockType) {
-        String[] parts = blockType.split("x");
-        return new int[] { Integer.parseInt(parts[0]), Integer.parseInt(parts[1]), Integer.parseInt(parts[2]) };
-    }
 }
