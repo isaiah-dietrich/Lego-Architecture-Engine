@@ -65,34 +65,32 @@ class AllowedBrickDimensionsTest {
     }
 
     @Test
-    void testLoadFromCatalog_FiltersNonBrickCategory() throws IOException {
+    void testLoadFromCatalog_IncludesAllActiveCategories() throws IOException {
         createCatalogFile(VALID_CATALOG_HEADER +
-            "3001,Brick 2x4,11,Bricks,2,4,1,Plastic,true\n" +        // Bricks category, included
-            "3020,Plate 2x4,14,Plates,2,4,1/3,Plastic,true\n"        // Plates category, excluded
+            "3001,Brick 2x4,11,Bricks,2,4,1,Plastic,true\n" +
+            "3020,Plate 2x4,14,Plates,2,4,1/3,Plastic,true\n"
         );
 
         List<BrickSpec> specs = AllowedBrickDimensions.loadFromCatalog(tempDir);
 
-        // Should only have the brick (Bricks category), not the plate (Plates category)
-        assertEquals(1, specs.size());
-        assertEquals(2, specs.get(0).studX());
-        assertEquals(4, specs.get(0).studY());
+        // Should include both brick and plate (different heightUnits)
+        assertEquals(2, specs.size());
+        assertTrue(specs.stream().anyMatch(s -> s.heightUnits() == 3)); // brick
+        assertTrue(specs.stream().anyMatch(s -> s.heightUnits() == 1)); // plate
     }
 
     @Test
-    void testLoadFromCatalog_FiltersCategory() throws IOException {
+    void testLoadFromCatalog_IncludesAllCategories() throws IOException {
         createCatalogFile(VALID_CATALOG_HEADER +
-            "3001,Brick 2x4,11,Bricks,2,4,1,Plastic,true\n" +         // Bricks, included
-            "3039,Slope 45° 2x2,3,Bricks Sloped,2,2,1,Plastic,true\n" + // Sloped, excluded
-            "3070b,Tile 1x1,19,Tiles,1,1,1,Plastic,true\n"           // Tiles, excluded
+            "3001,Brick 2x4,11,Bricks,2,4,1,Plastic,true\n" +
+            "3039,Slope 45° 2x2,3,Bricks Sloped,2,2,1,Plastic,true\n" +
+            "3070b,Tile 1x1,19,Tiles,1,1,1,Plastic,true\n"
         );
 
         List<BrickSpec> specs = AllowedBrickDimensions.loadFromCatalog(tempDir);
 
-        // Should only have standard "Bricks", not slopes or tiles
-        assertEquals(1, specs.size());
-        assertEquals(2, specs.get(0).studX());
-        assertEquals(4, specs.get(0).studY());
+        // Should include all three active parts regardless of category
+        assertEquals(3, specs.size());
     }
 
     @Test
@@ -162,13 +160,16 @@ class AllowedBrickDimensionsTest {
     }
 
     @Test
-    void testLoadFromCatalog_NoValidBricks_Throws() throws IOException {
+    void testLoadFromCatalog_PlateOnlyCategory_Succeeds() throws IOException {
         createCatalogFile(VALID_CATALOG_HEADER +
-            "3020,Plate 2x4,14,Plates,2,4,1/3,Plastic,true\n"  // Plate, not Brick category
+            "3020,Plate 2x4,14,Plates,2,4,1/3,Plastic,true\n"
         );
 
-        assertThrows(IllegalStateException.class,
-            () -> AllowedBrickDimensions.loadFromCatalog(tempDir));
+        List<BrickSpec> specs = AllowedBrickDimensions.loadFromCatalog(tempDir);
+
+        // Plates are now valid specs
+        assertEquals(1, specs.size());
+        assertEquals(1, specs.get(0).heightUnits());
     }
 
     @Test
@@ -220,18 +221,18 @@ class AllowedBrickDimensionsTest {
     }
 
     @Test
-    void testLoadFromCatalog_CaseInsensitiveCategory() throws IOException {
-        // Verify that category "Bricks" is case-insensitive
+    void testLoadFromCatalog_PreservesCategoryFromCatalog() throws IOException {
+        // Verify that category is preserved from catalog (trimmed)
         createCatalogFile(
             "part_id,name,category,category_name,stud_x,stud_y,height_units,material,active\n" +
-            "3001,Brick 2x4,11,bricks,2,4,1,Plastic,true\n" +      // lowercase "bricks"
-            "3003,Brick 2x2,11,BRICKS,2,2,1,Plastic,true\n" +      // UPPERCASE "BRICKS"
-            "3005,Brick 1x1,11,Bricks,1,1,1,Plastic,true\n"        // Mixed case "Bricks"
+            "3001,Brick 2x4,11,bricks,2,4,1,Plastic,true\n" +
+            "3003,Brick 2x2,11,BRICKS,2,2,1,Plastic,true\n" +
+            "3005,Brick 1x1,11,Bricks,1,1,1,Plastic,true\n"
         );
 
         List<BrickSpec> specs = AllowedBrickDimensions.loadFromCatalog(tempDir);
 
-        // Should find all three specs (case-insensitive match)
+        // Should find all three specs regardless of category casing
         assertEquals(3, specs.size());
     }
 
@@ -251,19 +252,19 @@ class AllowedBrickDimensionsTest {
     }
 
     @Test
-    void testLoadFromCatalog_NonBrickCategory_Filtered() throws IOException {
-        // Verify that non-Bricks categories are filtered out
+    void testLoadFromCatalog_AllCategoriesIncluded() throws IOException {
+        // Verify that all active categories are included
         createCatalogFile(
             "part_id,name,category,category_name,stud_x,stud_y,height_units,material,active\n" +
-            "3001,Brick 2x4,11,Bricks,2,4,1,Plastic,true\n" +        // Valid: Bricks category
-            "3010,Plate 2x4,12,Plates,2,4,1/3,Plastic,true\n" +      // Invalid: Plates category
-            "3005,Brick 1x1,11,Bricks,1,1,1,Plastic,true\n"          // Valid: Bricks category
+            "3001,Brick 2x4,11,Bricks,2,4,1,Plastic,true\n" +
+            "3010,Plate 2x4,12,Plates,2,4,1/3,Plastic,true\n" +
+            "3005,Brick 1x1,11,Bricks,1,1,1,Plastic,true\n"
         );
 
         List<BrickSpec> specs = AllowedBrickDimensions.loadFromCatalog(tempDir);
 
-        // Should find only the two with Bricks category
-        assertEquals(2, specs.size());
+        // Should include all three active parts
+        assertEquals(3, specs.size());
     }
 
     private void createCatalogFile(String content) throws IOException {

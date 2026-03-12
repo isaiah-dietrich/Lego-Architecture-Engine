@@ -140,4 +140,42 @@ class LDrawExporterTest {
             "3003,Brick 2x2,11,Bricks,2,2,1,Plastic,true\n";
         Files.writeString(catalogDir.resolve(CatalogConfig.CURATED_CATALOG_FILE), content);
     }
+
+    @Test
+    void exportStackedBricksHaveNonOverlappingYPositions() throws IOException {
+        createCatalog(tempDir);
+        Path ldr = tempDir.resolve("stacked.ldr");
+
+        // Three 1×1 bricks stacked on consecutive voxel layers
+        Brick bottom = new Brick(0, 0, 0, 1, 1, 3, "3005");
+        Brick middle = new Brick(0, 1, 0, 1, 1, 3, "3005");
+        Brick top = new Brick(0, 2, 0, 1, 1, 3, "3005");
+
+        LDrawExporter.export(List.of(bottom, middle, top), ldr, tempDir, null);
+
+        String content = Files.readString(ldr);
+        List<String> partLines = content.lines()
+            .filter(l -> l.startsWith("1 "))
+            .toList();
+
+        assertEquals(3, partLines.size());
+
+        // Extract Y positions from LDraw lines (field index 3: "1 color x Y z ...")
+        double[] yPositions = new double[3];
+        for (int i = 0; i < 3; i++) {
+            String[] fields = partLines.get(i).split("\\s+");
+            yPositions[i] = Double.parseDouble(fields[3]);
+        }
+
+        // Each brick is 24 LDU tall. Consecutive layers should be 24 LDU apart.
+        double spacing01 = yPositions[0] - yPositions[1];
+        double spacing12 = yPositions[1] - yPositions[2];
+
+        assertEquals(24.0, spacing01, 0.001,
+            "Layer 0→1 spacing should be 24 LDU (one brick height). Y values: "
+            + yPositions[0] + ", " + yPositions[1]);
+        assertEquals(24.0, spacing12, 0.001,
+            "Layer 1→2 spacing should be 24 LDU (one brick height). Y values: "
+            + yPositions[1] + ", " + yPositions[2]);
+    }
 }

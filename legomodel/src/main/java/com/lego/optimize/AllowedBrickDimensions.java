@@ -6,8 +6,6 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-
 import com.lego.data.CuratedCatalogLoader;
 import com.lego.model.CatalogPart;
 
@@ -21,12 +19,9 @@ import com.lego.model.CatalogPart;
  * 
  * Filtering rules:
  * - Only active parts (active=true)
- * - Only allowed categories (currently "Bricks")
  * - Excludes forbidden orientations (1x2 vertical not allowed)
  */
 public final class AllowedBrickDimensions {
-
-    private static final Set<String> ALLOWED_CATEGORIES = Set.of("bricks");
 
     /**
      * Represents a brick specification with dimensions, height, category, and part ID.
@@ -153,9 +148,8 @@ public final class AllowedBrickDimensions {
      * Extracts and filters brick specs from catalog parts.
      * 
      * Filtering rules:
-     * - Only allowed categories (case-insensitive, trimmed)
      * - Handles orientations: adds 2x1 horizontal but excludes 1x2 vertical
-     * - Deduplicates by (studX, studY) footprint, keeping the first part encountered
+     * - Deduplicates by (studX, studY, heightUnits), keeping the first part encountered
      * 
      * @param parts catalog parts to extract specs from
      * @return sorted list of unique brick specs
@@ -165,12 +159,7 @@ public final class AllowedBrickDimensions {
         Map<String, BrickSpec> uniqueSpecs = new HashMap<>();
 
         for (CatalogPart part : parts) {
-            // Filter: only allowed categories (case-insensitive, trimmed)
             String category = part.categoryName().trim();
-            if (!ALLOWED_CATEGORIES.contains(category.toLowerCase())) {
-                continue;
-            }
-
             int studX = part.studX();
             int studY = part.studY();
             int heightUnits = parseHeightUnits(part.heightUnitsRaw().trim());
@@ -178,14 +167,14 @@ public final class AllowedBrickDimensions {
             // Special handling for 1x2 brick (part 3004):
             // Only add 2x1 horizontal orientation, NOT 1x2 vertical
             if (studX == 1 && studY == 2) {
-                String key = "2x1";
+                String key = "2x1x" + heightUnits;
                 uniqueSpecs.putIfAbsent(key,
                     new BrickSpec(2, 1, heightUnits, category, part.partId(), part.name()));
                 continue;
             }
 
-            // For all other bricks, add the spec as-is
-            String key = studX + "x" + studY;
+            // For all other parts, add the spec as-is
+            String key = studX + "x" + studY + "x" + heightUnits;
             uniqueSpecs.putIfAbsent(key,
                 new BrickSpec(studX, studY, heightUnits, category, part.partId(), part.name()));
         }
@@ -193,16 +182,17 @@ public final class AllowedBrickDimensions {
         if (uniqueSpecs.isEmpty()) {
             throw new IllegalStateException(
                 "No valid brick specs found in catalog. " +
-                "Expected active parts with allowed categories: " + ALLOWED_CATEGORIES + "."
+                "Expected active parts with positive dimensions."
             );
         }
 
         // Sort by priority: area desc, width desc, depth desc
         List<BrickSpec> sorted = new ArrayList<>(uniqueSpecs.values());
         sorted.sort(Comparator
-            .comparingInt(BrickSpec::area).reversed()
-            .thenComparingInt(BrickSpec::studX).reversed()
-            .thenComparingInt(BrickSpec::studY).reversed()
+            .comparingInt((BrickSpec s) -> -s.area())
+            .thenComparingInt((BrickSpec s) -> -s.heightUnits())
+            .thenComparingInt((BrickSpec s) -> -s.studX())
+            .thenComparingInt((BrickSpec s) -> -s.studY())
         );
 
         return sorted;
