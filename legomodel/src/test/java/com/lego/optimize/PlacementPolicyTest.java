@@ -472,6 +472,103 @@ class PlacementPolicyTest {
         assertEquals(16, countCoveredVoxels(bricks), "All 16 voxels must be covered");
     }
 
+    // ========== High color variance → smallest brick ==========
+
+    @Test
+    void testScoring_HighVarianceForcesSmallestBrick() {
+        // 4×2 region with a checkerboard of very different colors.
+        // Every interior voxel has ≥2 different-color neighbors → high variance.
+        // Policy should force 1×1 bricks everywhere.
+        VoxelGrid surface = new VoxelGrid(4, 1, 2);
+        ColorRgb[][][] colors = new ColorRgb[4][1][2];
+        ColorRgb white = new ColorRgb(1.0f, 1.0f, 1.0f);
+        ColorRgb black = new ColorRgb(0.0f, 0.0f, 0.0f);
+        for (int x = 0; x < 4; x++) {
+            for (int z = 0; z < 2; z++) {
+                surface.setFilled(x, 0, z, true);
+                colors[x][0][z] = (x + z) % 2 == 0 ? white : black;
+            }
+        }
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, STANDARD_DIMS,
+            new ScoringPlacementPolicy(colors));
+
+        // Every brick should be 1×1 because all anchor voxels are high-variance
+        for (Brick b : bricks) {
+            assertEquals(1, b.studX() * b.studY(),
+                "High-variance region should produce 1x1 bricks, got " + b.studX() + "x" + b.studY());
+        }
+        assertEquals(8, bricks.size(), "Should be exactly 8 × 1x1 bricks");
+        assertEquals(8, countCoveredVoxels(bricks), "All 8 voxels must be covered");
+    }
+
+    @Test
+    void testScoring_LowVarianceStillPrefersLargeBrick() {
+        // 4×2 region with uniform color — no high variance, so large bricks win
+        VoxelGrid surface = new VoxelGrid(4, 1, 2);
+        ColorRgb[][][] colors = new ColorRgb[4][1][2];
+        ColorRgb red = new ColorRgb(1.0f, 0.0f, 0.0f);
+        for (int x = 0; x < 4; x++) {
+            for (int z = 0; z < 2; z++) {
+                surface.setFilled(x, 0, z, true);
+                colors[x][0][z] = red;
+            }
+        }
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, STANDARD_DIMS,
+            new ScoringPlacementPolicy(colors));
+
+        assertEquals(1, bricks.size(), "Uniform color should still produce 1 large brick");
+        assertEquals(4, bricks.get(0).studX());
+        assertEquals(2, bricks.get(0).studY());
+    }
+
+    @Test
+    void testScoring_VarianceMapComputedCorrectly() {
+        // Set up a 3×1×3 grid with known colors:
+        // Row z=0: red, red, red
+        // Row z=1: red, blue, red    (blue center has 2 red neighbors → high variance)
+        // Row z=2: red, red, red
+        ColorRgb[][][] colors = new ColorRgb[3][1][3];
+        ColorRgb red = new ColorRgb(1.0f, 0.0f, 0.0f);
+        ColorRgb blue = new ColorRgb(0.0f, 0.0f, 1.0f);
+        for (int x = 0; x < 3; x++) {
+            for (int z = 0; z < 3; z++) {
+                colors[x][0][z] = red;
+            }
+        }
+        colors[1][0][1] = blue; // center voxel is blue
+
+        boolean[][][] variance = ScoringPlacementPolicy.computeVarianceMap(colors);
+
+        // Center voxel (1,0,1) has 4 red neighbors, all different from blue → 4 changes ≥ 2
+        assertTrue(variance[1][0][1], "Blue center with 4 different neighbors should be high-variance");
+
+        // Corner voxel (0,0,0) has 2 same-color neighbors → 0 changes
+        assertFalse(variance[0][0][0], "Red corner with all-red neighbors should NOT be high-variance");
+
+        // Adjacent to blue: (1,0,0) has neighbors: (0,0,0)=red, (2,0,0)=red, (1,0,1)=blue
+        // Only 1 different → below threshold of 2
+        assertFalse(variance[1][0][0], "Voxel with only 1 different neighbor should NOT be high-variance");
+    }
+
+    @Test
+    void testScoring_VarianceMapNullColors() {
+        // Null voxel colors should produce no high-variance voxels (no early exit)
+        VoxelGrid surface = new VoxelGrid(4, 1, 2);
+        for (int x = 0; x < 4; x++) {
+            for (int z = 0; z < 2; z++) {
+                surface.setFilled(x, 0, z, true);
+            }
+        }
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, STANDARD_DIMS,
+            new ScoringPlacementPolicy(null));
+
+        // Without color data, should behave normally (large bricks preferred)
+        assertEquals(1, bricks.size(), "Null colors should not trigger variance early-exit");
+    }
+
     // ========== Helpers ==========
 
     private int countCoveredVoxels(List<Brick> bricks) {

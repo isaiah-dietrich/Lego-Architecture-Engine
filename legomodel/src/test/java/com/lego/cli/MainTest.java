@@ -85,6 +85,52 @@ class MainTest {
     }
 
     @Test
+    void testHelpFlagPrintsUsageAndSucceeds() {
+        ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
+        ByteArrayOutputStream errBuffer = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(outBuffer);
+        PrintStream err = new PrintStream(errBuffer);
+
+        int exitCode = Main.run(new String[] { "--help" }, out, err);
+
+        assertEquals(0, exitCode);
+        String output = outBuffer.toString();
+        assertTrue(output.contains("Usage:"));
+        assertTrue(output.contains("--help"));
+        assertTrue(output.contains("--color-mode"));
+        assertTrue(output.contains("--placement-policy"));
+        assertEquals("", errBuffer.toString(), "Help should not write to stderr");
+    }
+
+    @Test
+    void testShortHelpFlagPrintsUsageAndSucceeds() {
+        ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
+        ByteArrayOutputStream errBuffer = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(outBuffer);
+        PrintStream err = new PrintStream(errBuffer);
+
+        int exitCode = Main.run(new String[] { "-h" }, out, err);
+
+        assertEquals(0, exitCode);
+        String output = outBuffer.toString();
+        assertTrue(output.contains("Usage:"));
+    }
+
+    @Test
+    void testHelpFlagWithOtherArgsStillShowsHelp() {
+        ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
+        ByteArrayOutputStream errBuffer = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(outBuffer);
+        PrintStream err = new PrintStream(errBuffer);
+
+        int exitCode = Main.run(new String[] { "model.obj", "50", "--help" }, out, err);
+
+        assertEquals(0, exitCode);
+        String output = outBuffer.toString();
+        assertTrue(output.contains("Usage:"));
+    }
+
+    @Test
     void testNonIntegerResolutionFails() {
         ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
         ByteArrayOutputStream errBuffer = new ByteArrayOutputStream();

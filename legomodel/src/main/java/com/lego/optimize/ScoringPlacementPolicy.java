@@ -53,7 +53,15 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
     /** ΔE threshold: above this, colors are considered perceptually different. */
     private static final double COLOR_DIFF_THRESHOLD = 25.0;
 
+    /**
+     * Minimum number of 4-connected XZ neighbors with ΔE above threshold
+     * for a voxel to be considered "high variance". At such voxels the
+     * policy forces the smallest available brick to preserve color detail.
+     */
+    static final int VARIANCE_NEIGHBOR_THRESHOLD = 2;
+
     private final ColorRgb[][][] voxelColors;
+    private final boolean[][][] highVariance;
 
     /** Creates a scoring policy without color awareness. */
     public ScoringPlacementPolicy() {
@@ -68,6 +76,7 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
      */
     public ScoringPlacementPolicy(ColorRgb[][][] voxelColors) {
         this.voxelColors = voxelColors;
+        this.highVariance = voxelColors != null ? computeVarianceMap(voxelColors) : null;
     }
 
     @Override
@@ -78,6 +87,15 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
     @Override
     public Brick selectBrick(VoxelGrid surface, boolean[][][] covered,
                               int x, int y, int z, List<BrickSpec> allowedSpecs) {
+        // In high color-variance regions, force the smallest available brick
+        if (highVariance != null
+                && x < highVariance.length && y < highVariance[0].length && z < highVariance[0][0].length
+                && highVariance[x][y][z]) {
+            BrickSpec smallest = allowedSpecs.get(allowedSpecs.size() - 1);
+            return new Brick(x, y, z, smallest.studX(), smallest.studY(),
+                             smallest.heightUnits(), smallest.partId());
+        }
+
         int bestStudX = 0;
         int bestStudY = 0;
         int bestHeightUnits = 0;
@@ -225,6 +243,56 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
 
         // Linear mapping: 0 → 1.0, threshold → 0.0
         return Math.max(0.0, 1.0 - maxDeltaE / COLOR_DIFF_THRESHOLD);
+    }
+
+    /**
+     * Pre-computes a per-voxel variance map from the color grid.
+     *
+     * <p>For each voxel with color data, counts how many of its 4-connected
+     * XZ-plane neighbors (same Y layer) have a ΔE above
+     * {@link #COLOR_DIFF_THRESHOLD}. Voxels with at least
+     * {@link #VARIANCE_NEIGHBOR_THRESHOLD} such neighbors are marked as
+     * high-variance, causing the policy to force the smallest brick.</p>
+     */
+    static boolean[][][] computeVarianceMap(ColorRgb[][][] colors) {
+        int w = colors.length;
+        int h = colors[0].length;
+        int d = colors[0][0].length;
+        boolean[][][] map = new boolean[w][h][d];
+
+        int[][] deltas = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
+
+        for (int x = 0; x < w; x++) {
+            for (int y = 0; y < h; y++) {
+                for (int z = 0; z < d; z++) {
+                    ColorRgb c = colors[x][y][z];
+                    if (c == null) continue;
+
+                    double[] lab = LegoPaletteMapper.linearRgbToLab(c.r(), c.g(), c.b());
+                    int changes = 0;
+
+                    for (int[] delta : deltas) {
+                        int nx = x + delta[0];
+                        int nz = z + delta[1];
+                        if (nx >= 0 && nx < w && nz >= 0 && nz < d) {
+                            ColorRgb nc = colors[nx][y][nz];
+                            if (nc != null) {
+                                double[] nlab = LegoPaletteMapper.linearRgbToLab(nc.r(), nc.g(), nc.b());
+                                double de = LegoPaletteMapper.deltaE(
+                                    lab[0], lab[1], lab[2],
+                                    nlab[0], nlab[1], nlab[2]);
+                                if (de > COLOR_DIFF_THRESHOLD) {
+                                    changes++;
+                                }
+                            }
+                        }
+                    }
+
+                    map[x][y][z] = changes >= VARIANCE_NEIGHBOR_THRESHOLD;
+                }
+            }
+        }
+        return map;
     }
 
     /**

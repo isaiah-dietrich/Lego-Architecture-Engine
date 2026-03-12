@@ -120,6 +120,7 @@ public final class AllowedBrickDimensions {
      * @throws IllegalStateException if catalog cannot be loaded or contains no valid specs
      */
     public static List<BrickSpec> loadFromCatalog() {
+        //Smallest brick located at the end of the array
         List<CatalogPart> activeParts = CuratedCatalogLoader.loadActiveParts();
         return extractSpecs(activeParts);
     }

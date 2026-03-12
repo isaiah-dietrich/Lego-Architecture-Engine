@@ -79,6 +79,14 @@ public final class Main {
             return 1;
         }
 
+        // Handle --help / -h before full parsing
+        for (String arg : args) {
+            if ("--help".equals(arg) || "-h".equals(arg)) {
+                printUsage(out);
+                return 0;
+            }
+        }
+
         ParsedOptions parsedOptions;
         try {
             parsedOptions = parseCliOptions(args);
@@ -379,9 +387,12 @@ public final class Main {
     private static void printUsage(PrintStream err) {
         err.println("Usage: java -jar legomodel.jar <modelPath> <resolution> [outputObjPath] [exportMode] [voxelizerMode] [options]");
         err.println("  modelPath: path to a .obj or .glb model file");
+        err.println("  resolution: voxel grid resolution (integer >= 2)");
+        err.println("  outputObjPath: path for the exported output file");
         err.println("  exportMode: 'brick' (default), 'voxel-surface', 'voxel-solid', or 'ldraw'");
         err.println("  voxelizerMode: 'topological' (default) or 'legacy'");
         err.println("  options:");
+        err.println("    -h, --help                     Show this help message and exit");
         err.println("    --analyze-stepping             Write stepping analysis files");
         err.println("    --analysis-dir=<path>          Output directory for analysis artifacts");
         err.println("    --jump-threshold=<int>         Large jump threshold (default: 25)");
