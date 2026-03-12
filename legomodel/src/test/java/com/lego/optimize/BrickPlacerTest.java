@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
 import com.lego.model.Brick;
-import com.lego.optimize.AllowedBrickDimensions.Dimension;
+import com.lego.optimize.AllowedBrickDimensions.BrickSpec;
 import com.lego.voxel.VoxelGrid;
 
 class BrickPlacerTest {
@@ -43,7 +43,7 @@ class BrickPlacerTest {
         assertEquals(1, brick.z());
         assertEquals(1, brick.studX());
         assertEquals(1, brick.studY());
-        assertEquals(1, brick.heightUnits());
+        assertEquals(3, brick.heightUnits());
     }
 
     @Test
@@ -293,7 +293,7 @@ class BrickPlacerTest {
         assertEquals(0, brick.z());
         assertEquals(2, brick.studX());
         assertEquals(2, brick.studY());
-        assertEquals(1, brick.heightUnits());
+        assertEquals(3, brick.heightUnits());
     }
 
     @Test
@@ -390,11 +390,11 @@ class BrickPlacerTest {
             }
         }
 
-        List<Dimension> dims = Arrays.asList(
-            new Dimension(2, 4),
-            new Dimension(2, 2),
-            new Dimension(2, 1),
-            new Dimension(1, 1)
+        List<BrickSpec> dims = Arrays.asList(
+            new BrickSpec(2, 4, 3, "Bricks", "3001"),
+            new BrickSpec(2, 2, 3, "Bricks", "3003"),
+            new BrickSpec(2, 1, 3, "Bricks", "3004"),
+            new BrickSpec(1, 1, 3, "Bricks", "3005")
         );
 
         List<Brick> bricks = BrickPlacer.placeBricks(surface, dims);
@@ -418,11 +418,11 @@ class BrickPlacerTest {
             }
         }
 
-        List<Dimension> dims = Arrays.asList(
-            new Dimension(2, 4),
-            new Dimension(2, 2),
-            new Dimension(2, 1),
-            new Dimension(1, 1)
+        List<BrickSpec> dims = Arrays.asList(
+            new BrickSpec(2, 4, 3, "Bricks", "3001"),
+            new BrickSpec(2, 2, 3, "Bricks", "3003"),
+            new BrickSpec(2, 1, 3, "Bricks", "3004"),
+            new BrickSpec(1, 1, 3, "Bricks", "3005")
         );
 
         List<Brick> bricks = BrickPlacer.placeBricks(surface, dims);
@@ -438,11 +438,11 @@ class BrickPlacerTest {
         surface.setFilled(0, 0, 0, true);
         surface.setFilled(1, 0, 0, true);
 
-        List<Dimension> dims = Arrays.asList(
-            new Dimension(2, 4),
-            new Dimension(2, 2),
-            new Dimension(2, 1),
-            new Dimension(1, 1)
+        List<BrickSpec> dims = Arrays.asList(
+            new BrickSpec(2, 4, 3, "Bricks", "3001"),
+            new BrickSpec(2, 2, 3, "Bricks", "3003"),
+            new BrickSpec(2, 1, 3, "Bricks", "3004"),
+            new BrickSpec(1, 1, 3, "Bricks", "3005")
         );
 
         List<Brick> bricks = BrickPlacer.placeBricks(surface, dims);
@@ -457,11 +457,11 @@ class BrickPlacerTest {
         VoxelGrid surface = new VoxelGrid(3, 3, 1);
         surface.setFilled(1, 1, 0, true);
 
-        List<Dimension> dims = Arrays.asList(
-            new Dimension(2, 4),
-            new Dimension(2, 2),
-            new Dimension(2, 1),
-            new Dimension(1, 1)
+        List<BrickSpec> dims = Arrays.asList(
+            new BrickSpec(2, 4, 3, "Bricks", "3001"),
+            new BrickSpec(2, 2, 3, "Bricks", "3003"),
+            new BrickSpec(2, 1, 3, "Bricks", "3004"),
+            new BrickSpec(1, 1, 3, "Bricks", "3005")
         );
 
         List<Brick> bricks = BrickPlacer.placeBricks(surface, dims);
@@ -484,11 +484,11 @@ class BrickPlacerTest {
         surface.setFilled(4, 0, 0, true);
         surface.setFilled(5, 0, 5, true);
 
-        List<Dimension> dims = Arrays.asList(
-            new Dimension(2, 4),
-            new Dimension(2, 2),
-            new Dimension(2, 1),
-            new Dimension(1, 1)
+        List<BrickSpec> dims = Arrays.asList(
+            new BrickSpec(2, 4, 3, "Bricks", "3001"),
+            new BrickSpec(2, 2, 3, "Bricks", "3003"),
+            new BrickSpec(2, 1, 3, "Bricks", "3004"),
+            new BrickSpec(1, 1, 3, "Bricks", "3005")
         );
 
         List<Brick> first = BrickPlacer.placeBricks(surface, dims);
@@ -519,10 +519,10 @@ class BrickPlacerTest {
         surface.setFilled(2, 0, 0, true);
         surface.setFilled(3, 0, 0, true);
 
-        // Without 2x4, allowed dimensions are only 2x1 and 1x1
-        List<Dimension> limited = Arrays.asList(
-            new Dimension(2, 1),
-            new Dimension(1, 1)
+        // Without 2x4, allowed specs are only 2x1 and 1x1
+        List<BrickSpec> limited = Arrays.asList(
+            new BrickSpec(2, 1, 3, "Bricks", "3004"),
+            new BrickSpec(1, 1, 3, "Bricks", "3005")
         );
 
         List<Brick> bricks = BrickPlacer.placeBricks(surface, limited);
@@ -547,11 +547,11 @@ class BrickPlacerTest {
         surface.setFilled(3, 0, 0, true);
 
         // With 2x4 enabled (but 4x1 not possible due to grid width)
-        List<Dimension> full = Arrays.asList(
-            new Dimension(2, 4),
-            new Dimension(2, 2),
-            new Dimension(2, 1),
-            new Dimension(1, 1)
+        List<BrickSpec> full = Arrays.asList(
+            new BrickSpec(2, 4, 3, "Bricks", "3001"),
+            new BrickSpec(2, 2, 3, "Bricks", "3003"),
+            new BrickSpec(2, 1, 3, "Bricks", "3004"),
+            new BrickSpec(1, 1, 3, "Bricks", "3005")
         );
 
         List<Brick> bricks = BrickPlacer.placeBricks(surface, full);
@@ -572,11 +572,11 @@ class BrickPlacerTest {
         surface.setFilled(1, 0, 1, true);
 
         // With 2x2 enabled
-        List<Dimension> full = Arrays.asList(
-            new Dimension(2, 4),
-            new Dimension(2, 2),
-            new Dimension(2, 1),
-            new Dimension(1, 1)
+        List<BrickSpec> full = Arrays.asList(
+            new BrickSpec(2, 4, 3, "Bricks", "3001"),
+            new BrickSpec(2, 2, 3, "Bricks", "3003"),
+            new BrickSpec(2, 1, 3, "Bricks", "3004"),
+            new BrickSpec(1, 1, 3, "Bricks", "3005")
         );
 
         List<Brick> bricks = BrickPlacer.placeBricks(surface, full);
@@ -598,9 +598,9 @@ class BrickPlacerTest {
         surface.setFilled(1, 0, 1, true);
 
         // Without 2x2, only 2x1 and 1x1 available
-        List<Dimension> limited = Arrays.asList(
-            new Dimension(2, 1),
-            new Dimension(1, 1)
+        List<BrickSpec> limited = Arrays.asList(
+            new BrickSpec(2, 1, 3, "Bricks", "3004"),
+            new BrickSpec(1, 1, 3, "Bricks", "3005")
         );
 
         List<Brick> bricks = BrickPlacer.placeBricks(surface, limited);
@@ -619,10 +619,10 @@ class BrickPlacerTest {
         VoxelGrid surface = new VoxelGrid(3, 3, 1);
         surface.setFilled(1, 1, 0, true);
 
-        // Only large dimensions, no 1x1 fallback
-        List<Dimension> noFallback = Arrays.asList(
-            new Dimension(2, 4),
-            new Dimension(2, 2)
+        // Only large specs, no 1x1 fallback
+        List<BrickSpec> noFallback = Arrays.asList(
+            new BrickSpec(2, 4, 3, "Bricks", "3001"),
+            new BrickSpec(2, 2, 3, "Bricks", "3003")
         );
 
         IllegalStateException ex = assertThrows(IllegalStateException.class,
@@ -647,12 +647,12 @@ class BrickPlacerTest {
             }
         }
 
-        // Dimensions with duplicates (should be deduplicated elsewhere, but don't break placement)
-        List<Dimension> dims = Arrays.asList(
-            new Dimension(2, 2),
-            new Dimension(2, 2),  // Duplicate
-            new Dimension(2, 1),
-            new Dimension(1, 1)
+        // Specs with duplicates (should be deduplicated elsewhere, but don't break placement)
+        List<BrickSpec> dims = Arrays.asList(
+            new BrickSpec(2, 2, 3, "Bricks", "3003"),
+            new BrickSpec(2, 2, 3, "Bricks", "3003"),  // Duplicate
+            new BrickSpec(2, 1, 3, "Bricks", "3004"),
+            new BrickSpec(1, 1, 3, "Bricks", "3005")
         );
 
         List<Brick> bricks = BrickPlacer.placeBricks(surface, dims);
@@ -673,16 +673,16 @@ class BrickPlacerTest {
         surface.setFilled(0, 1, 0, true);
         surface.setFilled(2, 2, 0, true);
 
-        List<Dimension> dims1 = Arrays.asList(
-            new Dimension(2, 2),
-            new Dimension(2, 1),
-            new Dimension(1, 1)
+        List<BrickSpec> dims1 = Arrays.asList(
+            new BrickSpec(2, 2, 3, "Bricks", "3003"),
+            new BrickSpec(2, 1, 3, "Bricks", "3004"),
+            new BrickSpec(1, 1, 3, "Bricks", "3005")
         );
 
-        List<Dimension> dims2 = Arrays.asList(
-            new Dimension(2, 2),
-            new Dimension(2, 1),
-            new Dimension(1, 1)
+        List<BrickSpec> dims2 = Arrays.asList(
+            new BrickSpec(2, 2, 3, "Bricks", "3003"),
+            new BrickSpec(2, 1, 3, "Bricks", "3004"),
+            new BrickSpec(1, 1, 3, "Bricks", "3005")
         );
 
         List<Brick> result1 = BrickPlacer.placeBricks(surface, dims1);

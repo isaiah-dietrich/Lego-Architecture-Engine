@@ -5,7 +5,7 @@ import java.util.List;
 import com.lego.color.LegoPaletteMapper;
 import com.lego.model.Brick;
 import com.lego.model.ColorRgb;
-import com.lego.optimize.AllowedBrickDimensions.Dimension;
+import com.lego.optimize.AllowedBrickDimensions.BrickSpec;
 import com.lego.voxel.VoxelGrid;
 
 /**
@@ -77,29 +77,35 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
 
     @Override
     public Brick selectBrick(VoxelGrid surface, boolean[][][] covered,
-                              int x, int y, int z, List<Dimension> allowedDimensions) {
+                              int x, int y, int z, List<BrickSpec> allowedSpecs) {
         int bestStudX = 0;
         int bestStudY = 0;
+        int bestHeightUnits = 0;
+        String bestPartId = null;
         double bestScore = Double.NEGATIVE_INFINITY;
 
-        for (Dimension dim : allowedDimensions) {
+        for (BrickSpec spec : allowedSpecs) {
             // Try catalog orientation
             double score = scorePlacement(surface, covered, voxelColors, x, y, z,
-                                          dim.studX(), dim.studY());
+                                          spec.studX(), spec.studY());
             if (score > bestScore) {
                 bestScore = score;
-                bestStudX = dim.studX();
-                bestStudY = dim.studY();
+                bestStudX = spec.studX();
+                bestStudY = spec.studY();
+                bestHeightUnits = spec.heightUnits();
+                bestPartId = spec.partId();
             }
 
             // Try rotated orientation (skip square bricks — identical)
-            if (dim.studX() != dim.studY()) {
+            if (spec.studX() != spec.studY()) {
                 score = scorePlacement(surface, covered, voxelColors, x, y, z,
-                                       dim.studY(), dim.studX());
+                                       spec.studY(), spec.studX());
                 if (score > bestScore) {
                     bestScore = score;
-                    bestStudX = dim.studY();
-                    bestStudY = dim.studX();
+                    bestStudX = spec.studY();
+                    bestStudY = spec.studX();
+                    bestHeightUnits = spec.heightUnits();
+                    bestPartId = spec.partId();
                 }
             }
         }
@@ -111,7 +117,7 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
             );
         }
 
-        return new Brick(x, y, z, bestStudX, bestStudY, 1);
+        return new Brick(x, y, z, bestStudX, bestStudY, bestHeightUnits, bestPartId);
     }
 
     /**

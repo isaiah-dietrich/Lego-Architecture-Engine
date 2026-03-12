@@ -24,7 +24,7 @@ import com.lego.model.CatalogPart;
  * <p>Coordinate conventions used here (LDraw standard):</p>
  * <ul>
  *   <li>Stud pitch: 20 LDU</li>
- *   <li>Brick height: 24 LDU</li>
+ *   <li>Brick height: 24 LDU (per full brick height unit of 3)</li>
  *   <li>Vertical axis is Y, with -Y being "up" in LDraw, so stacking upward decreases Y.</li>
  *   <li>Standard brick parts are centered in X/Z around their origin and use Y=0 at the top surface.</li>
  * </ul>
@@ -33,7 +33,8 @@ public final class LDrawExporter {
 
     // LDraw units (LDU)
     private static final double STUD_PITCH_LDU = 20.0;
-    private static final double BRICK_HEIGHT_LDU = 24.0;
+    /** LDU height per heightUnit. A full brick (heightUnits=3) = 24 LDU, a plate (heightUnits=1) = 8 LDU. */
+    private static final double HEIGHT_UNIT_LDU = 8.0;
     private static final int DEFAULT_COLOR = 16; // "current color" in LDraw workflows
 
     private LDrawExporter() {
@@ -55,6 +56,10 @@ public final class LDrawExporter {
     /**
      * Exports bricks with optional per-brick LDraw color codes.
      *
+     * <p>Uses the brick's {@code partId} to determine the LDraw part file name
+     * ({@code partId + ".dat"}). Rotation is determined by comparing the brick's
+     * placed orientation against the catalog part's canonical dimensions.</p>
+     *
      * @param bricks         placed bricks
      * @param outputPath     output .ldr path
      * @param catalogBaseDir optional catalog base directory (test-only)
@@ -72,7 +77,9 @@ public final class LDrawExporter {
 
         Files.createDirectories(outputPath.toAbsolutePath().getParent());
 
-        Map<StudKey, String> studKeyToPartFile = buildPartIndex(catalogBaseDir);
+        // Build part index for rotation resolution and fallback mapping
+        Map<String, CatalogPart> partById = buildPartByIdIndex(catalogBaseDir);
+        Map<StudKey, String> studKeyIndex = buildStudKeyIndex(partById);
 
         StringBuilder out = new StringBuilder();
         out.append("0 LEGO Architecture Engine LDraw export\n");
@@ -80,7 +87,7 @@ public final class LDrawExporter {
         out.append("0 Bricks: ").append(bricks.size()).append('\n');
 
         for (Brick brick : bricks) {
-            PartPlacement placement = resolvePart(studKeyToPartFile, brick.studX(), brick.studY());
+            PartPlacement placement = resolvePlacement(brick, partById, studKeyIndex);
 
             // Determine color: use per-brick code if available, else default (16)
             int color = DEFAULT_COLOR;
@@ -100,9 +107,9 @@ public final class LDrawExporter {
             double x = centerXStuds * STUD_PITCH_LDU;
             double z = centerZStuds * STUD_PITCH_LDU;
 
-            // LDraw parts are defined with Y=0 at the top surface and extend down to +24.
-            // brick.y() is the OBJ Y axis (wolf height, Y-up); stacking upward decreases LDraw Y.
-            double y = -((brick.y() + brick.heightUnits()) * BRICK_HEIGHT_LDU);
+            // LDraw parts are defined with Y=0 at the top surface and extend down.
+            // brick.heightUnits() is in LDraw-relative units (bricks=3, plates=1).
+            double y = -((brick.y() + brick.heightUnits()) * HEIGHT_UNIT_LDU);
 
             out.append("1 ")
                 .append(color).append(' ')
@@ -133,47 +140,82 @@ public final class LDrawExporter {
         return String.format(Locale.ROOT, "%.3f", value);
     }
 
-    private static Map<StudKey, String> buildPartIndex(Path catalogBaseDir) {
+    /**
+     * Builds a lookup from partId to CatalogPart for rotation determination.
+     */
+    private static Map<String, CatalogPart> buildPartByIdIndex(Path catalogBaseDir) {
         List<CatalogPart> parts = (catalogBaseDir != null)
             ? CuratedCatalogLoader.loadActiveParts(catalogBaseDir)
             : CuratedCatalogLoader.loadActiveParts();
 
-        Map<StudKey, String> index = new HashMap<>();
+        Map<String, CatalogPart> index = new HashMap<>();
         for (CatalogPart part : parts) {
-            String height = part.heightUnitsRaw().trim();
-            if (!"1".equals(height) && !"1.0".equals(height)) {
-                continue;
-            }
-            if (!"bricks".equalsIgnoreCase(part.categoryName().trim())) {
-                continue;
-            }
+            index.putIfAbsent(part.partId(), part);
+        }
+        return index;
+    }
 
-            // Only first part per stud key is used to keep mapping deterministic.
+    /**
+     * Builds a StudKey→datFile fallback index for bricks with unknown partId.
+     */
+    private static Map<StudKey, String> buildStudKeyIndex(Map<String, CatalogPart> partById) {
+        Map<StudKey, String> index = new HashMap<>();
+        for (CatalogPart part : partById.values()) {
             StudKey key = new StudKey(part.studX(), part.studY());
             index.putIfAbsent(key, part.partId() + ".dat");
         }
-
         // Ensure 1x1 exists as a safe minimum.
         if (!index.containsKey(new StudKey(1, 1))) {
             index.put(new StudKey(1, 1), "3005.dat");
         }
-
         return index;
     }
 
-    private static PartPlacement resolvePart(Map<StudKey, String> index, int studX, int studY) {
-        // In LDraw part files, catalog stud_y = studs along the part's local X axis.
-        // Identity placement: part X aligns with world X.
-        //   → need catalog stud_y = studX (world X span) and stud_x = studY
-        //   → key is StudKey(studY, studX)
+    /**
+     * Resolves the part file and rotation for a brick.
+     *
+     * <p>When the brick has a known partId, uses it directly and determines rotation
+     * by comparing placed orientation with catalog canonical dimensions.</p>
+     *
+     * <p>Falls back to StudKey lookup for bricks with "unknown" partId.</p>
+     */
+    private static PartPlacement resolvePlacement(Brick brick,
+                                                   Map<String, CatalogPart> partById,
+                                                   Map<StudKey, String> studKeyIndex) {
+        String partId = brick.partId();
+
+        // Direct lookup for bricks with known partId
+        if (!Brick.UNKNOWN_PART_ID.equals(partId)) {
+            String partFile = partId + ".dat";
+            CatalogPart catalogPart = partById.get(partId);
+            if (catalogPart != null) {
+                // Determine rotation by comparing placed orientation with catalog orientation.
+                // In LDraw, catalog stud_y maps to the part's local X axis.
+                // Identity: catalog (stud_x, stud_y) matches (brick.studY, brick.studX)
+                if (catalogPart.studX() == brick.studY() && catalogPart.studY() == brick.studX()) {
+                    return PartPlacement.identity(partFile);
+                }
+                // Rotated: catalog (stud_x, stud_y) matches (brick.studX, brick.studY)
+                if (catalogPart.studX() == brick.studX() && catalogPart.studY() == brick.studY()) {
+                    return PartPlacement.rotateY90(partFile);
+                }
+            }
+            // partId known but no catalog match — use identity as default
+            return PartPlacement.identity(partFile);
+        }
+
+        // Fallback: StudKey lookup for "unknown" partId (legacy/test bricks)
+        return resolvePartByStudKey(studKeyIndex, brick.studX(), brick.studY());
+    }
+
+    private static PartPlacement resolvePartByStudKey(Map<StudKey, String> index, int studX, int studY) {
+        // Identity: catalog stud_y = world X span
         String forIdentity = index.get(new StudKey(studY, studX));
         if (forIdentity != null) {
             return PartPlacement.identity(forIdentity);
         }
 
-        // rotateY90 placement: part X maps to world -Z, part Z maps to world X.
-        //   → need catalog stud_x = studX (world X span) and stud_y = studY (world Z span)
-        //   → key is StudKey(studX, studY)
+        // Rotated Y90
         String forRotated = index.get(new StudKey(studX, studY));
         if (forRotated != null) {
             return PartPlacement.rotateY90(forRotated);

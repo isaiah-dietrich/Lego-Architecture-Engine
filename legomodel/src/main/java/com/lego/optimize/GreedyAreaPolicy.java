@@ -3,7 +3,7 @@ package com.lego.optimize;
 import java.util.List;
 
 import com.lego.model.Brick;
-import com.lego.optimize.AllowedBrickDimensions.Dimension;
+import com.lego.optimize.AllowedBrickDimensions.BrickSpec;
 import com.lego.voxel.VoxelGrid;
 
 /**
@@ -22,10 +22,10 @@ public final class GreedyAreaPolicy implements PlacementPolicy {
 
     @Override
     public Brick selectBrick(VoxelGrid surface, boolean[][][] covered,
-                              int x, int y, int z, List<Dimension> allowedDimensions) {
-        for (Dimension dim : allowedDimensions) {
-            if (canPlace(surface, covered, x, y, z, dim.studX(), dim.studY())) {
-                return new Brick(x, y, z, dim.studX(), dim.studY(), 1);
+                              int x, int y, int z, List<BrickSpec> allowedSpecs) {
+        for (BrickSpec spec : allowedSpecs) {
+            if (canPlace(surface, covered, x, y, z, spec.studX(), spec.studY())) {
+                return new Brick(x, y, z, spec.studX(), spec.studY(), spec.heightUnits(), spec.partId());
             }
         }
 

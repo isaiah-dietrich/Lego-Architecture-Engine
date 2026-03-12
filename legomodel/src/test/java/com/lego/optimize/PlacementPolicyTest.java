@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 
 import com.lego.model.Brick;
 import com.lego.model.ColorRgb;
-import com.lego.optimize.AllowedBrickDimensions.Dimension;
+import com.lego.optimize.AllowedBrickDimensions.BrickSpec;
 import com.lego.voxel.VoxelGrid;
 
 /**
@@ -21,11 +21,11 @@ import com.lego.voxel.VoxelGrid;
  */
 class PlacementPolicyTest {
 
-    private static final List<Dimension> STANDARD_DIMS = Arrays.asList(
-        new Dimension(2, 4),
-        new Dimension(2, 2),
-        new Dimension(2, 1),
-        new Dimension(1, 1)
+    private static final List<BrickSpec> STANDARD_DIMS = Arrays.asList(
+        new BrickSpec(2, 4, 3, "Bricks", "3001"),
+        new BrickSpec(2, 2, 3, "Bricks", "3003"),
+        new BrickSpec(2, 1, 3, "Bricks", "3004"),
+        new BrickSpec(1, 1, 3, "Bricks", "3005")
     );
 
     // ========== Policy name ==========
@@ -90,7 +90,7 @@ class PlacementPolicyTest {
         VoxelGrid surface = new VoxelGrid(3, 1, 1);
         surface.setFilled(0, 0, 0, true);
 
-        List<Dimension> nofallback = Arrays.asList(new Dimension(2, 4));
+        List<BrickSpec> nofallback = Arrays.asList(new BrickSpec(2, 4, 3, "Bricks", "3001"));
         assertThrows(IllegalStateException.class,
             () -> BrickPlacer.placeBricks(surface, nofallback, new GreedyAreaPolicy()));
     }
@@ -145,7 +145,7 @@ class PlacementPolicyTest {
         VoxelGrid surface = new VoxelGrid(3, 1, 1);
         surface.setFilled(0, 0, 0, true);
 
-        List<Dimension> nofallback = Arrays.asList(new Dimension(2, 4));
+        List<BrickSpec> nofallback = Arrays.asList(new BrickSpec(2, 4, 3, "Bricks", "3001"));
         assertThrows(IllegalStateException.class,
             () -> BrickPlacer.placeBricks(surface, nofallback, new ScoringPlacementPolicy()));
     }

@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.lego.model.Brick;
-import com.lego.optimize.AllowedBrickDimensions.Dimension;
+import com.lego.optimize.AllowedBrickDimensions.BrickSpec;
 import com.lego.voxel.VoxelGrid;
 
 /**
@@ -56,46 +56,46 @@ public final class BrickPlacer {
     }
 
     /**
-     * Generates a list of bricks from a surface voxel grid using provided dimensions.
+     * Generates a list of bricks from a surface voxel grid using provided brick specs.
      * Uses the default {@link ScoringPlacementPolicy}.
      *
      * @param surface the surface voxel grid
-     * @param allowedDimensions allowed brick dimensions in priority order (largest first)
+     * @param allowedSpecs allowed brick specs in priority order (largest first)
      * @return list of bricks covering all filled voxels, deterministic order
-     * @throws IllegalArgumentException if surface is null or allowedDimensions is null/empty
+     * @throws IllegalArgumentException if surface is null or allowedSpecs is null/empty
      */
-    public static List<Brick> placeBricks(VoxelGrid surface, List<Dimension> allowedDimensions) {
-        return placeBricks(surface, allowedDimensions, DEFAULT_POLICY);
+    public static List<Brick> placeBricks(VoxelGrid surface, List<BrickSpec> allowedSpecs) {
+        return placeBricks(surface, allowedSpecs, DEFAULT_POLICY);
     }
 
     /**
      * Generates a list of bricks from a surface voxel grid using a specific placement policy.
      *
      * @param surface the surface voxel grid
-     * @param allowedDimensions allowed brick dimensions in priority order (largest first)
+     * @param allowedSpecs allowed brick specs in priority order (largest first)
      * @param policy placement policy for brick selection
      * @return list of bricks covering all filled voxels, deterministic order
-     * @throws IllegalArgumentException if any argument is null, or allowedDimensions is empty
+     * @throws IllegalArgumentException if any argument is null, or allowedSpecs is empty
      */
-    public static List<Brick> placeBricks(VoxelGrid surface, List<Dimension> allowedDimensions,
+    public static List<Brick> placeBricks(VoxelGrid surface, List<BrickSpec> allowedSpecs,
                                            PlacementPolicy policy) {
         if (surface == null) {
             throw new IllegalArgumentException("surface must not be null");
         }
-        if (allowedDimensions == null || allowedDimensions.isEmpty()) {
+        if (allowedSpecs == null || allowedSpecs.isEmpty()) {
             throw new IllegalArgumentException("allowedDimensions must not be null or empty");
         }
         if (policy == null) {
             throw new IllegalArgumentException("policy must not be null");
         }
 
-        return placeBricksInternal(surface, allowedDimensions, policy);
+        return placeBricksInternal(surface, allowedSpecs, policy);
     }
 
     /**
      * Core placement loop. Scans layer-by-layer, delegating brick selection to the policy.
      */
-    private static List<Brick> placeBricksInternal(VoxelGrid surface, List<Dimension> allowedDimensions,
+    private static List<Brick> placeBricksInternal(VoxelGrid surface, List<BrickSpec> allowedSpecs,
                                                     PlacementPolicy policy) {
         List<Brick> bricks = new ArrayList<>();
         boolean[][][] covered = new boolean[surface.width()][surface.height()][surface.depth()];
@@ -105,7 +105,7 @@ public final class BrickPlacer {
             for (int z = 0; z < surface.depth(); z++) {
                 for (int x = 0; x < surface.width(); x++) {
                     if (surface.isFilled(x, y, z) && !covered[x][y][z]) {
-                        Brick brick = policy.selectBrick(surface, covered, x, y, z, allowedDimensions);
+                        Brick brick = policy.selectBrick(surface, covered, x, y, z, allowedSpecs);
                         bricks.add(brick);
                         markCovered(covered, brick);
                     }

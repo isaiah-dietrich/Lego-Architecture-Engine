@@ -82,9 +82,9 @@ class BrickTest {
 
     @Test
     void testMaxY() {
-        // maxY = y + heightUnits (Y is the height axis)
+        // maxY = y + 1 (each brick occupies 1 voxel layer; heightUnits is for LDraw export)
         Brick brick = new Brick(0, 5, 0, 1, 1, 3);
-        assertEquals(8, brick.maxY());
+        assertEquals(6, brick.maxY());
     }
 
     @Test

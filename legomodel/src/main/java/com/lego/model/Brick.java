@@ -7,19 +7,29 @@ package com.lego.model;
  * starting at position (x, y, z) and extending heightUnits voxel layers upward.
  *
  * All fields are validated on construction to ensure a well-formed brick.
+ *
+ * @param x           voxel x coordinate (>= 0)
+ * @param y           voxel y coordinate (>= 0)
+ * @param z           voxel z coordinate (>= 0)
+ * @param studX       width in studs (> 0)
+ * @param studY       depth in studs (> 0)
+ * @param heightUnits height in LDraw-relative units (> 0; bricks=3, plates=1)
+ * @param partId      catalog part identifier (e.g. "3001"), or "unknown" for test/legacy bricks
  */
-public record Brick(int x, int y, int z, int studX, int studY, int heightUnits) {
+public record Brick(int x, int y, int z, int studX, int studY, int heightUnits, String partId) {
+
+    /** Default part ID for bricks created without catalog context. */
+    public static final String UNKNOWN_PART_ID = "unknown";
+
+    /**
+     * Convenience constructor without partId (uses "unknown").
+     */
+    public Brick(int x, int y, int z, int studX, int studY, int heightUnits) {
+        this(x, y, z, studX, studY, heightUnits, UNKNOWN_PART_ID);
+    }
 
     /**
      * Creates a brick with full validation.
-     *
-     * @param x           voxel x coordinate (>= 0)
-     * @param y           voxel y coordinate (>= 0)
-     * @param z           voxel z coordinate (>= 0)
-     * @param studX       width in studs (> 0)
-     * @param studY       depth in studs (> 0)
-     * @param heightUnits height in voxel layers (> 0)
-     * @throws IllegalArgumentException if any field is invalid
      */
     public Brick {
         if (x < 0) {
@@ -40,6 +50,9 @@ public record Brick(int x, int y, int z, int studX, int studY, int heightUnits) 
         if (heightUnits <= 0) {
             throw new IllegalArgumentException("heightUnits must be > 0, got: " + heightUnits);
         }
+        if (partId == null || partId.isBlank()) {
+            throw new IllegalArgumentException("partId must not be blank");
+        }
     }
 
     /**
@@ -51,10 +64,11 @@ public record Brick(int x, int y, int z, int studX, int studY, int heightUnits) 
 
     /**
      * Returns the maximum y coordinate occupied by this brick (exclusive).
-     * Y is the height axis (VoxelGrid Y = OBJ Y-up), so the Y extent is heightUnits.
+     * Each brick always occupies exactly one voxel layer in Y, regardless of
+     * {@code heightUnits} (which carries LDraw-relative height for export).
      */
     public int maxY() {
-        return y + heightUnits;
+        return y + 1;
     }
 
     /**

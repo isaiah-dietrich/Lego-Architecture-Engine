@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import com.lego.optimize.AllowedBrickDimensions.Dimension;
+import com.lego.optimize.AllowedBrickDimensions.BrickSpec;
 
 /**
  * Tests for catalog-driven brick dimensions.
@@ -26,7 +26,7 @@ class AllowedBrickDimensionsTest {
     Path tempDir;
 
     @Test
-    void testLoadFromCatalog_ParsesDimensions() throws IOException {
+    void testLoadFromCatalog_ParsesSpecs() throws IOException {
         createCatalogFile(VALID_CATALOG_HEADER +
             "3001,Brick 2x4,11,Bricks,2,4,1,Plastic,true\n" +
             "3003,Brick 2x2,11,Bricks,2,2,1,Plastic,true\n" +
@@ -34,10 +34,10 @@ class AllowedBrickDimensionsTest {
             "3005,Brick 1x1,11,Bricks,1,1,1,Plastic,true\n"
         );
 
-        List<Dimension> dimensions = AllowedBrickDimensions.loadFromCatalog(tempDir);
+        List<BrickSpec> specs = AllowedBrickDimensions.loadFromCatalog(tempDir);
 
-        // Should have 4 dimensions: 2x4, 2x2, 2x1 (from 1x2), 1x1
-        assertEquals(4, dimensions.size());
+        // Should have 4 specs: 2x4, 2x2, 2x1 (from 1x2), 1x1
+        assertEquals(4, specs.size());
     }
 
     @Test
@@ -48,35 +48,35 @@ class AllowedBrickDimensionsTest {
             "3001,Brick 2x4,11,Bricks,2,4,1,Plastic,true\n"   // area=8
         );
 
-        List<Dimension> dimensions = AllowedBrickDimensions.loadFromCatalog(tempDir);
+        List<BrickSpec> specs = AllowedBrickDimensions.loadFromCatalog(tempDir);
 
         // Should be sorted by area descending: 2x4 (8), 2x2 (4), 1x1 (1)
-        assertEquals(2, dimensions.get(0).studX());
-        assertEquals(4, dimensions.get(0).studY());
-        assertEquals(8, dimensions.get(0).area());
+        assertEquals(2, specs.get(0).studX());
+        assertEquals(4, specs.get(0).studY());
+        assertEquals(8, specs.get(0).area());
 
-        assertEquals(2, dimensions.get(1).studX());
-        assertEquals(2, dimensions.get(1).studY());
-        assertEquals(4, dimensions.get(1).area());
+        assertEquals(2, specs.get(1).studX());
+        assertEquals(2, specs.get(1).studY());
+        assertEquals(4, specs.get(1).area());
 
-        assertEquals(1, dimensions.get(2).studX());
-        assertEquals(1, dimensions.get(2).studY());
-        assertEquals(1, dimensions.get(2).area());
+        assertEquals(1, specs.get(2).studX());
+        assertEquals(1, specs.get(2).studY());
+        assertEquals(1, specs.get(2).area());
     }
 
     @Test
-    void testLoadFromCatalog_FiltersHeight() throws IOException {
+    void testLoadFromCatalog_FiltersNonBrickCategory() throws IOException {
         createCatalogFile(VALID_CATALOG_HEADER +
-            "3001,Brick 2x4,11,Bricks,2,4,1,Plastic,true\n" +        // height=1, included
-            "3020,Plate 2x4,14,Plates,2,4,1/3,Plastic,true\n"        // height=1/3, excluded (also wrong category)
+            "3001,Brick 2x4,11,Bricks,2,4,1,Plastic,true\n" +        // Bricks category, included
+            "3020,Plate 2x4,14,Plates,2,4,1/3,Plastic,true\n"        // Plates category, excluded
         );
 
-        List<Dimension> dimensions = AllowedBrickDimensions.loadFromCatalog(tempDir);
+        List<BrickSpec> specs = AllowedBrickDimensions.loadFromCatalog(tempDir);
 
-        // Should only have the brick (height=1), not the plate (height=1/3)
-        assertEquals(1, dimensions.size());
-        assertEquals(2, dimensions.get(0).studX());
-        assertEquals(4, dimensions.get(0).studY());
+        // Should only have the brick (Bricks category), not the plate (Plates category)
+        assertEquals(1, specs.size());
+        assertEquals(2, specs.get(0).studX());
+        assertEquals(4, specs.get(0).studY());
     }
 
     @Test
@@ -87,12 +87,12 @@ class AllowedBrickDimensionsTest {
             "3070b,Tile 1x1,19,Tiles,1,1,1,Plastic,true\n"           // Tiles, excluded
         );
 
-        List<Dimension> dimensions = AllowedBrickDimensions.loadFromCatalog(tempDir);
+        List<BrickSpec> specs = AllowedBrickDimensions.loadFromCatalog(tempDir);
 
         // Should only have standard "Bricks", not slopes or tiles
-        assertEquals(1, dimensions.size());
-        assertEquals(2, dimensions.get(0).studX());
-        assertEquals(4, dimensions.get(0).studY());
+        assertEquals(1, specs.size());
+        assertEquals(2, specs.get(0).studX());
+        assertEquals(4, specs.get(0).studY());
     }
 
     @Test
@@ -104,13 +104,13 @@ class AllowedBrickDimensionsTest {
             "3001,Brick 2x4,11,Bricks,2,4,1,Plastic,true\n"
         );
 
-        List<Dimension> dimensions = AllowedBrickDimensions.loadFromCatalog(tempDir);
+        List<BrickSpec> specs = AllowedBrickDimensions.loadFromCatalog(tempDir);
 
-        assertEquals(4, dimensions.size());
-        assertEquals(new Dimension(2, 4), dimensions.get(0));
-        assertEquals(new Dimension(2, 2), dimensions.get(1));
-        assertEquals(new Dimension(2, 1), dimensions.get(2));
-        assertEquals(new Dimension(1, 1), dimensions.get(3));
+        assertEquals(4, specs.size());
+        assertEquals(new BrickSpec(2, 4, 3, "Bricks", "3001"), specs.get(0));
+        assertEquals(new BrickSpec(2, 2, 3, "Bricks", "3003"), specs.get(1));
+        assertEquals(new BrickSpec(2, 1, 3, "Bricks", "3004"), specs.get(2));
+        assertEquals(new BrickSpec(1, 1, 3, "Bricks", "3005"), specs.get(3));
     }
 
     @Test
@@ -120,10 +120,10 @@ class AllowedBrickDimensionsTest {
             "3005,Brick 1x1,11,Bricks,1,1,1,Plastic,true\n"
         );
 
-        List<Dimension> dimensions = AllowedBrickDimensions.loadFromCatalog(tempDir);
+        List<BrickSpec> specs = AllowedBrickDimensions.loadFromCatalog(tempDir);
 
-        assertTrue(dimensions.contains(new Dimension(2, 1)));
-        assertFalse(dimensions.contains(new Dimension(1, 2)));
+        assertTrue(specs.stream().anyMatch(s -> s.studX() == 2 && s.studY() == 1));
+        assertFalse(specs.stream().anyMatch(s -> s.studX() == 1 && s.studY() == 2));
     }
 
     @Test
@@ -132,12 +132,12 @@ class AllowedBrickDimensionsTest {
             "3004,Brick 1x2,11,Bricks,1,2,1,Plastic,true\n"
         );
 
-        List<Dimension> dimensions = AllowedBrickDimensions.loadFromCatalog(tempDir);
+        List<BrickSpec> specs = AllowedBrickDimensions.loadFromCatalog(tempDir);
 
         // Should convert 1x2 to 2x1 horizontal (forbidden vertical orientation)
-        assertEquals(1, dimensions.size());
-        assertEquals(2, dimensions.get(0).studX());
-        assertEquals(1, dimensions.get(0).studY());
+        assertEquals(1, specs.size());
+        assertEquals(2, specs.get(0).studX());
+        assertEquals(1, specs.get(0).studY());
     }
 
     @Test
@@ -147,10 +147,10 @@ class AllowedBrickDimensionsTest {
             "3003,Brick 2x2,11,Bricks,2,2,1,Plastic,true\n"  // Duplicate
         );
 
-        List<Dimension> dimensions = AllowedBrickDimensions.loadFromCatalog(tempDir);
+        List<BrickSpec> specs = AllowedBrickDimensions.loadFromCatalog(tempDir);
 
         // Should deduplicate
-        assertEquals(1, dimensions.size());
+        assertEquals(1, specs.size());
     }
 
     @Test
@@ -172,32 +172,32 @@ class AllowedBrickDimensionsTest {
     }
 
     @Test
-    void testDimension_CalculatesArea() {
-        Dimension dim = new Dimension(2, 4);
-        assertEquals(8, dim.area());
+    void testBrickSpec_CalculatesArea() {
+        BrickSpec spec = new BrickSpec(2, 4, 3, "Bricks", "3001");
+        assertEquals(8, spec.area());
     }
 
     @Test
-    void testDimension_ValidatesPositive() {
-        assertThrows(IllegalArgumentException.class, () -> new Dimension(0, 4));
-        assertThrows(IllegalArgumentException.class, () -> new Dimension(2, 0));
-        assertThrows(IllegalArgumentException.class, () -> new Dimension(-1, 4));
+    void testBrickSpec_ValidatesPositive() {
+        assertThrows(IllegalArgumentException.class, () -> new BrickSpec(0, 4, 3, "Bricks", "test"));
+        assertThrows(IllegalArgumentException.class, () -> new BrickSpec(2, 0, 3, "Bricks", "test"));
+        assertThrows(IllegalArgumentException.class, () -> new BrickSpec(-1, 4, 3, "Bricks", "test"));
     }
 
     @Test
-    void testDimension_Equality() {
-        Dimension dim1 = new Dimension(2, 4);
-        Dimension dim2 = new Dimension(2, 4);
-        Dimension dim3 = new Dimension(4, 2);
+    void testBrickSpec_Equality() {
+        BrickSpec spec1 = new BrickSpec(2, 4, 3, "Bricks", "3001");
+        BrickSpec spec2 = new BrickSpec(2, 4, 3, "Bricks", "3001");
+        BrickSpec spec3 = new BrickSpec(4, 2, 3, "Bricks", "3001");
 
-        assertEquals(dim1, dim2);
-        assertFalse(dim1.equals(dim3));
+        assertEquals(spec1, spec2);
+        assertFalse(spec1.equals(spec3));
     }
 
     @Test
-    void testDimension_ToString() {
-        Dimension dim = new Dimension(2, 4);
-        assertEquals("2x4", dim.toString());
+    void testBrickSpec_ToString() {
+        BrickSpec spec = new BrickSpec(2, 4, 3, "Bricks", "3001");
+        assertEquals("2x4x3 (3001)", spec.toString());
     }
 
     // ========== FILTER FLEXIBILITY TESTS ==========
@@ -211,12 +211,12 @@ class AllowedBrickDimensionsTest {
             "3005,Brick 1x1,11,Bricks,1,1,1.0,Plastic,true\n"    // 1.0 instead of 1
         );
 
-        List<Dimension> dimensions = AllowedBrickDimensions.loadFromCatalog(tempDir);
+        List<BrickSpec> specs = AllowedBrickDimensions.loadFromCatalog(tempDir);
 
-        // Should find both dimensions (height filter is lenient)
-        assertEquals(2, dimensions.size());
-        assertTrue(dimensions.stream().anyMatch(d -> d.studX() == 2 && d.studY() == 4));
-        assertTrue(dimensions.stream().anyMatch(d -> d.studX() == 1 && d.studY() == 1));
+        // Should find both specs (height parsing is lenient)
+        assertEquals(2, specs.size());
+        assertTrue(specs.stream().anyMatch(s -> s.studX() == 2 && s.studY() == 4));
+        assertTrue(specs.stream().anyMatch(s -> s.studX() == 1 && s.studY() == 1));
     }
 
     @Test
@@ -229,10 +229,10 @@ class AllowedBrickDimensionsTest {
             "3005,Brick 1x1,11,Bricks,1,1,1,Plastic,true\n"        // Mixed case "Bricks"
         );
 
-        List<Dimension> dimensions = AllowedBrickDimensions.loadFromCatalog(tempDir);
+        List<BrickSpec> specs = AllowedBrickDimensions.loadFromCatalog(tempDir);
 
-        // Should find all three dimensions (case-insensitive match)
-        assertEquals(3, dimensions.size());
+        // Should find all three specs (case-insensitive match)
+        assertEquals(3, specs.size());
     }
 
     @Test
@@ -244,26 +244,26 @@ class AllowedBrickDimensionsTest {
             "3005,Brick 1x1,11,Bricks  ,1,1,1,Plastic,true\n"      // Trailing whitespace
         );
 
-        List<Dimension> dimensions = AllowedBrickDimensions.loadFromCatalog(tempDir);
+        List<BrickSpec> specs = AllowedBrickDimensions.loadFromCatalog(tempDir);
 
-        // Should find both dimensions (whitespace is trimmed)
-        assertEquals(2, dimensions.size());
+        // Should find both specs (whitespace is trimmed)
+        assertEquals(2, specs.size());
     }
 
     @Test
-    void testLoadFromCatalog_HeightMismatch_Filtered() throws IOException {
-        // Verify that heights other than "1" or "1.0" are filtered out
+    void testLoadFromCatalog_NonBrickCategory_Filtered() throws IOException {
+        // Verify that non-Bricks categories are filtered out
         createCatalogFile(
             "part_id,name,category,category_name,stud_x,stud_y,height_units,material,active\n" +
-            "3001,Brick 2x4,11,Bricks,2,4,1,Plastic,true\n" +        // Valid: height=1
-            "3010,Plate 2x4,12,Plates,2,4,1/3,Plastic,true\n" +      // Invalid: height=1/3 (different category)
-            "3005,Brick 1x1,11,Bricks,1,1,1,Plastic,true\n"          // Valid: height=1
+            "3001,Brick 2x4,11,Bricks,2,4,1,Plastic,true\n" +        // Valid: Bricks category
+            "3010,Plate 2x4,12,Plates,2,4,1/3,Plastic,true\n" +      // Invalid: Plates category
+            "3005,Brick 1x1,11,Bricks,1,1,1,Plastic,true\n"          // Valid: Bricks category
         );
 
-        List<Dimension> dimensions = AllowedBrickDimensions.loadFromCatalog(tempDir);
+        List<BrickSpec> specs = AllowedBrickDimensions.loadFromCatalog(tempDir);
 
-        // Should find only the two with height=1
-        assertEquals(2, dimensions.size());
+        // Should find only the two with Bricks category
+        assertEquals(2, specs.size());
     }
 
     private void createCatalogFile(String content) throws IOException {
