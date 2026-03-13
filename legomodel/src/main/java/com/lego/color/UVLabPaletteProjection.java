@@ -271,7 +271,7 @@ public final class UVLabPaletteProjection implements ColorStrategy {
      * more important. This prevents dark shadow samples from matching
      * wrong-hue palette entries that happen to have similar darkness.
      */
-    static final double KL = 1.0;
+    static final double KL = 1.5;
 
     /**
      * Finds the nearest palette entry using CIEDE2000 distance with

@@ -122,8 +122,9 @@ public final class SupersampledVoxelColorPipeline implements ColorStrategy {
         java.util.List<SampleLab> allSamples = new java.util.ArrayList<>();
         java.util.List<Double> allL = new java.util.ArrayList<>();
 
+        int yResolution = surface.height();
         for (int x = 0; x < resolution; x++) {
-            for (int y = 0; y < resolution; y++) {
+            for (int y = 0; y < yResolution; y++) {
                 for (int z = 0; z < resolution; z++) {
                     if (!surface.isFilled(x, y, z)) continue;
 
@@ -132,7 +133,8 @@ public final class SupersampledVoxelColorPipeline implements ColorStrategy {
 
                     for (double[] offset : sampleOffsets) {
                         double sx = x + offset[0];
-                        double sy = y + offset[1];
+                        // Map plate-voxel Y back to mesh space (1 plate = 1/3 brick)
+                        double sy = (y + offset[1]) / 3.0;
                         double sz = z + offset[2];
 
                         TriangleBVH.Hit hit = bvh.nearestSurfacePoint(sx, sy, sz);
@@ -343,13 +345,15 @@ public final class SupersampledVoxelColorPipeline implements ColorStrategy {
         return ((long) x << 40) | ((long) y << 20) | z;
     }
 
+    private static final double KL = 1.5;
+
     private static int nearestCiede2000(double l, double a, double b,
                                          List<PaletteEntry> entries) {
         PaletteEntry best = null;
         double bestDist = Double.MAX_VALUE;
         for (PaletteEntry entry : entries) {
             double dist = LegoPaletteMapper.deltaE2000(l, a, b,
-                entry.labL(), entry.labA(), entry.labB());
+                entry.labL(), entry.labA(), entry.labB(), KL);
             if (dist < bestDist) {
                 bestDist = dist;
                 best = entry;

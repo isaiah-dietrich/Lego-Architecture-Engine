@@ -132,12 +132,14 @@ public final class DominantVoteStrategy implements ColorStrategy {
         return result;
     }
 
+    private static final double KL = 1.5;
+
     private static int nearestCiede2000(double l, double a, double b, List<PaletteEntry> entries) {
         PaletteEntry best = null;
         double bestDist = Double.MAX_VALUE;
         for (PaletteEntry entry : entries) {
             double dist = LegoPaletteMapper.deltaE2000(l, a, b,
-                entry.labL(), entry.labA(), entry.labB());
+                entry.labL(), entry.labA(), entry.labB(), KL);
             if (dist < bestDist) {
                 bestDist = dist;
                 best = entry;

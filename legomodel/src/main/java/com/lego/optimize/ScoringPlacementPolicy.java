@@ -144,12 +144,16 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
      * <p>Returns {@link Double#NEGATIVE_INFINITY} if the candidate cannot be
      * placed (any footprint voxel is out of bounds, empty, or already covered).</p>
      *
-     * <p>Score = accuracy × 1B + colorUniformity × area × 1K + neighborCoverage × 100</p>
+     * <p>Score = accuracy × 1B + colorUniformity × area × 1K + heightUnits × 150
+     *        + neighborCoverage × 100</p>
      * <ul>
      *   <li>accuracy — must be 1.0 to be valid (gates all candidates)</li>
      *   <li>colorUniformity × area × 1K — quality-weighted area: a color-uniform
      *       brick scores its full area, while one spanning a color boundary gets
      *       penalized, potentially letting a smaller single-color brick win</li>
+     *   <li>heightUnits × 150 — consolidation bonus: bricks (h=3) beat plates
+     *       (h=1) in uniform-color areas (fewer pieces), but the 300-point gap
+     *       is easily overridden by even modest color variation across Y layers</li>
      *   <li>neighborCoverage × 100 — among same-area candidates (e.g. rotations),
      *       selects the orientation with the best surrounding fit</li>
      * </ul>
@@ -178,12 +182,16 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
             }
         }
 
-        // Color uniformity and neighbor coverage computed at base layer
-        double colorUniformity = computeColorUniformity(colors, x, y, z, studX, studY);
+        // Color uniformity across entire volume (XZ footprint × all Y layers)
+        double colorUniformity = computeColorUniformity(colors, x, y, z, studX, studY, heightUnits);
         double neighborCoverage = computeNeighborCoverage(surface, x, y, z, studX, studY);
 
-        // heightUnits multiplier ensures bricks beat plates for the same XZ footprint
-        return 1_000_000_000 + colorUniformity * area * heightUnits * 1_000 + neighborCoverage * 100;
+        // Consolidation bonus: bricks (h=3) get +450, plates (h=1) get +150.
+        // The 300-point gap lets bricks win in uniform areas (fewer pieces).
+        // For a 2×4 brick, a ~4% uniformity drop wipes out the bonus;
+        // for a 1×1, the high-variance map handles detail forcing.
+        return 1_000_000_000 + colorUniformity * area * 1_000
+             + heightUnits * 150 + neighborCoverage * 100;
     }
 
     /**
@@ -197,27 +205,32 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
      */
     private static double computeColorUniformity(ColorRgb[][][] colors,
                                                    int x, int y, int z,
-                                                   int studX, int studY) {
+                                                   int studX, int studY,
+                                                   int heightUnits) {
         if (colors == null) {
             return 1.0;
         }
 
-        int area = studX * studY;
-        if (area <= 1) {
+        int volume = studX * studY * heightUnits;
+        if (volume <= 1) {
             return 1.0;
         }
 
-        // Collect Lab values for voxels in the footprint
-        double[][] labs = new double[area][];
+        // Collect Lab values for voxels across the entire brick volume
+        double[][] labs = new double[volume][];
         int count = 0;
-        for (int dx = 0; dx < studX; dx++) {
-            for (int dz = 0; dz < studY; dz++) {
-                int cx = x + dx;
-                int cz = z + dz;
-                if (cx < colors.length && y < colors[0].length && cz < colors[0][0].length) {
-                    ColorRgb c = colors[cx][y][cz];
-                    if (c != null) {
-                        labs[count++] = LegoPaletteMapper.linearRgbToLab(c.r(), c.g(), c.b());
+        for (int dy = 0; dy < heightUnits; dy++) {
+            int cy = y + dy;
+            if (cy >= colors[0].length) continue;
+            for (int dx = 0; dx < studX; dx++) {
+                for (int dz = 0; dz < studY; dz++) {
+                    int cx = x + dx;
+                    int cz = z + dz;
+                    if (cx < colors.length && cz < colors[0][0].length) {
+                        ColorRgb c = colors[cx][cy][cz];
+                        if (c != null) {
+                            labs[count++] = LegoPaletteMapper.linearRgbToLab(c.r(), c.g(), c.b());
+                        }
                     }
                 }
             }
@@ -259,7 +272,8 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
         int d = colors[0][0].length;
         boolean[][][] map = new boolean[w][h][d];
 
-        int[][] deltas = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
+        // 6-connected neighbors: ±X, ±Z (same layer) and ±Y (vertical)
+        int[][] deltas = {{-1, 0, 0}, {1, 0, 0}, {0, 0, -1}, {0, 0, 1}, {0, -1, 0}, {0, 1, 0}};
 
         for (int x = 0; x < w; x++) {
             for (int y = 0; y < h; y++) {
@@ -272,9 +286,10 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
 
                     for (int[] delta : deltas) {
                         int nx = x + delta[0];
-                        int nz = z + delta[1];
-                        if (nx >= 0 && nx < w && nz >= 0 && nz < d) {
-                            ColorRgb nc = colors[nx][y][nz];
+                        int ny = y + delta[1];
+                        int nz = z + delta[2];
+                        if (nx >= 0 && nx < w && ny >= 0 && ny < h && nz >= 0 && nz < d) {
+                            ColorRgb nc = colors[nx][ny][nz];
                             if (nc != null) {
                                 double[] nlab = LegoPaletteMapper.linearRgbToLab(nc.r(), nc.g(), nc.b());
                                 double de = LegoPaletteMapper.deltaE(
