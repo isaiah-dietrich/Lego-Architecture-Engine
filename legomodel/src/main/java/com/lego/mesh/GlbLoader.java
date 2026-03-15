@@ -1,17 +1,14 @@
 package com.lego.mesh;
 
 import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import javax.imageio.ImageIO;
-
+import com.lego.model.ColorMath;
 import com.lego.model.ColorRgb;
 import com.lego.model.Mesh;
 import com.lego.model.Triangle;
@@ -23,15 +20,11 @@ import de.javagl.jgltf.model.AccessorIntData;
 import de.javagl.jgltf.model.AccessorModel;
 import de.javagl.jgltf.model.AccessorShortData;
 import de.javagl.jgltf.model.GltfModel;
-import de.javagl.jgltf.model.ImageModel;
-import de.javagl.jgltf.model.MaterialModel;
 import de.javagl.jgltf.model.MeshModel;
 import de.javagl.jgltf.model.MeshPrimitiveModel;
 import de.javagl.jgltf.model.NodeModel;
 import de.javagl.jgltf.model.SceneModel;
-import de.javagl.jgltf.model.TextureModel;
 import de.javagl.jgltf.model.io.GltfModelReader;
-import de.javagl.jgltf.model.v2.MaterialModelV2;
 
 /**
  * Loads {@code .glb} files using the {@code de.javagl:jgltf-model} library.
@@ -53,13 +46,6 @@ import de.javagl.jgltf.model.v2.MaterialModelV2;
 public final class GlbLoader implements ModelLoader {
 
     private static final int GL_TRIANGLES = 4;
-
-    /**
-     * sRGB channel threshold for UV-padding detection. Pixels with all channels
-     * at or below this value (out of 255) are treated as texture atlas padding
-     * and excluded from color sampling.
-     */
-    private static final int UV_PADDING_SRGB_THRESHOLD = 10;
 
     @Override
     public LoadedModel load(Path path) throws IOException {
@@ -182,10 +168,10 @@ public final class GlbLoader implements ModelLoader {
         }
 
         // Read material baseColorFactor as fallback
-        ColorRgb materialColor = extractMaterialColor(primitive.getMaterialModel());
+        ColorRgb materialColor = GlbMaterialExtractor.extractMaterialColor(primitive.getMaterialModel());
 
         // Decode baseColorTexture image (if present)
-        BufferedImage textureImage = extractTextureImage(primitive.getMaterialModel());
+        BufferedImage textureImage = GlbMaterialExtractor.extractTextureImage(primitive.getMaterialModel());
 
         // Read indices
         AccessorModel indicesAccessor = primitive.getIndices();
@@ -204,7 +190,7 @@ public final class GlbLoader implements ModelLoader {
                 texturedTriangles.add(buildTexturedTriangle(
                     texCoords, textureImage, materialColor, colors, colorComponents, i0, i1, i2));
 
-                ColorRgb triColor = resolveTriangleColor(
+                ColorRgb triColor = GlbTriangleColorResolver.resolveTriangleColor(
                     colors, colorComponents, i0, i1, i2,
                     texCoords, textureImage, materialColor
                 );
@@ -221,7 +207,7 @@ public final class GlbLoader implements ModelLoader {
                 texturedTriangles.add(buildTexturedTriangle(
                     texCoords, textureImage, materialColor, colors, colorComponents, f, f + 1, f + 2));
 
-                ColorRgb triColor = resolveTriangleColor(
+                ColorRgb triColor = GlbTriangleColorResolver.resolveTriangleColor(
                     colors, colorComponents, f, f + 1, f + 2,
                     texCoords, textureImage, materialColor
                 );
@@ -265,198 +251,6 @@ public final class GlbLoader implements ModelLoader {
         double z = m[2] * px + m[6] * py + m[10] * pz + m[14];
 
         return new Vector3(x, y, z);
-    }
-
-    /**
-     * Determines the color for a triangle. Priority:
-     * 1. COLOR_0 vertex attribute (average of 3 vertex colors)
-     * 2. baseColorTexture multi-sampled across the triangle's UV footprint
-     *    (× baseColorFactor if set)
-     * 3. baseColorFactor alone
-     * 4. null (no color)
-     */
-    private ColorRgb resolveTriangleColor(
-        AccessorFloatData colors,
-        int colorComponents,
-        int i0, int i1, int i2,
-        AccessorFloatData texCoords,
-        BufferedImage textureImage,
-        ColorRgb materialColor
-    ) {
-        if (colors != null && colorComponents >= 3) {
-            float r = (colors.get(i0, 0) + colors.get(i1, 0) + colors.get(i2, 0)) / 3f;
-            float g = (colors.get(i0, 1) + colors.get(i1, 1) + colors.get(i2, 1)) / 3f;
-            float b = (colors.get(i0, 2) + colors.get(i1, 2) + colors.get(i2, 2)) / 3f;
-            return new ColorRgb(clamp01(r), clamp01(g), clamp01(b));
-        }
-
-        if (textureImage != null && texCoords != null) {
-            float u0 = texCoords.get(i0, 0), v0 = texCoords.get(i0, 1);
-            float u1 = texCoords.get(i1, 0), v1 = texCoords.get(i1, 1);
-            float u2 = texCoords.get(i2, 0), v2 = texCoords.get(i2, 1);
-
-            // Multi-sample: 3 vertices + centroid + 3 edge midpoints = 7 samples.
-            // This captures interior color that vertex-only sampling misses
-            // (e.g., white body fur where vertices sit at texture island edges).
-            float rSum = 0, gSum = 0, bSum = 0;
-            int validCount = 0;
-
-            // Vertex samples
-            ColorRgb s;
-            s = sampleTextureFiltered(textureImage, u0, v0);
-            if (s != null) { rSum += s.r(); gSum += s.g(); bSum += s.b(); validCount++; }
-            s = sampleTextureFiltered(textureImage, u1, v1);
-            if (s != null) { rSum += s.r(); gSum += s.g(); bSum += s.b(); validCount++; }
-            s = sampleTextureFiltered(textureImage, u2, v2);
-            if (s != null) { rSum += s.r(); gSum += s.g(); bSum += s.b(); validCount++; }
-
-            // Centroid sample
-            s = sampleTextureFiltered(textureImage,
-                (u0 + u1 + u2) / 3f, (v0 + v1 + v2) / 3f);
-            if (s != null) { rSum += s.r(); gSum += s.g(); bSum += s.b(); validCount++; }
-
-            // Edge midpoint samples
-            s = sampleTextureFiltered(textureImage,
-                (u0 + u1) / 2f, (v0 + v1) / 2f);
-            if (s != null) { rSum += s.r(); gSum += s.g(); bSum += s.b(); validCount++; }
-            s = sampleTextureFiltered(textureImage,
-                (u1 + u2) / 2f, (v1 + v2) / 2f);
-            if (s != null) { rSum += s.r(); gSum += s.g(); bSum += s.b(); validCount++; }
-            s = sampleTextureFiltered(textureImage,
-                (u0 + u2) / 2f, (v0 + v2) / 2f);
-            if (s != null) { rSum += s.r(); gSum += s.g(); bSum += s.b(); validCount++; }
-
-            if (validCount > 0) {
-                ColorRgb texColor = new ColorRgb(
-                    rSum / validCount, gSum / validCount, bSum / validCount);
-                if (materialColor != null) {
-                    return new ColorRgb(
-                        clamp01(texColor.r() * materialColor.r()),
-                        clamp01(texColor.g() * materialColor.g()),
-                        clamp01(texColor.b() * materialColor.b())
-                    );
-                }
-                return texColor;
-            }
-            // All samples were UV padding — fall through to materialColor
-        }
-
-        return materialColor; // may be null
-    }
-
-    /**
-     * Extracts baseColorFactor from a glTF v2 PBR material, or returns null.
-     */
-    private ColorRgb extractMaterialColor(MaterialModel material) {
-        if (material instanceof MaterialModelV2 pbrMaterial) {
-            float[] factor = pbrMaterial.getBaseColorFactor();
-            if (factor != null && factor.length >= 3) {
-                return new ColorRgb(clamp01(factor[0]), clamp01(factor[1]), clamp01(factor[2]));
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Decodes the baseColorTexture image from a glTF v2 PBR material, or returns null.
-     */
-    private BufferedImage extractTextureImage(MaterialModel material) {
-        if (!(material instanceof MaterialModelV2 pbrMaterial)) {
-            return null;
-        }
-        TextureModel textureModel = pbrMaterial.getBaseColorTexture();
-        if (textureModel == null) {
-            return null;
-        }
-        ImageModel imageModel = textureModel.getImageModel();
-        if (imageModel == null) {
-            return null;
-        }
-        ByteBuffer imageData = imageModel.getImageData();
-        if (imageData == null) {
-            return null;
-        }
-        byte[] bytes = new byte[imageData.remaining()];
-        imageData.duplicate().get(bytes);
-        try {
-            return ImageIO.read(new ByteArrayInputStream(bytes));
-        } catch (IOException e) {
-            return null;
-        }
-    }
-
-    /**
-     * Samples a texture at the given UV coordinate, converting from sRGB to linear RGB.
-     * UV coordinates are wrapped to [0,1] (glTF default repeat mode).
-     */
-    private ColorRgb sampleTexture(BufferedImage image, float u, float v) {
-        u = wrapUv(u);
-        v = wrapUv(v);
-
-        int x = Math.min((int) (u * image.getWidth()), image.getWidth() - 1);
-        int y = uvToPixelY(v, image.getHeight());
-
-        int argb = image.getRGB(x, y);
-        float sR = ((argb >> 16) & 0xFF) / 255f;
-        float sG = ((argb >> 8) & 0xFF) / 255f;
-        float sB = (argb & 0xFF) / 255f;
-
-        return new ColorRgb(
-            clamp01((float) srgbToLinear(sR)),
-            clamp01((float) srgbToLinear(sG)),
-            clamp01((float) srgbToLinear(sB))
-        );
-    }
-
-    /**
-     * Samples a texture at the given UV coordinate, returning null if the pixel
-     * is likely UV-atlas padding (all sRGB channels ≤ {@link #UV_PADDING_SRGB_THRESHOLD}).
-     * Non-padding pixels are converted from sRGB to linear RGB.
-     */
-    private ColorRgb sampleTextureFiltered(BufferedImage image, float u, float v) {
-        u = wrapUv(u);
-        v = wrapUv(v);
-
-        int x = Math.min((int) (u * image.getWidth()), image.getWidth() - 1);
-        int y = uvToPixelY(v, image.getHeight());
-
-        int argb = image.getRGB(x, y);
-        int sR = (argb >> 16) & 0xFF;
-        int sG = (argb >> 8) & 0xFF;
-        int sB = argb & 0xFF;
-
-        if (sR <= UV_PADDING_SRGB_THRESHOLD
-                && sG <= UV_PADDING_SRGB_THRESHOLD
-                && sB <= UV_PADDING_SRGB_THRESHOLD) {
-            return null; // likely UV-atlas padding
-        }
-
-        return new ColorRgb(
-            clamp01((float) srgbToLinear(sR / 255f)),
-            clamp01((float) srgbToLinear(sG / 255f)),
-            clamp01((float) srgbToLinear(sB / 255f))
-        );
-    }
-
-    /** sRGB gamma-encoded [0,1] to linear [0,1]. */
-    private static double srgbToLinear(double c) {
-        if (c <= 0.04045) {
-            return c / 12.92;
-        }
-        return Math.pow((c + 0.055) / 1.055, 2.4);
-    }
-
-    /** Wraps UV coordinate into [0,1). */
-    private static float wrapUv(float uv) {
-        return uv - (float) Math.floor(uv);
-    }
-
-    /**
-     * Converts glTF V (origin at bottom) to image Y (origin at top).
-     */
-    private static int uvToPixelY(float v, int imageHeight) {
-        float flippedV = 1f - v;
-        return Math.min((int) (flippedV * imageHeight), imageHeight - 1);
     }
 
     /**
@@ -513,16 +307,13 @@ public final class GlbLoader implements ModelLoader {
 
         ColorRgb vc0 = null, vc1 = null, vc2 = null;
         if (colors != null && colorComponents >= 3) {
-            vc0 = new ColorRgb(clamp01(colors.get(i0, 0)), clamp01(colors.get(i0, 1)), clamp01(colors.get(i0, 2)));
-            vc1 = new ColorRgb(clamp01(colors.get(i1, 0)), clamp01(colors.get(i1, 1)), clamp01(colors.get(i1, 2)));
-            vc2 = new ColorRgb(clamp01(colors.get(i2, 0)), clamp01(colors.get(i2, 1)), clamp01(colors.get(i2, 2)));
+            vc0 = new ColorRgb(ColorMath.clamp01(colors.get(i0, 0)), ColorMath.clamp01(colors.get(i0, 1)), ColorMath.clamp01(colors.get(i0, 2)));
+            vc1 = new ColorRgb(ColorMath.clamp01(colors.get(i1, 0)), ColorMath.clamp01(colors.get(i1, 1)), ColorMath.clamp01(colors.get(i1, 2)));
+            vc2 = new ColorRgb(ColorMath.clamp01(colors.get(i2, 0)), ColorMath.clamp01(colors.get(i2, 1)), ColorMath.clamp01(colors.get(i2, 2)));
         }
 
         return new TexturedTriangle(u0, v0, u1, v1, u2, v2,
             textureImage, vc0, vc1, vc2, materialColor);
     }
 
-    private static float clamp01(float v) {
-        return Math.max(0f, Math.min(1f, v));
-    }
 }

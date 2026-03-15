@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Set;
 
 import com.lego.model.Brick;
+import com.lego.model.VoxelKey;
 
 /**
  * Post-processing pass that smooths brick color assignments by replacing
@@ -226,7 +227,7 @@ public final class ColorSmoother {
             for (int x = brick.x(); x < brick.maxX(); x++) {
                 for (int y = brick.y(); y < brick.maxY(); y++) {
                     for (int z = brick.z(); z < brick.maxZ(); z++) {
-                        index.put(pack(x, y, z), brick);
+                        index.put(VoxelKey.pack(x, y, z), brick);
                     }
                 }
             }
@@ -248,42 +249,42 @@ public final class ColorSmoother {
         if (brick.x() > 0) {
             for (int y = brick.y(); y < brick.maxY(); y++) {
                 for (int z = brick.z(); z < brick.maxZ(); z++) {
-                    addNeighbor(voxelToBrick, pack(brick.x() - 1, y, z), seen, neighbors);
+                    addNeighbor(voxelToBrick, VoxelKey.pack(brick.x() - 1, y, z), seen, neighbors);
                 }
             }
         }
         // +X face
         for (int y = brick.y(); y < brick.maxY(); y++) {
             for (int z = brick.z(); z < brick.maxZ(); z++) {
-                addNeighbor(voxelToBrick, pack(brick.maxX(), y, z), seen, neighbors);
+                addNeighbor(voxelToBrick, VoxelKey.pack(brick.maxX(), y, z), seen, neighbors);
             }
         }
         // -Y face
         if (brick.y() > 0) {
             for (int x = brick.x(); x < brick.maxX(); x++) {
                 for (int z = brick.z(); z < brick.maxZ(); z++) {
-                    addNeighbor(voxelToBrick, pack(x, brick.y() - 1, z), seen, neighbors);
+                    addNeighbor(voxelToBrick, VoxelKey.pack(x, brick.y() - 1, z), seen, neighbors);
                 }
             }
         }
         // +Y face
         for (int x = brick.x(); x < brick.maxX(); x++) {
             for (int z = brick.z(); z < brick.maxZ(); z++) {
-                addNeighbor(voxelToBrick, pack(x, brick.maxY(), z), seen, neighbors);
+                addNeighbor(voxelToBrick, VoxelKey.pack(x, brick.maxY(), z), seen, neighbors);
             }
         }
         // -Z face
         if (brick.z() > 0) {
             for (int x = brick.x(); x < brick.maxX(); x++) {
                 for (int y = brick.y(); y < brick.maxY(); y++) {
-                    addNeighbor(voxelToBrick, pack(x, y, brick.z() - 1), seen, neighbors);
+                    addNeighbor(voxelToBrick, VoxelKey.pack(x, y, brick.z() - 1), seen, neighbors);
                 }
             }
         }
         // +Z face
         for (int x = brick.x(); x < brick.maxX(); x++) {
             for (int y = brick.y(); y < brick.maxY(); y++) {
-                addNeighbor(voxelToBrick, pack(x, y, brick.maxZ()), seen, neighbors);
+                addNeighbor(voxelToBrick, VoxelKey.pack(x, y, brick.maxZ()), seen, neighbors);
             }
         }
 
@@ -327,9 +328,5 @@ public final class ColorSmoother {
         // High contrast: only protect achromatic colors (low chroma)
         double fromChroma = Math.sqrt(fromLab[1] * fromLab[1] + fromLab[2] * fromLab[2]);
         return fromChroma < ACHROMATIC_CHROMA_LIMIT;
-    }
-
-    private static long pack(int x, int y, int z) {
-        return ((long) x << 40) | ((long) (y & 0xFFFFF) << 20) | (z & 0xFFFFF);
     }
 }

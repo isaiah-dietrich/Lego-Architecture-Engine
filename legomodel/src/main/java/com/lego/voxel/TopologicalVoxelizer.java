@@ -6,6 +6,7 @@ import java.util.Set;
 
 import com.lego.model.Mesh;
 import com.lego.model.Triangle;
+import com.lego.model.TriangleAabbTest;
 import com.lego.model.Vector3;
 
 /**
@@ -80,7 +81,7 @@ public final class TopologicalVoxelizer {
                         double cy = alignedBounds.minY + (j + 0.5) * config.voxelSizeY();
                         double cz = alignedBounds.minZ + (k + 0.5) * config.voxelSizeZ();
 
-                        if (triangleOverlapsVoxel(triangle, cx, cy, cz, hx, hy, hz)) {
+                        if (TriangleAabbTest.overlaps(triangle, cx, cy, cz, hx, hy, hz)) {
                             sparseGrid.setSurfaceFilled(i, j, k);
                         }
                     }
@@ -130,105 +131,6 @@ public final class TopologicalVoxelizer {
             if (!anyFilled) break;
         }
         return current;
-    }
-
-    /**
-     * Tests whether a triangle overlaps an axis-aligned voxel box using the
-     * Separating Axis Theorem (SAT). Tests 13 candidate separating axes:
-     * 3 AABB face normals, 1 triangle face normal, and 9 edge cross-products.
-     *
-     * @param tri the triangle
-     * @param cx  voxel center X
-     * @param cy  voxel center Y
-     * @param cz  voxel center Z
-     * @param hx  voxel half-extent on X
-     * @param hy  voxel half-extent on Y
-     * @param hz  voxel half-extent on Z
-     * @return true if the triangle overlaps the voxel
-     */
-    private static boolean triangleOverlapsVoxel(
-        Triangle tri,
-        double cx, double cy, double cz,
-        double hx, double hy, double hz
-    ) {
-        // Translate triangle vertices so AABB is centered at origin
-        double v0x = tri.v1().x() - cx, v0y = tri.v1().y() - cy, v0z = tri.v1().z() - cz;
-        double v1x = tri.v2().x() - cx, v1y = tri.v2().y() - cy, v1z = tri.v2().z() - cz;
-        double v2x = tri.v3().x() - cx, v2y = tri.v3().y() - cy, v2z = tri.v3().z() - cz;
-
-        // Axes 1–3: AABB face normals (coordinate axes)
-        if (separatingOnAxis(v0x, v1x, v2x, hx)) return false;
-        if (separatingOnAxis(v0y, v1y, v2y, hy)) return false;
-        if (separatingOnAxis(v0z, v1z, v2z, hz)) return false;
-
-        double e0x = v1x - v0x, e0y = v1y - v0y, e0z = v1z - v0z;
-        double e1x = v2x - v1x, e1y = v2y - v1y, e1z = v2z - v1z;
-        double e2x = v0x - v2x, e2y = v0y - v2y, e2z = v0z - v2z;
-
-        // Axis 4: triangle face normal  n = e0 × (v2 - v0)
-        double nx = e0y * (v2z - v0z) - e0z * (v2y - v0y);
-        double ny = e0z * (v2x - v0x) - e0x * (v2z - v0z);
-        double nz = e0x * (v2y - v0y) - e0y * (v2x - v0x);
-        double d = nx * v0x + ny * v0y + nz * v0z;
-        double rn = hx * Math.abs(nx) + hy * Math.abs(ny) + hz * Math.abs(nz);
-        if (d > rn || d < -rn) return false;
-
-        // Axes 5–13: 9 edge × AABB-axis cross products
-        // e × X = (0, ez, -ey);  e × Y = (-ez, 0, ex);  e × Z = (ey, -ex, 0)
-        if (axisEdgeCrossX(v0y, v0z, v1y, v1z, v2y, v2z, e0y, e0z, hy, hz)) return false;
-        if (axisEdgeCrossY(v0x, v0z, v1x, v1z, v2x, v2z, e0x, e0z, hx, hz)) return false;
-        if (axisEdgeCrossZ(v0x, v0y, v1x, v1y, v2x, v2y, e0x, e0y, hx, hy)) return false;
-
-        if (axisEdgeCrossX(v0y, v0z, v1y, v1z, v2y, v2z, e1y, e1z, hy, hz)) return false;
-        if (axisEdgeCrossY(v0x, v0z, v1x, v1z, v2x, v2z, e1x, e1z, hx, hz)) return false;
-        if (axisEdgeCrossZ(v0x, v0y, v1x, v1y, v2x, v2y, e1x, e1y, hx, hy)) return false;
-
-        if (axisEdgeCrossX(v0y, v0z, v1y, v1z, v2y, v2z, e2y, e2z, hy, hz)) return false;
-        if (axisEdgeCrossY(v0x, v0z, v1x, v1z, v2x, v2z, e2x, e2z, hx, hz)) return false;
-        if (axisEdgeCrossZ(v0x, v0y, v1x, v1y, v2x, v2y, e2x, e2y, hx, hy)) return false;
-
-        return true;
-    }
-
-    /** Returns true if the AABB interval [-h, h] does not overlap the triangle's projection. */
-    private static boolean separatingOnAxis(double p0, double p1, double p2, double h) {
-        return Math.min(p0, Math.min(p1, p2)) > h || Math.max(p0, Math.max(p1, p2)) < -h;
-    }
-
-    /** SAT test for axis = e × X = (0, ez, -ey); r = hy|ez| + hz|ey|. */
-    private static boolean axisEdgeCrossX(
-        double v0y, double v0z, double v1y, double v1z, double v2y, double v2z,
-        double ey, double ez, double hy, double hz
-    ) {
-        double p0 = ez * v0y - ey * v0z;
-        double p1 = ez * v1y - ey * v1z;
-        double p2 = ez * v2y - ey * v2z;
-        double r = hy * Math.abs(ez) + hz * Math.abs(ey);
-        return Math.min(p0, Math.min(p1, p2)) > r || Math.max(p0, Math.max(p1, p2)) < -r;
-    }
-
-    /** SAT test for axis = e × Y = (-ez, 0, ex); r = hx|ez| + hz|ex|. */
-    private static boolean axisEdgeCrossY(
-        double v0x, double v0z, double v1x, double v1z, double v2x, double v2z,
-        double ex, double ez, double hx, double hz
-    ) {
-        double p0 = -ez * v0x + ex * v0z;
-        double p1 = -ez * v1x + ex * v1z;
-        double p2 = -ez * v2x + ex * v2z;
-        double r = hx * Math.abs(ez) + hz * Math.abs(ex);
-        return Math.min(p0, Math.min(p1, p2)) > r || Math.max(p0, Math.max(p1, p2)) < -r;
-    }
-
-    /** SAT test for axis = e × Z = (ey, -ex, 0); r = hx|ey| + hy|ex|. */
-    private static boolean axisEdgeCrossZ(
-        double v0x, double v0y, double v1x, double v1y, double v2x, double v2y,
-        double ex, double ey, double hx, double hy
-    ) {
-        double p0 = ey * v0x - ex * v0y;
-        double p1 = ey * v1x - ex * v1y;
-        double p2 = ey * v2x - ex * v2y;
-        double r = hx * Math.abs(ey) + hy * Math.abs(ex);
-        return Math.min(p0, Math.min(p1, p2)) > r || Math.max(p0, Math.max(p1, p2)) < -r;
     }
 
     private static Bounds computeMeshBounds(Mesh mesh) {

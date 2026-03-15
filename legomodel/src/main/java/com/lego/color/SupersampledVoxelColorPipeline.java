@@ -9,8 +9,10 @@ import com.lego.color.LegoPaletteMapper.PaletteEntry;
 import com.lego.color.UVLabPaletteProjection.LightnessStats;
 import com.lego.mesh.TexturedTriangle;
 import com.lego.model.Brick;
+import com.lego.model.ColorMath;
 import com.lego.model.ColorRgb;
 import com.lego.model.Mesh;
+import com.lego.model.VoxelKey;
 import com.lego.voxel.VoxelGrid;
 
 /**
@@ -65,7 +67,7 @@ public final class SupersampledVoxelColorPipeline implements ColorStrategy {
         for (Map.Entry<Brick, ColorRgb> e : brickColors.entrySet()) {
             ColorRgb rgb = e.getValue();
             double[] lab = LegoPaletteMapper.linearRgbToLab(rgb.r(), rgb.g(), rgb.b());
-            result.put(e.getKey(), nearestCiede2000(lab[0], lab[1], lab[2], entries));
+            result.put(e.getKey(), LegoPaletteMapper.nearestCiede2000(lab[0], lab[1], lab[2], entries, KL));
         }
         return result;
     }
@@ -105,7 +107,7 @@ public final class SupersampledVoxelColorPipeline implements ColorStrategy {
             for (int bx = brick.x(); bx < brick.maxX(); bx++) {
                 for (int by = brick.y(); by < brick.maxY(); by++) {
                     for (int bz = brick.z(); bz < brick.maxZ(); bz++) {
-                        voxelToBrick.put(voxelKey(bx, by, bz), brick);
+                        voxelToBrick.put(VoxelKey.pack(bx, by, bz), brick);
                     }
                 }
             }
@@ -128,7 +130,7 @@ public final class SupersampledVoxelColorPipeline implements ColorStrategy {
                 for (int z = 0; z < resolution; z++) {
                     if (!surface.isFilled(x, y, z)) continue;
 
-                    Brick brick = voxelToBrick.get(voxelKey(x, y, z));
+                    Brick brick = voxelToBrick.get(VoxelKey.pack(x, y, z));
                     if (brick == null) continue;
 
                     for (double[] offset : sampleOffsets) {
@@ -167,7 +169,7 @@ public final class SupersampledVoxelColorPipeline implements ColorStrategy {
         // correctly votes Black instead of averaging to muddy brown.
         Map<Brick, Map<Integer, Integer>> brickVotes = new HashMap<>();
         for (SampleLab sl : allSamples) {
-            int code = nearestCiede2000(sl.lab[0], sl.lab[1], sl.lab[2], entries);
+            int code = LegoPaletteMapper.nearestCiede2000(sl.lab[0], sl.lab[1], sl.lab[2], entries, KL);
             brickVotes.computeIfAbsent(sl.brick, k -> new HashMap<>())
                       .merge(code, 1, Integer::sum);
         }
@@ -246,9 +248,9 @@ public final class SupersampledVoxelColorPipeline implements ColorStrategy {
             ColorRgb texColor = sampleTextureBilinear(tt.texture(), uv[0], uv[1]);
             if (texColor != null && tt.materialColor() != null) {
                 return new ColorRgb(
-                    clamp01(texColor.r() * tt.materialColor().r()),
-                    clamp01(texColor.g() * tt.materialColor().g()),
-                    clamp01(texColor.b() * tt.materialColor().b())
+                    ColorMath.clamp01(texColor.r() * tt.materialColor().r()),
+                    ColorMath.clamp01(texColor.g() * tt.materialColor().g()),
+                    ColorMath.clamp01(texColor.b() * tt.materialColor().b())
                 );
             }
             return texColor;
@@ -305,7 +307,7 @@ public final class SupersampledVoxelColorPipeline implements ColorStrategy {
         float g = lerp(lerp(c00[1], c10[1], fracX), lerp(c01[1], c11[1], fracX), fracY);
         float b = lerp(lerp(c00[2], c10[2], fracX), lerp(c01[2], c11[2], fracX), fracY);
 
-        return new ColorRgb(clamp01(r), clamp01(g), clamp01(b));
+        return new ColorRgb(ColorMath.clamp01(r), ColorMath.clamp01(g), ColorMath.clamp01(b));
     }
 
     private static int wrapPixel(int p, int size) {
@@ -319,49 +321,19 @@ public final class SupersampledVoxelColorPipeline implements ColorStrategy {
         float sG = ((argb >>  8) & 0xFF) / 255f;
         float sB = ( argb        & 0xFF) / 255f;
         return new float[] {
-            (float) srgbToLinear(sR),
-            (float) srgbToLinear(sG),
-            (float) srgbToLinear(sB)
+            (float) ColorMath.srgbToLinear(sR),
+            (float) ColorMath.srgbToLinear(sG),
+            (float) ColorMath.srgbToLinear(sB)
         };
-    }
-
-    private static double srgbToLinear(double c) {
-        return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
     }
 
     private static float lerp(float a, float b, float t) {
         return a + t * (b - a);
     }
 
-    private static float clamp01(float v) {
-        return Math.max(0f, Math.min(1f, v));
-    }
-
     // ------------------------------------------------------------------ //
     //  Utilities
     // ------------------------------------------------------------------ //
 
-    private static long voxelKey(int x, int y, int z) {
-        return ((long) x << 40) | ((long) y << 20) | z;
-    }
-
     private static final double KL = 1.5;
-
-    private static int nearestCiede2000(double l, double a, double b,
-                                         List<PaletteEntry> entries) {
-        PaletteEntry best = null;
-        double bestDist = Double.MAX_VALUE;
-        for (PaletteEntry entry : entries) {
-            double dist = LegoPaletteMapper.deltaE2000(l, a, b,
-                entry.labL(), entry.labA(), entry.labB(), KL);
-            if (dist < bestDist) {
-                bestDist = dist;
-                best = entry;
-            }
-        }
-        if (best == null) {
-            throw new IllegalStateException("No opaque palette entries available");
-        }
-        return best.ldrawCode();
-    }
 }

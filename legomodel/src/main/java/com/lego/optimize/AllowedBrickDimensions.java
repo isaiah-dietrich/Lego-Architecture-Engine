@@ -6,6 +6,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import com.lego.data.CatalogPartRepository;
 import com.lego.data.CuratedCatalogLoader;
 import com.lego.model.CatalogPart;
 
@@ -119,12 +120,37 @@ public final class AllowedBrickDimensions {
     }
 
     /**
+     * Loads allowed brick specs from the given repository.
+     *
+     * @param repository catalog part data source
+     * @return list of allowed brick specs in placement priority order
+     * @throws IllegalStateException if repository contains no valid specs
+     */
+    public static List<BrickSpec> loadFromRepository(CatalogPartRepository repository) {
+        return extractSpecs(repository.findActiveParts());
+    }
+
+    /**
+     * Pure transformer: derives brick specs from pre-loaded catalog parts.
+     * No file I/O — callers are responsible for loading parts.
+     *
+     * @param activeParts active catalog parts
+     * @return list of allowed brick specs in placement priority order
+     * @throws IllegalStateException if no valid specs can be derived
+     */
+    public static List<BrickSpec> fromParts(List<CatalogPart> activeParts) {
+        return extractSpecs(activeParts);
+    }
+
+    /**
      * Loads allowed brick specs from the curated catalog.
      * Returns specs sorted by placement priority (largest area first).
      * 
      * @return list of allowed brick specs in placement priority order
      * @throws IllegalStateException if catalog cannot be loaded or contains no valid specs
+     * @deprecated Use {@link #fromParts(List)} or {@link #loadFromRepository(CatalogPartRepository)}.
      */
+    @Deprecated
     public static List<BrickSpec> loadFromCatalog() {
         //Smallest brick located at the end of the array
         List<CatalogPart> activeParts = CuratedCatalogLoader.loadActiveParts();
@@ -138,7 +164,9 @@ public final class AllowedBrickDimensions {
      * @param baseDir base directory to resolve catalog from
      * @return list of allowed brick specs in placement priority order
      * @throws IllegalStateException if catalog cannot be loaded or contains no valid specs
+     * @deprecated Use {@link #fromParts(List)} or {@link #loadFromRepository(CatalogPartRepository)}.
      */
+    @Deprecated
     public static List<BrickSpec> loadFromCatalog(Path baseDir) {
         List<CatalogPart> activeParts = CuratedCatalogLoader.loadActiveParts(baseDir);
         return extractSpecs(activeParts);

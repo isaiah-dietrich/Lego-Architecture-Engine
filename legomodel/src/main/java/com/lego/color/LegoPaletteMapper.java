@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
+import com.lego.model.ColorMath;
 import com.lego.model.ColorRgb;
 
 /**
@@ -368,10 +369,7 @@ public final class LegoPaletteMapper {
 
     /** sRGB gamma-encoded [0,1] → linear [0,1]. */
     static double srgbToLinear(double c) {
-        if (c <= 0.04045) {
-            return c / 12.92;
-        }
-        return Math.pow((c + 0.055) / 1.055, 2.4);
+        return ColorMath.srgbToLinear(c);
     }
 
     /** Linear RGB [0,1] → CIE L*a*b* (D65 illuminant). */
@@ -402,5 +400,29 @@ public final class LegoPaletteMapper {
             return Math.cbrt(t);
         }
         return t / (3 * delta * delta) + 4.0 / 29.0;
+    }
+
+    /**
+     * Finds the nearest opaque palette entry using CIEDE2000 with a custom
+     * lightness weight (kL). All three duplicate call sites now share this.
+     *
+     * @return the LDraw color code of the nearest palette entry
+     */
+    public static int nearestCiede2000(double l, double a, double b,
+                                       List<PaletteEntry> entries, double kL) {
+        PaletteEntry best = null;
+        double bestDist = Double.MAX_VALUE;
+        for (PaletteEntry entry : entries) {
+            double dist = deltaE2000(l, a, b,
+                entry.labL(), entry.labA(), entry.labB(), kL);
+            if (dist < bestDist) {
+                bestDist = dist;
+                best = entry;
+            }
+        }
+        if (best == null) {
+            throw new IllegalStateException("No opaque palette entries available");
+        }
+        return best.ldrawCode();
     }
 }

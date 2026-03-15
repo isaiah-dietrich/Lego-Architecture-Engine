@@ -140,7 +140,7 @@ public final class UVLabPaletteProjection implements ColorStrategy {
 
         for (Map.Entry<Brick, double[]> entry : brickLab.entrySet()) {
             double[] lab = entry.getValue();
-            int code = nearestCiede2000(lab[0], lab[1], lab[2], entries);
+            int code = LegoPaletteMapper.nearestCiede2000(lab[0], lab[1], lab[2], entries, KL);
             result.put(entry.getKey(), code);
         }
 
@@ -272,27 +272,4 @@ public final class UVLabPaletteProjection implements ColorStrategy {
      * wrong-hue palette entries that happen to have similar darkness.
      */
     static final double KL = 1.5;
-
-    /**
-     * Finds the nearest palette entry using CIEDE2000 distance with
-     * a lightness de-weight (kL={@value #KL}) to prioritize hue fidelity.
-     */
-    static int nearestCiede2000(double l, double a, double b, List<PaletteEntry> entries) {
-        PaletteEntry best = null;
-        double bestDist = Double.MAX_VALUE;
-
-        for (PaletteEntry entry : entries) {
-            double dist = LegoPaletteMapper.deltaE2000(l, a, b,
-                entry.labL(), entry.labA(), entry.labB(), KL);
-            if (dist < bestDist) {
-                bestDist = dist;
-                best = entry;
-            }
-        }
-
-        if (best == null) {
-            throw new IllegalStateException("No opaque palette entries available for matching");
-        }
-        return best.ldrawCode();
-    }
 }

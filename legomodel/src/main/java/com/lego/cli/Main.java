@@ -1,56 +1,29 @@
 package com.lego.cli;
 
-import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Path;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
-import com.lego.color.ColorSampler;
-import com.lego.color.ColorSmoother;
-import com.lego.color.ColorStrategy;
 import com.lego.color.ColorStrategyRegistry;
-import com.lego.color.DominantVoteStrategy;
-import com.lego.color.LegoPaletteMapper;
-import com.lego.color.SupersampledVoxelColorPipeline;
-import com.lego.export.BrickObjExporter;
-import com.lego.export.LDrawExporter;
-import com.lego.export.VoxelObjExporter;
+import com.lego.data.CatalogPartRepository;
+import com.lego.data.CsvCatalogPartRepository;
+import com.lego.data.CsvPaletteRepository;
+import com.lego.data.PaletteRepository;
 import com.lego.mesh.GlbLoader;
-import com.lego.mesh.LoadedModel;
-import com.lego.mesh.MeshNormalizer;
 import com.lego.mesh.ModelLoader;
 import com.lego.mesh.ObjModelLoader;
-import com.lego.model.Brick;
-import com.lego.model.ColorRgb;
-import com.lego.model.Mesh;
-import com.lego.model.Triangle;
-import com.lego.optimize.AllowedBrickDimensions;
-import com.lego.optimize.BrickPlacer;
-import com.lego.optimize.GreedyAreaPolicy;
-import com.lego.optimize.PlacementPolicy;
-import com.lego.optimize.ScoringPlacementPolicy;
-import com.lego.voxel.SurfaceExtractor;
-import com.lego.voxel.VoxelGrid;
-import com.lego.voxel.VoxelSteppingAnalyzer;
-import com.lego.voxel.VoxelSteppingAnalyzer.AnalysisMetadata;
-import com.lego.voxel.VoxelSteppingAnalyzer.ResolutionSweepResult;
-import com.lego.voxel.VoxelSteppingAnalyzer.VoxelSteppingMetrics;
 import com.lego.voxel.VoxelizationStrategy;
-import com.lego.voxel.Voxelizer;
 
 /**
  * Command-line entry point for the LEGO Architecture Engine.
+ *
+ * <p>This class is a thin composition root: it parses arguments, validates them,
+ * builds a {@link PipelineRequest}, and delegates execution to
+ * {@link PipelineRunner}.</p>
  */
 public final class Main {
 
-    private Main() {
-        // Utility class, prevent instantiation
-    }
+    private Main() {}
 
     public static void main(String[] args) {
         int exitCode = run(args, System.out, System.err);
@@ -63,40 +36,28 @@ public final class Main {
         return run(args, out, err, null);
     }
 
-    /**
-     * Internal overload for testing: accepts optional catalog base directory.
-     * When baseDir is null, uses default catalog location.
-     * 
-     * @param args command-line arguments
-     * @param out output stream for normal messages
-     * @param err output stream for errors
-     * @param catalogBaseDir optional base directory for catalog loading (test-only)
-     * @return exit code
-     */
     static int run(String[] args, PrintStream out, PrintStream err, Path catalogBaseDir) {
         if (args == null) {
-            printUsage(err);
+            OutputReporter.printUsage(err);
             return 1;
         }
 
-        // Handle --help / -h before full parsing
         for (String arg : args) {
             if ("--help".equals(arg) || "-h".equals(arg)) {
-                printUsage(out);
+                OutputReporter.printUsage(out);
                 return 0;
             }
         }
 
         ParsedOptions parsedOptions;
         try {
-            parsedOptions = parseCliOptions(args);
+            parsedOptions = CliOptionsParser.parse(args);
         } catch (IllegalArgumentException e) {
             err.println("Error: " + e.getMessage());
-            printUsage(err);
+            OutputReporter.printUsage(err);
             return 1;
         }
 
-        // Handle --color-algorithm=list early (no positional args required)
         ColorStrategyRegistry strategyRegistry = ColorStrategyRegistry.createDefault();
         if ("list".equals(parsedOptions.colorAlgorithm())) {
             out.println("Available color algorithms:");
@@ -107,14 +68,43 @@ public final class Main {
             return 0;
         }
 
-        List<String> positional = parsedOptions.positionalArgs();
-        if (positional.size() < 2 || positional.size() > 5) {
-            printUsage(err);
+        // Validate positional arguments and build PipelineRequest
+        PipelineRequest request;
+        try {
+            request = buildRequest(parsedOptions, strategyRegistry, catalogBaseDir, err);
+        } catch (IllegalArgumentException e) {
+            err.println("Error: " + e.getMessage());
+            OutputReporter.printUsage(err);
             return 1;
         }
+        if (request == null) {
+            return 1; // error already printed
+        }
 
-        Path objPath = Path.of(positional.get(0));
-        Path outputObjPath = positional.size() >= 3 ? Path.of(positional.get(2)) : null;
+        ModelLoader loader = resolveLoader(request.modelPath());
+        CatalogPartRepository catalogRepository = catalogBaseDir != null
+            ? new CsvCatalogPartRepository(catalogBaseDir)
+            : new CsvCatalogPartRepository();
+        PaletteRepository paletteRepository = catalogBaseDir != null
+            ? new CsvPaletteRepository(catalogBaseDir.resolve("raw/rebrickable/colors.csv"))
+            : new CsvPaletteRepository();
+        return PipelineRunner.run(request, loader, strategyRegistry, catalogRepository, paletteRepository, out, err);
+    }
+
+    private static PipelineRequest buildRequest(
+        ParsedOptions opts,
+        ColorStrategyRegistry strategyRegistry,
+        Path catalogBaseDir,
+        PrintStream err
+    ) {
+        List<String> positional = opts.positionalArgs();
+        if (positional.size() < 2 || positional.size() > 5) {
+            OutputReporter.printUsage(err);
+            return null;
+        }
+
+        Path modelPath = Path.of(positional.get(0));
+        Path outputPath = positional.size() >= 3 ? Path.of(positional.get(2)) : null;
 
         String exportMode = "brick";
         String voxelizerModeArg = "topological";
@@ -127,7 +117,6 @@ public final class Main {
                 exportMode = arg3;
             }
         }
-
         if (positional.size() == 5) {
             voxelizerModeArg = positional.get(4);
         }
@@ -137,14 +126,13 @@ public final class Main {
             resolution = Integer.parseInt(positional.get(1));
         } catch (NumberFormatException e) {
             err.println("Error: resolution must be an integer.");
-            printUsage(err);
-            return 1;
+            OutputReporter.printUsage(err);
+            return null;
         }
-
         if (resolution < 2) {
             err.println("Error: resolution must be >= 2.");
-            printUsage(err);
-            return 1;
+            OutputReporter.printUsage(err);
+            return null;
         }
 
         if (!exportMode.equals("brick")
@@ -152,8 +140,8 @@ public final class Main {
             && !exportMode.equals("voxel-solid")
             && !exportMode.equals("ldraw")) {
             err.println("Error: export mode must be 'brick', 'voxel-surface', 'voxel-solid', or 'ldraw'.");
-            printUsage(err);
-            return 1;
+            OutputReporter.printUsage(err);
+            return null;
         }
 
         VoxelizationStrategy voxelizationStrategy;
@@ -161,263 +149,43 @@ public final class Main {
             voxelizationStrategy = VoxelizationStrategy.fromCliValue(voxelizerModeArg);
         } catch (IllegalArgumentException e) {
             err.println("Error: " + e.getMessage());
-            printUsage(err);
-            return 1;
+            OutputReporter.printUsage(err);
+            return null;
         }
 
-        String colorMode = parsedOptions.colorMode();
-        int colorFallback = parsedOptions.colorFallback();
-        String colorAlgorithm = parsedOptions.colorAlgorithm();
-
-        // Validate color algorithm name early (before expensive mesh processing)
+        String colorAlgorithm = opts.colorAlgorithm();
         if (!strategyRegistry.availableNames().contains(colorAlgorithm.toLowerCase())) {
             err.println("Error: Unknown color algorithm: '" + colorAlgorithm
                 + "'. Available: " + strategyRegistry.availableNames());
-            return 1;
+            return null;
         }
 
-        // Validate: --color-mode=glb-color with .obj input is an error
-        if ("glb-color".equals(colorMode)) {
-            String filename = objPath.getFileName().toString().toLowerCase();
+        if ("glb-color".equals(opts.colorMode())) {
+            String filename = modelPath.getFileName().toString().toLowerCase();
             if (filename.endsWith(".obj")) {
                 err.println("Error: --color-mode=glb-color is not supported with .obj input. OBJ files have no color channel.");
-                return 1;
+                return null;
             }
         }
 
-        try {
-            ModelLoader loader = resolveLoader(objPath);
-            LoadedModel loaded = loader.load(objPath);
-            Mesh mesh = loaded.mesh();
-            Mesh normalized = MeshNormalizer.normalize(mesh, resolution);
-            VoxelGrid solid = Voxelizer.voxelize(normalized, resolution, voxelizationStrategy);
-
-            // Topological mode produces surface-only grid; legacy mode requires surface extraction.
-            VoxelGrid surface = (voxelizationStrategy == VoxelizationStrategy.TOPOLOGICAL_SURFACE)
-                ? solid
-                : SurfaceExtractor.extractSurface(solid);
-            
-            // Resolve placement policy
-            PlacementPolicy placementPolicy = resolvePolicy(parsedOptions.placementPolicy());
-
-            // Color-aware scoring: sample voxel colors before placement so the
-            // scoring policy can prefer smaller bricks at color boundaries.
-            if (placementPolicy instanceof ScoringPlacementPolicy
-                    && "glb-color".equals(colorMode)
-                    && loaded.colorMap().isPresent()) {
-                ColorRgb[][][] voxelColors = ColorSampler.sampleVoxelColorGrid(
-                    mesh, normalized, loaded.colorMap().get(), surface, resolution);
-                placementPolicy = new ScoringPlacementPolicy(voxelColors);
-            }
-
-            // Load dimensions from catalog (test-friendly with optional base dir)
-            var allowedDims = catalogBaseDir != null
-                ? AllowedBrickDimensions.loadFromCatalog(catalogBaseDir)
-                : AllowedBrickDimensions.loadFromCatalog();
-            List<Brick> bricks = BrickPlacer.placeBricks(surface, allowedDims, placementPolicy);
-
-            int triangleCount = mesh.triangleCount();
-            int totalVoxels = resolution * resolution * resolution;
-            int surfaceVoxels = surface.countFilledVoxels();
-            int brickCount = bricks.size();
-
-            out.println("Triangles: " + triangleCount);
-            out.println("Resolution: " + resolution + "x" + resolution + "x" + resolution);
-            out.println("Total voxels: " + totalVoxels);
-            out.println("Filled voxels (solid): " + solid.countFilledVoxels());
-            out.println("Surface voxels: " + surfaceVoxels);
-            out.println("Bricks generated: " + brickCount + " (policy=" + placementPolicy.name() + ")");
-
-            // Print block type summary
-            printBlockTypeSummary(bricks, allowedDims, out);
-
-            if (surfaceVoxels > 0) {
-                double reductionPercent = 100.0 * (surfaceVoxels - brickCount) / surfaceVoxels;
-                out.printf("Reduction: %.1f%% (%d voxels -> %d bricks)%n",
-                    reductionPercent, surfaceVoxels, brickCount);
-            }
-
-            if (outputObjPath != null) {
-                try {
-                    switch (exportMode) {
-                        case "brick":
-                            BrickObjExporter.export(bricks, outputObjPath);
-                            out.println("Visual OBJ exported (brick): " + outputObjPath.toAbsolutePath());
-                            break;
-                        case "voxel-surface":
-                            VoxelObjExporter.export(surface, outputObjPath);
-                            out.println("Visual OBJ exported (voxel-surface): " + outputObjPath.toAbsolutePath());
-                            break;
-                        case "voxel-solid":
-                            VoxelObjExporter.export(solid, outputObjPath);
-                            out.println("Visual OBJ exported (voxel-solid): " + outputObjPath.toAbsolutePath());
-                            break;
-                        case "ldraw":
-                            Map<Brick, Integer> brickColorCodes = null;
-                            LegoPaletteMapper palette = null;
-                            if ("glb-color".equals(colorMode) && loaded.colorMap().isPresent()) {
-                                Map<Triangle, ColorRgb> triColorMap = loaded.colorMap().get();
-                                palette = catalogBaseDir != null
-                                    ? LegoPaletteMapper.load(catalogBaseDir.resolve("raw/rebrickable/colors.csv"))
-                                    : LegoPaletteMapper.loadDefault();
-                                ColorStrategy strategy = strategyRegistry.get(colorAlgorithm);
-                                int coloredCount;
-
-                                // Supersampled pipeline: BVH + per-sample texture lookup
-                                if (strategy instanceof SupersampledVoxelColorPipeline supersampledPipeline
-                                        && loaded.texturedTriangles().isPresent()) {
-                                    brickColorCodes = supersampledPipeline.colorize(
-                                        normalized, loaded.texturedTriangles().get(),
-                                        surface, bricks, resolution, palette, 64);
-                                    coloredCount = brickColorCodes.size();
-                                // Dominant vote strategy uses per-voxel colors (no averaging)
-                                } else if (strategy instanceof DominantVoteStrategy dominantStrategy) {
-                                    Map<Brick, java.util.List<ColorRgb>> brickVoxelColors =
-                                        ColorSampler.sampleBrickVoxelColors(
-                                            mesh, normalized, triColorMap, surface, bricks, resolution
-                                        );
-                                    brickColorCodes = dominantStrategy.applyWithVoxelColors(brickVoxelColors, palette);
-                                    coloredCount = brickVoxelColors.size();
-                                } else {
-                                    Map<Brick, ColorRgb> brickRgbColors = ColorSampler.sampleBrickColors(
-                                        mesh, normalized, triColorMap, surface, bricks, resolution
-                                    );
-                                    brickColorCodes = strategy.apply(brickRgbColors, palette);
-                                    coloredCount = brickRgbColors.size();
-                                }
-
-                                // Apply fallback for bricks without color
-                                if (colorFallback >= 0) {
-                                    for (Brick brick : bricks) {
-                                        brickColorCodes.putIfAbsent(brick, colorFallback);
-                                    }
-                                }
-                                // Spatial smoothing: eliminate isolated outlier colors
-                                // Skip smoothing for "direct" strategy to give raw unprocessed output
-                                int smoothed = 0;
-                                if (!"direct".equals(strategy.name())) {
-                                    smoothed = ColorSmoother.smoothIterative(brickColorCodes, bricks, 3, palette);
-                                }
-                                out.println("Color mode: glb-color (" + coloredCount
-                                    + "/" + bricks.size() + " bricks colored, "
-                                    + palette.opaqueEntryCount() + " opaque palette entries"
-                                    + ", algorithm=" + strategy.name()
-                                    + (smoothed > 0 ? ", " + smoothed + " smoothed" : "") + ")");
-                            }
-                            LDrawExporter.export(bricks, outputObjPath, catalogBaseDir, brickColorCodes);
-                            out.println("LDraw exported: " + outputObjPath.toAbsolutePath());
-                            
-                            if (parsedOptions.colorList()) {
-                                printColorList(brickColorCodes, palette, out);
-                            }
-                            break;
-                    }
-                } catch (IOException e) {
-                    err.println("Error: failed to write output file: " + e.getMessage());
-                    return 1;
-                }
-            }
-
-            if (parsedOptions.analyzeStepping()) {
-                Path analysisDir = resolveAnalysisDir(parsedOptions.analysisDir(), outputObjPath);
-                try {
-                    if (!parsedOptions.sweepResolutions().isEmpty()) {
-                        ResolutionSweepResult sweepResult = VoxelSteppingAnalyzer.runResolutionSweep(
-                            mesh,
-                            objPath,
-                            parsedOptions.sweepResolutions(),
-                            voxelizationStrategy,
-                            exportMode,
-                            parsedOptions.largeJumpThreshold()
-                        );
-
-                        for (VoxelSteppingAnalyzer.SweepEntry entry : sweepResult.entries()) {
-                            Path perResolutionDir = analysisDir.resolve("resolution_" + entry.resolution());
-                            VoxelSteppingAnalyzer.writeMetricsJson(
-                                entry.metrics(),
-                                perResolutionDir.resolve("stepping_metrics.json")
-                            );
-                            VoxelSteppingAnalyzer.writeLayersCsv(
-                                entry.metrics(),
-                                perResolutionDir.resolve("stepping_layers.csv")
-                            );
-                        }
-
-                        VoxelSteppingAnalyzer.writeSweepJson(sweepResult, analysisDir.resolve("stepping_sweep.json"));
-                        VoxelSteppingAnalyzer.writeSweepCsv(sweepResult, analysisDir.resolve("stepping_sweep.csv"));
-                        out.println("Stepping analysis sweep exported: " + analysisDir.toAbsolutePath());
-                    } else {
-                        AnalysisMetadata metadata = new AnalysisMetadata(
-                            objPath.toString(),
-                            resolution,
-                            voxelizationStrategy.cliValue(),
-                            exportMode,
-                            Instant.now().toString()
-                        );
-                        VoxelSteppingMetrics metrics = VoxelSteppingAnalyzer.analyze(
-                            solid,
-                            surface,
-                            metadata,
-                            parsedOptions.largeJumpThreshold()
-                        );
-
-                        VoxelSteppingAnalyzer.writeMetricsJson(metrics, analysisDir.resolve("stepping_metrics.json"));
-                        VoxelSteppingAnalyzer.writeLayersCsv(metrics, analysisDir.resolve("stepping_layers.csv"));
-                        out.println("Stepping analysis exported: " + analysisDir.toAbsolutePath());
-                    }
-                } catch (IOException e) {
-                    err.println("Error: failed to write stepping analysis files: " + e.getMessage());
-                    return 1;
-                }
-            }
-
-            return 0;
-        } catch (IOException e) {
-            err.println("Error: failed to read OBJ file: " + e.getMessage());
-            return 1;
-        } catch (IllegalArgumentException e) {
-            err.println("Error: " + e.getMessage());
-            return 1;
-        } catch (UnsupportedOperationException e) {
-            err.println("Error: " + e.getMessage());
-            return 1;
-        }
+        return new PipelineRequest(
+            modelPath,
+            resolution,
+            outputPath,
+            exportMode,
+            voxelizationStrategy,
+            opts.colorMode(),
+            opts.colorFallback(),
+            opts.colorList(),
+            colorAlgorithm,
+            opts.placementPolicy(),
+            opts.analyzeStepping(),
+            opts.analysisDir(),
+            opts.largeJumpThreshold(),
+            opts.sweepResolutions()
+        );
     }
 
-    private static void printUsage(PrintStream err) {
-        err.println("Usage: java -jar legomodel.jar <modelPath> <resolution> [outputObjPath] [exportMode] [voxelizerMode] [options]");
-        err.println("  modelPath: path to a .obj or .glb model file");
-        err.println("  resolution: voxel grid resolution (integer >= 2)");
-        err.println("  outputObjPath: path for the exported output file");
-        err.println("  exportMode: 'brick' (default), 'voxel-surface', 'voxel-solid', or 'ldraw'");
-        err.println("  voxelizerMode: 'topological' (default) or 'legacy'");
-        err.println("  options:");
-        err.println("    -h, --help                     Show this help message and exit");
-        err.println("    --analyze-stepping             Write stepping analysis files");
-        err.println("    --analysis-dir=<path>          Output directory for analysis artifacts");
-        err.println("    --jump-threshold=<int>         Large jump threshold (default: 25)");
-        err.println("    --sweep=<r1,r2,...>            Analyze multiple resolutions (e.g., 10,20,30)");
-        err.println("    --color-mode=<mode>            Color mode: 'none' (default) or 'glb-color'");
-        err.println("    --color-fallback=<code>        LDraw color code for bricks without sampled color");
-        err.println("    --color-list                   Output list of unique color codes used in LDraw export");
-        err.println("    --color-algorithm=<name>       Color mapping algorithm (default: direct). Use 'list' to see all.");
-        err.println("    --placement-policy=<name>      Brick placement policy: 'scoring' (default) or 'greedy-area'");
-    }
-
-    /**
-     * Selects the appropriate {@link ModelLoader} for the given model path based on file extension.
-     *
-     * <p>Supported extensions:
-     * <ul>
-     *   <li>{@code .obj} — uses {@link ObjModelLoader}</li>
-     *   <li>{@code .glb} — uses {@link GlbLoader}</li>
-     *   <li>{@code .gltf} — rejected with a clear error (convert to {@code .glb})</li>
-     * </ul>
-     *
-     * @param path the model file path
-     * @return the appropriate loader
-     * @throws IllegalArgumentException for unsupported or rejected extensions
-     */
     private static ModelLoader resolveLoader(Path path) {
         String name = path.getFileName().toString().toLowerCase();
         if (name.endsWith(".gltf")) {
@@ -428,190 +196,6 @@ public final class Main {
         if (name.endsWith(".glb")) {
             return new GlbLoader();
         }
-        // Default: treat as .obj
         return new ObjModelLoader();
     }
-
-    private static PlacementPolicy resolvePolicy(String name) {
-        return switch (name.toLowerCase()) {
-            case "scoring" -> new ScoringPlacementPolicy();
-            case "greedy-area" -> new GreedyAreaPolicy();
-            default -> throw new IllegalArgumentException(
-                "Unknown placement policy: '" + name + "'. Use 'scoring' or 'greedy-area'."
-            );
-        };
-    }
-
-    private static ParsedOptions parseCliOptions(String[] args) {
-        List<String> positional = new ArrayList<>();
-        boolean analyzeStepping = false;
-        Path analysisDir = null;
-        int jumpThreshold = 25;
-        List<Integer> sweepResolutions = new ArrayList<>();
-        String colorMode = "none";
-        int colorFallback = -1; // -1 = no fallback (use default color 16)
-        boolean colorList = false;
-        String colorAlgorithm = "direct";
-        String placementPolicy = "scoring";
-
-        for (int i = 0; i < args.length; i++) {
-            String arg = args[i];
-            if ("--analyze-stepping".equals(arg)) {
-                analyzeStepping = true;
-            } else if (arg.startsWith("--analysis-dir=")) {
-                analysisDir = Path.of(arg.substring("--analysis-dir=".length()));
-            } else if ("--analysis-dir".equals(arg)) {
-                if (i + 1 >= args.length) {
-                    throw new IllegalArgumentException("--analysis-dir requires a value");
-                }
-                analysisDir = Path.of(args[++i]);
-            } else if (arg.startsWith("--jump-threshold=")) {
-                String value = arg.substring("--jump-threshold=".length());
-                jumpThreshold = parseNonNegativeInt(value, "jump-threshold");
-            } else if (arg.startsWith("--sweep=")) {
-                String value = arg.substring("--sweep=".length());
-                sweepResolutions = parseSweepResolutions(value);
-            } else if (arg.startsWith("--color-mode=")) {
-                colorMode = arg.substring("--color-mode=".length());
-                if (!"none".equals(colorMode) && !"glb-color".equals(colorMode)) {
-                    throw new IllegalArgumentException(
-                        "Invalid --color-mode: " + colorMode + ". Use 'none' or 'glb-color'."
-                    );
-                }
-            } else if (arg.startsWith("--color-fallback=")) {
-                colorFallback = parseNonNegativeInt(
-                    arg.substring("--color-fallback=".length()), "color-fallback"
-                );
-            } else if ("--color-list".equals(arg)) {
-                colorList = true;
-            } else if (arg.startsWith("--color-algorithm=")) {
-                colorAlgorithm = arg.substring("--color-algorithm=".length());
-            } else if (arg.startsWith("--placement-policy=")) {
-                placementPolicy = arg.substring("--placement-policy=".length());
-            } else {
-                positional.add(arg);
-            }
-        }
-
-        return new ParsedOptions(positional, analyzeStepping, analysisDir, jumpThreshold,
-            sweepResolutions, colorMode, colorFallback, colorList, colorAlgorithm,
-            placementPolicy);
-    }
-
-    private static Path resolveAnalysisDir(Path explicitAnalysisDir, Path outputObjPath) {
-        if (explicitAnalysisDir != null) {
-            return explicitAnalysisDir;
-        }
-        if (outputObjPath != null && outputObjPath.getParent() != null) {
-            return outputObjPath.getParent();
-        }
-        return Path.of("output", "analysis");
-    }
-
-    private static int parseNonNegativeInt(String value, String fieldName) {
-        int parsed;
-        try {
-            parsed = Integer.parseInt(value);
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException(fieldName + " must be an integer");
-        }
-        if (parsed < 0) {
-            throw new IllegalArgumentException(fieldName + " must be >= 0");
-        }
-        return parsed;
-    }
-
-    private static List<Integer> parseSweepResolutions(String csv) {
-        if (csv == null || csv.isBlank()) {
-            throw new IllegalArgumentException("sweep resolutions must not be empty");
-        }
-
-        String[] parts = csv.split(",");
-        List<Integer> resolutions = new ArrayList<>();
-        for (String part : parts) {
-            String trimmed = part.trim();
-            int resolution = parseNonNegativeInt(trimmed, "sweep resolution");
-            if (resolution < 2) {
-                throw new IllegalArgumentException("sweep resolution must be >= 2");
-            }
-            resolutions.add(resolution);
-        }
-        return resolutions;
-    }
-
-    private record ParsedOptions(
-        List<String> positionalArgs,
-        boolean analyzeStepping,
-        Path analysisDir,
-        int largeJumpThreshold,
-        List<Integer> sweepResolutions,
-        String colorMode,
-        int colorFallback,
-        boolean colorList,
-        String colorAlgorithm,
-        String placementPolicy
-    ) {}
-
-    /**
-     * Prints a list of unique color codes present in the LDraw export, sorted numerically.
-     *
-     * @param brickColorCodes map of bricks to their color codes
-     * @param palette         the palette mapper for looking up color names
-     * @param out             the output stream to print to
-     */
-    static void printColorList(Map<Brick, Integer> brickColorCodes, LegoPaletteMapper palette, PrintStream out) {
-        if (brickColorCodes == null || brickColorCodes.isEmpty()) {
-            out.println("Color list: (no colors - using default color 16)");
-            return;
-        }
-
-        List<Integer> uniqueColors = brickColorCodes.values().stream()
-            .distinct()
-            .sorted()
-            .collect(Collectors.toList());
-
-        out.println("Color list (" + uniqueColors.size() + " unique colors):");
-        for (int color : uniqueColors) {
-            long count = brickColorCodes.values().stream().filter(c -> c == color).count();
-            String colorName = palette != null ? palette.getColorName(color) : "Unknown";
-            out.printf("  %3d %-25s (%d bricks)%n", color, colorName, count);
-        }
-    }
-
-    /**
-     * Prints a summary of block types used, grouped by partId with catalog name.
-     *
-     * @param bricks      the list of bricks generated
-     * @param allowedSpecs the allowed brick specs (for name lookup)
-     * @param out          the output stream to print to
-     */
-    static void printBlockTypeSummary(List<Brick> bricks, List<AllowedBrickDimensions.BrickSpec> allowedSpecs,
-                                      PrintStream out) {
-        // Build partId → name lookup from specs
-        Map<String, String> partNames = new HashMap<>();
-        for (AllowedBrickDimensions.BrickSpec spec : allowedSpecs) {
-            partNames.putIfAbsent(spec.partId(), spec.name());
-        }
-
-        // Group bricks by partId
-        Map<String, Integer> partCounts = new HashMap<>();
-        for (Brick brick : bricks) {
-            partCounts.merge(brick.partId(), 1, Integer::sum);
-        }
-
-        // Sort by count descending, then partId ascending
-        List<Map.Entry<String, Integer>> sorted = partCounts.entrySet().stream()
-            .sorted(Map.Entry.<String, Integer>comparingByValue().reversed()
-                .thenComparing(Map.Entry.comparingByKey()))
-            .collect(Collectors.toList());
-
-        out.println("Block types used:");
-        for (Map.Entry<String, Integer> entry : sorted) {
-            String partId = entry.getKey();
-            int count = entry.getValue();
-            String name = partNames.getOrDefault(partId, partId);
-            out.printf("  %-6s %-30s x%d%n", partId, name, count);
-        }
-    }
-
 }

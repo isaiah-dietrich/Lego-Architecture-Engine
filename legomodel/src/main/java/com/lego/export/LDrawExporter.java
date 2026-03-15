@@ -11,7 +11,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
-import com.lego.data.CuratedCatalogLoader;
+import com.lego.data.CatalogPartRepository;
+import com.lego.data.CsvCatalogPartRepository;
 import com.lego.model.Brick;
 import com.lego.model.CatalogPart;
 
@@ -44,7 +45,7 @@ public final class LDrawExporter {
     }
 
     public static void export(List<Brick> bricks, Path outputPath) throws IOException {
-        export(bricks, outputPath, null, null);
+        export(bricks, outputPath, (CatalogPartRepository) null, null);
     }
 
     /**
@@ -53,6 +54,35 @@ public final class LDrawExporter {
      */
     public static void export(List<Brick> bricks, Path outputPath, Path catalogBaseDir) throws IOException {
         export(bricks, outputPath, catalogBaseDir, null);
+    }
+
+    /**
+     * Exports bricks using parts from the given repository.
+     *
+     * @param bricks          placed bricks
+     * @param outputPath      output .ldr path
+     * @param repository      catalog part data source; {@code null} uses default catalog
+     * @param brickColorCodes optional per-brick LDraw color code map
+     */
+    public static void export(
+        List<Brick> bricks,
+        Path outputPath,
+        CatalogPartRepository repository,
+        Map<Brick, Integer> brickColorCodes
+    ) throws IOException {
+        Objects.requireNonNull(bricks, "bricks must not be null");
+        Objects.requireNonNull(outputPath, "outputPath must not be null");
+
+        Files.createDirectories(outputPath.toAbsolutePath().getParent());
+
+        CatalogPartRepository repo = repository != null ? repository : new CsvCatalogPartRepository();
+        List<CatalogPart> parts = repo.findActiveParts();
+
+        Map<String, CatalogPart> partById = buildPartByIdIndexFromList(parts);
+        Map<StudKey, String> studKeyIndex = buildStudKeyIndex(partById);
+
+        String content = renderLdr(bricks, partById, studKeyIndex, brickColorCodes);
+        Files.writeString(outputPath, content, StandardCharsets.UTF_8);
     }
 
     /**
@@ -67,22 +97,35 @@ public final class LDrawExporter {
      * @param catalogBaseDir optional catalog base directory (test-only)
      * @param brickColorCodes optional per-brick LDraw color code map; {@code null} or absent
      *                        entries use {@link #DEFAULT_COLOR} (16, "current color")
+     * @deprecated Use the {@link CatalogPartRepository}-based overload instead.
      */
+    @Deprecated
     public static void export(
         List<Brick> bricks,
         Path outputPath,
         Path catalogBaseDir,
         Map<Brick, Integer> brickColorCodes
     ) throws IOException {
-        Objects.requireNonNull(bricks, "bricks must not be null");
-        Objects.requireNonNull(outputPath, "outputPath must not be null");
+        export(bricks, outputPath, new CsvCatalogPartRepository(catalogBaseDir), brickColorCodes);
+    }
 
-        Files.createDirectories(outputPath.toAbsolutePath().getParent());
+    private static String formatLdu(double value) {
+        // Keep output stable and readable for Studio.
+        if (Math.abs(value - Math.rint(value)) < 1e-9) {
+            return Long.toString(Math.round(value));
+        }
+        return String.format(Locale.ROOT, "%.3f", value);
+    }
 
-        // Build part index for rotation resolution and fallback mapping
-        Map<String, CatalogPart> partById = buildPartByIdIndex(catalogBaseDir);
-        Map<StudKey, String> studKeyIndex = buildStudKeyIndex(partById);
-
+    /**
+     * Renders the LDR file content for the given bricks and part indices.
+     */
+    private static String renderLdr(
+        List<Brick> bricks,
+        Map<String, CatalogPart> partById,
+        Map<StudKey, String> studKeyIndex,
+        Map<Brick, Integer> brickColorCodes
+    ) {
         StringBuilder out = new StringBuilder();
         out.append("0 LEGO Architecture Engine LDraw export\n");
         out.append("0 Generated: ").append(Instant.now().toString()).append('\n');
@@ -91,7 +134,6 @@ public final class LDrawExporter {
         for (Brick brick : bricks) {
             PartPlacement placement = resolvePlacement(brick, partById, studKeyIndex);
 
-            // Determine color: use per-brick code if available, else default (16)
             int color = DEFAULT_COLOR;
             if (brickColorCodes != null) {
                 Integer code = brickColorCodes.get(brick);
@@ -100,17 +142,11 @@ public final class LDrawExporter {
                 }
             }
 
-            // Center in studs (our brick coords are min-corner on the stud grid).
             double centerXStuds = brick.x() + (brick.studX() / 2.0);
-            // Source meshes use Y-up convention (Blender OBJ default).
-            // brick.z() is the OBJ Z axis (wolf front-to-back depth); maps to LDraw Z.
             double centerZStuds = brick.z() + (brick.studY() / 2.0);
 
             double x = centerXStuds * STUD_PITCH_LDU;
             double z = centerZStuds * STUD_PITCH_LDU;
-
-            // LDraw parts are defined with Y=0 at the top surface and extend down.
-            // Each voxel layer = 1 plate height (8 LDU). Brick height = heightUnits × 8 LDU.
             double y = -(brick.y() * LAYER_HEIGHT_LDU + brick.heightUnits() * HEIGHT_UNIT_LDU);
 
             out.append("1 ")
@@ -131,25 +167,13 @@ public final class LDrawExporter {
                 .append('\n');
         }
 
-        Files.writeString(outputPath, out.toString(), StandardCharsets.UTF_8);
-    }
-
-    private static String formatLdu(double value) {
-        // Keep output stable and readable for Studio.
-        if (Math.abs(value - Math.rint(value)) < 1e-9) {
-            return Long.toString(Math.round(value));
-        }
-        return String.format(Locale.ROOT, "%.3f", value);
+        return out.toString();
     }
 
     /**
-     * Builds a lookup from partId to CatalogPart for rotation determination.
+     * Builds a partId→CatalogPart index from a pre-loaded list of parts.
      */
-    private static Map<String, CatalogPart> buildPartByIdIndex(Path catalogBaseDir) {
-        List<CatalogPart> parts = (catalogBaseDir != null)
-            ? CuratedCatalogLoader.loadActiveParts(catalogBaseDir)
-            : CuratedCatalogLoader.loadActiveParts();
-
+    private static Map<String, CatalogPart> buildPartByIdIndexFromList(List<CatalogPart> parts) {
         Map<String, CatalogPart> index = new HashMap<>();
         for (CatalogPart part : parts) {
             index.putIfAbsent(part.partId(), part);

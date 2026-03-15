@@ -65,7 +65,7 @@ public final class DominantVoteStrategy implements ColorStrategy {
         for (Map.Entry<Brick, ColorRgb> entry : brickColors.entrySet()) {
             ColorRgb rgb = entry.getValue();
             double[] lab = LegoPaletteMapper.linearRgbToLab(rgb.r(), rgb.g(), rgb.b());
-            result.put(entry.getKey(), nearestCiede2000(lab[0], lab[1], lab[2], entries));
+            result.put(entry.getKey(), LegoPaletteMapper.nearestCiede2000(lab[0], lab[1], lab[2], entries, KL));
         }
         return result;
     }
@@ -112,7 +112,7 @@ public final class DominantVoteStrategy implements ColorStrategy {
         for (Map.Entry<Brick, List<double[]>> entry : brickVoxelLab.entrySet()) {
             Map<Integer, Integer> votes = new HashMap<>();
             for (double[] lab : entry.getValue()) {
-                int code = nearestCiede2000(lab[0], lab[1], lab[2], entries);
+                int code = LegoPaletteMapper.nearestCiede2000(lab[0], lab[1], lab[2], entries, KL);
                 votes.merge(code, 1, Integer::sum);
             }
 
@@ -133,21 +133,4 @@ public final class DominantVoteStrategy implements ColorStrategy {
     }
 
     private static final double KL = 1.5;
-
-    private static int nearestCiede2000(double l, double a, double b, List<PaletteEntry> entries) {
-        PaletteEntry best = null;
-        double bestDist = Double.MAX_VALUE;
-        for (PaletteEntry entry : entries) {
-            double dist = LegoPaletteMapper.deltaE2000(l, a, b,
-                entry.labL(), entry.labA(), entry.labB(), KL);
-            if (dist < bestDist) {
-                bestDist = dist;
-                best = entry;
-            }
-        }
-        if (best == null) {
-            throw new IllegalStateException("No opaque palette entries available for matching");
-        }
-        return best.ldrawCode();
-    }
 }

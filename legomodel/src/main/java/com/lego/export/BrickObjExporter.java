@@ -48,65 +48,14 @@ public final class BrickObjExporter {
                     "brick at index " + index + " must not be null"
                 );
             }
-            appendBrick(obj, brick, index, vertexOffset);
-            vertexOffset += 8;
+            ObjCuboidWriter.appendCuboid(obj, "brick_" + index,
+                brick.x(), brick.y(), brick.z(),
+                brick.maxX(), brick.maxY(), brick.maxZ(),
+                vertexOffset);
+            vertexOffset += ObjCuboidWriter.VERTICES_PER_CUBOID;
             index++;
         }
 
         Files.writeString(outputPath, obj.toString(), StandardCharsets.UTF_8);
-    }
-
-    private static void appendBrick(StringBuilder obj, Brick brick, int index, int vertexOffset) {
-        double x0 = brick.x();
-        double y0 = brick.y();
-        double z0 = brick.z();
-        double x1 = brick.maxX();
-        double y1 = brick.maxY();
-        double z1 = brick.maxZ();
-
-        obj.append("\n");
-        obj.append("o brick_").append(index).append('\n');
-
-        // 8 cuboid vertices
-        obj.append("v ").append(x0).append(' ').append(y0).append(' ').append(z0).append('\n'); // 1
-        obj.append("v ").append(x1).append(' ').append(y0).append(' ').append(z0).append('\n'); // 2
-        obj.append("v ").append(x1).append(' ').append(y1).append(' ').append(z0).append('\n'); // 3
-        obj.append("v ").append(x0).append(' ').append(y1).append(' ').append(z0).append('\n'); // 4
-        obj.append("v ").append(x0).append(' ').append(y0).append(' ').append(z1).append('\n'); // 5
-        obj.append("v ").append(x1).append(' ').append(y0).append(' ').append(z1).append('\n'); // 6
-        obj.append("v ").append(x1).append(' ').append(y1).append(' ').append(z1).append('\n'); // 7
-        obj.append("v ").append(x0).append(' ').append(y1).append(' ').append(z1).append('\n'); // 8
-
-        // 12 triangles (2 per face, outward-facing winding)
-        // Bottom face (Z=z0, normal -Z)
-        writeTri(obj, vertexOffset, 1, 3, 2);
-        writeTri(obj, vertexOffset, 1, 4, 3);
-
-        // Top face (Z=z1, normal +Z)
-        writeTri(obj, vertexOffset, 5, 6, 7);
-        writeTri(obj, vertexOffset, 5, 7, 8);
-
-        // Front face (Y=y0, normal -Y)
-        writeTri(obj, vertexOffset, 1, 5, 6);
-        writeTri(obj, vertexOffset, 1, 6, 2);
-
-        // Right face (X=x1, normal +X)
-        writeTri(obj, vertexOffset, 2, 6, 7);
-        writeTri(obj, vertexOffset, 2, 7, 3);
-
-        // Back face (Y=y1, normal +Y)
-        writeTri(obj, vertexOffset, 3, 7, 8);
-        writeTri(obj, vertexOffset, 3, 8, 4);
-
-        // Left face (X=x0, normal -X)
-        writeTri(obj, vertexOffset, 4, 1, 5);
-        writeTri(obj, vertexOffset, 4, 5, 8);
-    }
-
-    private static void writeTri(StringBuilder obj, int vertexOffset, int a, int b, int c) {
-        obj.append("f ")
-            .append(vertexOffset + a - 1).append(' ')
-            .append(vertexOffset + b - 1).append(' ')
-            .append(vertexOffset + c - 1).append('\n');
     }
 }

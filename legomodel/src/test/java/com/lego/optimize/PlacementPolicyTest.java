@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
+import com.lego.color.ColorFeatureGridFactory;
 import com.lego.model.Brick;
 import com.lego.model.ColorRgb;
 import com.lego.optimize.AllowedBrickDimensions.BrickSpec;
@@ -413,7 +414,7 @@ class PlacementPolicyTest {
         }
 
         List<Brick> bricks = BrickPlacer.placeBricks(surface, STANDARD_DIMS,
-            new ScoringPlacementPolicy(colors));
+            new ScoringPlacementPolicy(ColorFeatureGridFactory.create(colors)));
 
         assertEquals(1, bricks.size(), "Uniform color should still prefer 1 large brick");
         assertEquals(4, bricks.get(0).studX());
@@ -437,7 +438,7 @@ class PlacementPolicyTest {
         }
 
         List<Brick> colorAware = BrickPlacer.placeBricks(surface, STANDARD_DIMS,
-            new ScoringPlacementPolicy(colors));
+            new ScoringPlacementPolicy(ColorFeatureGridFactory.create(colors)));
         List<Brick> noColor = BrickPlacer.placeBricks(surface, STANDARD_DIMS,
             new ScoringPlacementPolicy());
 
@@ -467,7 +468,7 @@ class PlacementPolicyTest {
         }
 
         List<Brick> bricks = BrickPlacer.placeBricks(surface, STANDARD_DIMS,
-            new ScoringPlacementPolicy(colors));
+            new ScoringPlacementPolicy(ColorFeatureGridFactory.create(colors)));
 
         assertEquals(16, countCoveredVoxels(bricks), "All 16 voxels must be covered");
     }
@@ -491,7 +492,7 @@ class PlacementPolicyTest {
         }
 
         List<Brick> bricks = BrickPlacer.placeBricks(surface, STANDARD_DIMS,
-            new ScoringPlacementPolicy(colors));
+            new ScoringPlacementPolicy(ColorFeatureGridFactory.create(colors)));
 
         // Every brick should be 1×1 because all anchor voxels are high-variance
         for (Brick b : bricks) {
@@ -516,7 +517,7 @@ class PlacementPolicyTest {
         }
 
         List<Brick> bricks = BrickPlacer.placeBricks(surface, STANDARD_DIMS,
-            new ScoringPlacementPolicy(colors));
+            new ScoringPlacementPolicy(ColorFeatureGridFactory.create(colors)));
 
         assertEquals(1, bricks.size(), "Uniform color should still produce 1 large brick");
         assertEquals(4, bricks.get(0).studX());
@@ -539,17 +540,17 @@ class PlacementPolicyTest {
         }
         colors[1][0][1] = blue; // center voxel is blue
 
-        boolean[][][] variance = ScoringPlacementPolicy.computeVarianceMap(colors);
+        PlacementFeatureGrid grid = ColorFeatureGridFactory.create(colors);
 
         // Center voxel (1,0,1) has 4 red neighbors, all different from blue → 4 changes ≥ 2
-        assertTrue(variance[1][0][1], "Blue center with 4 different neighbors should be high-variance");
+        assertTrue(grid.isHighVariance(1, 0, 1), "Blue center with 4 different neighbors should be high-variance");
 
         // Corner voxel (0,0,0) has 2 same-color neighbors → 0 changes
-        assertFalse(variance[0][0][0], "Red corner with all-red neighbors should NOT be high-variance");
+        assertFalse(grid.isHighVariance(0, 0, 0), "Red corner with all-red neighbors should NOT be high-variance");
 
         // Adjacent to blue: (1,0,0) has neighbors: (0,0,0)=red, (2,0,0)=red, (1,0,1)=blue
         // Only 1 different → below threshold of 2
-        assertFalse(variance[1][0][0], "Voxel with only 1 different neighbor should NOT be high-variance");
+        assertFalse(grid.isHighVariance(1, 0, 0), "Voxel with only 1 different neighbor should NOT be high-variance");
     }
 
     @Test

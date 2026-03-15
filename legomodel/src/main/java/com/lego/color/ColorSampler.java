@@ -9,6 +9,8 @@ import com.lego.model.Brick;
 import com.lego.model.ColorRgb;
 import com.lego.model.Mesh;
 import com.lego.model.Triangle;
+import com.lego.model.TriangleAabbTest;
+import com.lego.model.VoxelKey;
 import com.lego.voxel.VoxelGrid;
 
 /**
@@ -177,7 +179,7 @@ public final class ColorSampler {
         ColorRgb[][][] result = new ColorRgb[surface.width()][surface.height()][surface.depth()];
         for (Map.Entry<Long, List<WeightedColor>> entry : voxelVotes.entrySet()) {
             long key = entry.getKey();
-            result[unpackX(key)][unpackY(key)][unpackZ(key)] = weightedAverageColor(entry.getValue());
+            result[VoxelKey.unpackX(key)][VoxelKey.unpackY(key)][VoxelKey.unpackZ(key)] = weightedAverageColor(entry.getValue());
         }
         return result;
     }
@@ -205,7 +207,7 @@ public final class ColorSampler {
                     best = samples.get(i);
                 }
             }
-            result[unpackX(key)][unpackY(key)][unpackZ(key)] = best.color();
+            result[VoxelKey.unpackX(key)][VoxelKey.unpackY(key)][VoxelKey.unpackZ(key)] = best.color();
         }
         return result;
     }
@@ -259,8 +261,8 @@ public final class ColorSampler {
                         double cy = (j + 0.5) / 3.0;
                         double cz = k + 0.5;
 
-                        if (triangleOverlapsVoxel(tri, cx, cy, cz, 0.5, 1.0 / 6.0, 0.5)) {
-                            long key = pack(i, j, k);
+                        if (TriangleAabbTest.overlaps(tri, cx, cy, cz, 0.5, 1.0 / 6.0, 0.5)) {
+                            long key = VoxelKey.pack(i, j, k);
                             voxelVotes.computeIfAbsent(key, x -> new ArrayList<>()).add(wc);
                         }
                     }
@@ -362,91 +364,7 @@ public final class ColorSampler {
         );
     }
 
-    // ---- SAT triangle-AABB overlap (same algorithm as TopologicalVoxelizer) ----
-
-    private static boolean triangleOverlapsVoxel(
-        Triangle tri,
-        double cx, double cy, double cz,
-        double hx, double hy, double hz
-    ) {
-        double v0x = tri.v1().x() - cx, v0y = tri.v1().y() - cy, v0z = tri.v1().z() - cz;
-        double v1x = tri.v2().x() - cx, v1y = tri.v2().y() - cy, v1z = tri.v2().z() - cz;
-        double v2x = tri.v3().x() - cx, v2y = tri.v3().y() - cy, v2z = tri.v3().z() - cz;
-
-        if (separating(v0x, v1x, v2x, hx)) return false;
-        if (separating(v0y, v1y, v2y, hy)) return false;
-        if (separating(v0z, v1z, v2z, hz)) return false;
-
-        double e0x = v1x - v0x, e0y = v1y - v0y, e0z = v1z - v0z;
-        double e1x = v2x - v1x, e1y = v2y - v1y, e1z = v2z - v1z;
-        double e2x = v0x - v2x, e2y = v0y - v2y, e2z = v0z - v2z;
-
-        double nx = e0y * (v2z - v0z) - e0z * (v2y - v0y);
-        double ny = e0z * (v2x - v0x) - e0x * (v2z - v0z);
-        double nz = e0x * (v2y - v0y) - e0y * (v2x - v0x);
-        double d = nx * v0x + ny * v0y + nz * v0z;
-        double rn = hx * Math.abs(nx) + hy * Math.abs(ny) + hz * Math.abs(nz);
-        if (d > rn || d < -rn) return false;
-
-        if (edgeCrossX(v0y, v0z, v1y, v1z, v2y, v2z, e0y, e0z, hy, hz)) return false;
-        if (edgeCrossY(v0x, v0z, v1x, v1z, v2x, v2z, e0x, e0z, hx, hz)) return false;
-        if (edgeCrossZ(v0x, v0y, v1x, v1y, v2x, v2y, e0x, e0y, hx, hy)) return false;
-        if (edgeCrossX(v0y, v0z, v1y, v1z, v2y, v2z, e1y, e1z, hy, hz)) return false;
-        if (edgeCrossY(v0x, v0z, v1x, v1z, v2x, v2z, e1x, e1z, hx, hz)) return false;
-        if (edgeCrossZ(v0x, v0y, v1x, v1y, v2x, v2y, e1x, e1y, hx, hy)) return false;
-        if (edgeCrossX(v0y, v0z, v1y, v1z, v2y, v2z, e2y, e2z, hy, hz)) return false;
-        if (edgeCrossY(v0x, v0z, v1x, v1z, v2x, v2z, e2x, e2z, hx, hz)) return false;
-        if (edgeCrossZ(v0x, v0y, v1x, v1y, v2x, v2y, e2x, e2y, hx, hy)) return false;
-
-        return true;
-    }
-
-    private static boolean separating(double p0, double p1, double p2, double h) {
-        return Math.min(p0, Math.min(p1, p2)) > h || Math.max(p0, Math.max(p1, p2)) < -h;
-    }
-
-    private static boolean edgeCrossX(
-        double v0y, double v0z, double v1y, double v1z, double v2y, double v2z,
-        double ey, double ez, double hy, double hz
-    ) {
-        double p0 = ez * v0y - ey * v0z;
-        double p1 = ez * v1y - ey * v1z;
-        double p2 = ez * v2y - ey * v2z;
-        double r = hy * Math.abs(ez) + hz * Math.abs(ey);
-        return Math.min(p0, Math.min(p1, p2)) > r || Math.max(p0, Math.max(p1, p2)) < -r;
-    }
-
-    private static boolean edgeCrossY(
-        double v0x, double v0z, double v1x, double v1z, double v2x, double v2z,
-        double ex, double ez, double hx, double hz
-    ) {
-        double p0 = -ez * v0x + ex * v0z;
-        double p1 = -ez * v1x + ex * v1z;
-        double p2 = -ez * v2x + ex * v2z;
-        double r = hx * Math.abs(ez) + hz * Math.abs(ex);
-        return Math.min(p0, Math.min(p1, p2)) > r || Math.max(p0, Math.max(p1, p2)) < -r;
-    }
-
-    private static boolean edgeCrossZ(
-        double v0x, double v0y, double v1x, double v1y, double v2x, double v2y,
-        double ex, double ey, double hx, double hy
-    ) {
-        double p0 = ey * v0x - ex * v0y;
-        double p1 = ey * v1x - ex * v1y;
-        double p2 = ey * v2x - ex * v2y;
-        double r = hx * Math.abs(ey) + hy * Math.abs(ex);
-        return Math.min(p0, Math.min(p1, p2)) > r || Math.max(p0, Math.max(p1, p2)) < -r;
-    }
-
     private static int clamp(int val, int min, int max) {
         return Math.max(min, Math.min(max, val));
     }
-
-    private static long pack(int x, int y, int z) {
-        return ((long) x << 42) | ((long) y << 21) | (long) z;
-    }
-
-    private static int unpackX(long key) { return (int) (key >>> 42); }
-    private static int unpackY(long key) { return (int) ((key >>> 21) & 0x1FFFFF); }
-    private static int unpackZ(long key) { return (int) (key & 0x1FFFFF); }
 }

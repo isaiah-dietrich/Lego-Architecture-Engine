@@ -149,16 +149,16 @@ class UVLabPaletteProjectionTest {
     @Test
     void ciede2000MatchesWhiteToWhite() {
         double[] whiteLab = LegoPaletteMapper.linearRgbToLab(1.0, 1.0, 1.0);
-        int code = UVLabPaletteProjection.nearestCiede2000(
-            whiteLab[0], whiteLab[1], whiteLab[2], palette.opaqueEntries());
+        int code = LegoPaletteMapper.nearestCiede2000(
+            whiteLab[0], whiteLab[1], whiteLab[2], palette.opaqueEntries(), UVLabPaletteProjection.KL);
         assertEquals(15, code, "Pure white should map to LDraw White (15)");
     }
 
     @Test
     void ciede2000MatchesBlackToBlack() {
         double[] blackLab = LegoPaletteMapper.linearRgbToLab(0.0, 0.0, 0.0);
-        int code = UVLabPaletteProjection.nearestCiede2000(
-            blackLab[0], blackLab[1], blackLab[2], palette.opaqueEntries());
+        int code = LegoPaletteMapper.nearestCiede2000(
+            blackLab[0], blackLab[1], blackLab[2], palette.opaqueEntries(), UVLabPaletteProjection.KL);
         assertEquals(0, code, "Pure black should map to LDraw Black (0)");
     }
 
@@ -166,8 +166,8 @@ class UVLabPaletteProjectionTest {
     void ciede2000MatchesRedToRed() {
         // LEGO Red sRGB = C91A09 → linear ≈ (0.585, 0.010, 0.003)
         double[] redLab = LegoPaletteMapper.linearRgbToLab(0.585, 0.010, 0.003);
-        int code = UVLabPaletteProjection.nearestCiede2000(
-            redLab[0], redLab[1], redLab[2], palette.opaqueEntries());
+        int code = LegoPaletteMapper.nearestCiede2000(
+            redLab[0], redLab[1], redLab[2], palette.opaqueEntries(), UVLabPaletteProjection.KL);
         assertEquals(4, code, "LEGO Red linear should map to LDraw Red (4)");
     }
 
