@@ -60,6 +60,7 @@ public final class Mesh {
     }
 
     @Override
+    /** Returns a string summary of this mesh including triangle count. */
     public String toString() {
         return "Mesh{" +
                "triangles=" + triangles.size() +
@@ -67,6 +68,7 @@ public final class Mesh {
     }
 
     @Override
+    /** Two meshes are equal if they contain the same triangles in the same order. */
     public boolean equals(Object o) {
         if (this == o) return true;
         if (!(o instanceof Mesh mesh)) return false;
@@ -74,6 +76,7 @@ public final class Mesh {
     }
 
     @Override
+    /** Hash code based on the triangle list. */
     public int hashCode() {
         return triangles.hashCode();
     }

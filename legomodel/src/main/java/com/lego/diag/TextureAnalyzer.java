@@ -38,10 +38,10 @@ import de.javagl.jgltf.model.io.GltfModelReader;
  * performs color cluster analysis on only the texture pixels that are
  * actually referenced by the model geometry.
  *
- * <p>Unlike a naive full-texture scan, this avoids counting UV-atlas
+ * Unlike a naive full-texture scan, this avoids counting UV-atlas
  * padding/background pixels that the model never renders.
  *
- * <p>For each triangle it samples 4 UV points (3 vertices + centroid),
+ * For each triangle it samples 4 UV points (3 vertices + centroid),
  * reads the corresponding texture pixel, and accumulates statistics.
  *
  * Usage: mvn compile exec:java -Dexec.mainClass=com.lego.diag.TextureAnalyzer -Dexec.args="/path/to/file.glb"
@@ -185,6 +185,7 @@ public final class TextureAnalyzer {
         }
     }
 
+    /** Recursively walks the scene graph and processes each node's mesh primitives. */
     private static void walkNode(NodeModel node, SampleAccumulator acc) {
         for (MeshModel meshModel : node.getMeshModels()) {
             for (MeshPrimitiveModel prim : meshModel.getMeshPrimitiveModels()) {
@@ -196,6 +197,7 @@ public final class TextureAnalyzer {
         }
     }
 
+    /** Processes a single mesh primitive, sampling UV coordinates and texture colors. */
     private static void processPrimitive(MeshPrimitiveModel prim, SampleAccumulator acc) {
         int mode = prim.getMode();
         if (mode != GL_TRIANGLES) {
@@ -283,6 +285,7 @@ public final class TextureAnalyzer {
 
     // ---- Helpers for glTF data access (same as GlbLoader) ----
 
+    /** Extracts the base color texture image from a glTF material, or null if none. */
     private static BufferedImage extractTextureImage(MaterialModel material) {
         if (!(material instanceof MaterialModelV2 pbrMaterial)) return null;
         TextureModel textureModel = pbrMaterial.getBaseColorTexture();
@@ -300,6 +303,7 @@ public final class TextureAnalyzer {
         }
     }
 
+    /** Reads a single index value from an accessor at the given element position. */
     private static int readIndex(AccessorModel accessor, int elementIndex) {
         AccessorData data = accessor.getAccessorData();
         if (data instanceof AccessorShortData sd) return sd.getInt(elementIndex, 0);
@@ -309,6 +313,7 @@ public final class TextureAnalyzer {
             "Unsupported index accessor data type: " + data.getClass().getSimpleName());
     }
 
+    /** Converts an accessor to float data for reading vertex attributes. */
     private static AccessorFloatData asFloatData(AccessorModel accessor) {
         AccessorData data = accessor.getAccessorData();
         if (data instanceof AccessorFloatData fd) return fd;
@@ -327,12 +332,14 @@ public final class TextureAnalyzer {
         return Math.min((int) (flippedV * imageHeight), imageHeight - 1);
     }
 
+    /** Rounds a color channel value (0-255) to the nearest bucket for clustering. */
     private static int roundToBucket(int value) {
         return Math.min(((value + BUCKET_SIZE / 2) / BUCKET_SIZE) * BUCKET_SIZE, 260);
     }
 
     // ---- Accumulator for UV-sampled colors ----
 
+    /** Accumulates texture sample data during scene graph traversal. */
     private static final class SampleAccumulator {
         long totalSamples;
         long paddingSamples;

@@ -14,11 +14,11 @@ import com.lego.model.VoxelKey;
  * Post-processing pass that smooths brick color assignments by replacing
  * isolated color outliers with the dominant color of their neighbors.
  *
- * <p>This fixes "color speckle" caused by noisy texture samples (JPEG
+ * This fixes "color speckle" caused by noisy texture samples (JPEG
  * artifacts, shadow gradients, mouth/paw-pad redness, etc.) that produce
  * wrong-hue matches in the palette mapper.
  *
- * <p>Algorithm: for each brick, find all face-adjacent bricks. If the
+ * Algorithm: for each brick, find all face-adjacent bricks. If the
  * brick's LDraw color code differs from every neighbor's color AND a
  * single neighbor color appears more than once, replace the brick's
  * color with that dominant neighbor color.
@@ -34,17 +34,18 @@ public final class ColorSmoother {
      */
     static final double CONTRAST_GUARD_DELTA_E = 50.0;
 
+    /** Non-instantiable utility class. */
     private ColorSmoother() {}
 
     /**
      * Smooths brick color assignments by eliminating isolated outliers.
      *
-     * <p>A brick is considered an outlier if:
-     * <ol>
-     *   <li>It has at least 2 neighbors</li>
-     *   <li>Its color does not match ANY neighbor's color</li>
-     *   <li>One neighbor color is a clear majority (appears in &gt;50% of neighbors)</li>
-     * </ol>
+     * A brick is considered an outlier if:
+     * 
+     *   - It has at least 2 neighbors
+     *   - Its color does not match ANY neighbor's color
+     *   - One neighbor color is a clear majority (appears in >50% of neighbors)
+     * 
      * Outlier bricks are recolored to the majority neighbor color.
      *
      * @param brickColorCodes mutable map from brick to LDraw color code
@@ -136,10 +137,10 @@ public final class ColorSmoother {
 
     /**
      * Replaces bricks whose color is globally rare (used by fewer than
-     * {@code threshold} fraction of total bricks) with the most common
+     * threshold fraction of total bricks) with the most common
      * non-rare neighbor color. Runs iteratively until convergence.
      *
-     * <p>This targets patches of wrong-hue artifacts caused by baked lighting
+     * This targets patches of wrong-hue artifacts caused by baked lighting
      * in textures. Within such a patch, neighboring bricks share the same
      * wrong color, so the standard outlier detector doesn't flag them. But
      * the wrong color appears in very few bricks overall — this pass detects
@@ -291,6 +292,7 @@ public final class ColorSmoother {
         return neighbors;
     }
 
+    /** Adds a neighbor brick to the output list if it exists in the index and hasn't been seen. */
     private static void addNeighbor(Map<Long, Brick> index, long key, java.util.Set<Brick> seen, List<Brick> out) {
         Brick neighbor = index.get(key);
         if (neighbor != null && seen.add(neighbor)) {
@@ -312,7 +314,7 @@ public final class ColorSmoother {
      * Returns true if the brick's current color should be protected from
      * smoothing due to high contrast AND achromatic nature.
      *
-     * <p>High-contrast chromatic outliers (e.g., Magenta on yellow) are
+     * High-contrast chromatic outliers (e.g., Magenta on yellow) are
      * wrong-hue artifacts and should NOT be protected. Only high-contrast
      * achromatic colors (e.g., Black eyes on yellow face) are genuine
      * dark/light features worth preserving.

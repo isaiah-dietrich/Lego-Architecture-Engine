@@ -35,6 +35,7 @@ public final class AllowedBrickDimensions {
         private final String partId;
         private final String name;
 
+        /** Validates and constructs a brick specification. */
         public BrickSpec(int studX, int studY, int heightUnits, String category, String partId, String name) {
             if (studX <= 0 || studY <= 0) {
                 throw new IllegalArgumentException("Dimensions must be positive: " + studX + "x" + studY);
@@ -97,6 +98,7 @@ public final class AllowedBrickDimensions {
         }
 
         @Override
+        /** Two BrickSpecs are equal if they have the same stud dimensions and height. */
         public boolean equals(Object obj) {
             if (this == obj) return true;
             if (!(obj instanceof BrickSpec)) return false;
@@ -108,6 +110,7 @@ public final class AllowedBrickDimensions {
         }
 
         @Override
+        /** Hash code based on stud dimensions and height. */
         public int hashCode() {
             int result = 31 * studX + studY;
             result = 31 * result + heightUnits;
@@ -117,11 +120,13 @@ public final class AllowedBrickDimensions {
         }
 
         @Override
+        /** Returns a string representation of this brick specification. */
         public String toString() {
             return studX + "x" + studY + "x" + heightUnits + " (" + partId + ")";
         }
     }
 
+    /** Non-instantiable utility class. */
     private AllowedBrickDimensions() {
         // Utility class
     }
@@ -155,7 +160,7 @@ public final class AllowedBrickDimensions {
      * 
      * @return list of allowed brick specs in placement priority order
      * @throws IllegalStateException if catalog cannot be loaded or contains no valid specs
-     * @deprecated Use {@link #fromParts(List)} or {@link #loadFromRepository(CatalogPartRepository)}.
+     * @deprecated Use #fromParts(List) or #loadFromRepository(CatalogPartRepository).
      */
     @Deprecated
     public static List<BrickSpec> loadFromCatalog() {
@@ -171,7 +176,7 @@ public final class AllowedBrickDimensions {
      * @param baseDir base directory to resolve catalog from
      * @return list of allowed brick specs in placement priority order
      * @throws IllegalStateException if catalog cannot be loaded or contains no valid specs
-     * @deprecated Use {@link #fromParts(List)} or {@link #loadFromRepository(CatalogPartRepository)}.
+     * @deprecated Use #fromParts(List) or #loadFromRepository(CatalogPartRepository).
      */
     @Deprecated
     public static List<BrickSpec> loadFromCatalog(Path baseDir) {

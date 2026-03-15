@@ -6,8 +6,8 @@ import java.nio.file.Path;
 import com.lego.color.LegoPaletteMapper;
 
 /**
- * CSV-backed implementation of {@link PaletteRepository}.
- * Delegates to the existing {@link LegoPaletteMapper} static load methods.
+ * CSV-backed implementation of PaletteRepository.
+ * Delegates to the existing LegoPaletteMapper static load methods.
  */
 public final class CsvPaletteRepository implements PaletteRepository {
 
@@ -28,6 +28,7 @@ public final class CsvPaletteRepository implements PaletteRepository {
     }
 
     @Override
+    /** Loads the LEGO color palette from the Rebrickable CSV and returns the mapper. */
     public LegoPaletteMapper loadPalette() throws IOException {
         if (csvPath != null) {
             return LegoPaletteMapper.load(csvPath);

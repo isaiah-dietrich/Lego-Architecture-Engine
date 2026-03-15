@@ -9,8 +9,8 @@ import com.lego.voxel.VoxelGrid;
 /**
  * Strategy for selecting which brick to place at a given voxel position.
  *
- * <p>Implementations decide the trade-off between fewer bricks (larger pieces)
- * and surface accuracy (not overhanging into empty space).</p>
+ * Implementations decide the trade-off between fewer bricks (larger pieces)
+ * and surface accuracy (not overhanging into empty space).
  */
 public interface PlacementPolicy {
 

@@ -71,6 +71,7 @@ public final class CatalogConfig {
         "active"
     };
 
+    /** Non-instantiable constants class. */
     private CatalogConfig() {
         // Utility class, no instantiation
     }

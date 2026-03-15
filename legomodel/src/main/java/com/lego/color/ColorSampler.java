@@ -16,23 +16,24 @@ import com.lego.voxel.VoxelGrid;
 /**
  * Maps per-triangle color data through the voxel grid onto bricks.
  *
- * <p>For each filled voxel, determines which triangles from the normalized mesh
+ * For each filled voxel, determines which triangles from the normalized mesh
  * overlap it (using the same SAT-based overlap test as the voxelizer), then
  * computes an area-weighted average of their colors in linear RGB to assign a
  * single color. Per-brick color is then determined by averaging across the
  * brick's constituent voxels.
  *
- * <p>Area weighting ensures that large triangles (e.g., flat body panels)
+ * Area weighting ensures that large triangles (e.g., flat body panels)
  * contribute proportionally more than small triangles from detailed/dense
  * geometry areas. Without it, detailed regions with many small triangles
  * would dominate the color simply by having more triangle overlaps per voxel.
  *
- * <p>Color is remapped from pre-normalization triangle keys to post-normalization
+ * Color is remapped from pre-normalization triangle keys to post-normalization
  * triangle keys by index position (triangle order is preserved by
- * {@code MeshNormalizer}).
+ * MeshNormalizer).
  */
 public final class ColorSampler {
 
+    /** Non-instantiable utility class. */
     private ColorSampler() {}
 
     /** A color sample paired with its triangle's area weight. */
@@ -41,7 +42,7 @@ public final class ColorSampler {
     /**
      * Determines per-brick color from triangle color data.
      *
-     * @param originalMesh    mesh before normalization (triangle keys match {@code colorMap})
+     * @param originalMesh    mesh before normalization (triangle keys match colorMap)
      * @param normalizedMesh  mesh after normalization (same triangle count and order)
      * @param colorMap        triangle → color from the loader
      * @param surface         filled surface voxel grid
@@ -74,11 +75,11 @@ public final class ColorSampler {
     /**
      * Samples per-voxel colors from triangle data.
      *
-     * <p>For each filled voxel, computes an area-weighted average color from
+     * For each filled voxel, computes an area-weighted average color from
      * overlapping triangles. This can be called independently of brick placement
-     * to provide color data for color-aware placement policies.</p>
+     * to provide color data for color-aware placement policies.
      *
-     * @param originalMesh    mesh before normalization (triangle keys match {@code colorMap})
+     * @param originalMesh    mesh before normalization (triangle keys match colorMap)
      * @param normalizedMesh  mesh after normalization (same triangle count and order)
      * @param colorMap        triangle → color from the loader
      * @param surface         filled surface voxel grid
@@ -101,7 +102,7 @@ public final class ColorSampler {
     /**
      * Returns per-voxel colors for each brick without any brick-level averaging.
      *
-     * <p>At the voxel level, each voxel gets the color of the triangle with the
+     * At the voxel level, each voxel gets the color of the triangle with the
      * highest area overlap (dominant color), rather than an area-weighted average.
      * This preserves sharp color boundaries that would be lost by averaging.
      *
@@ -364,6 +365,7 @@ public final class ColorSampler {
         );
     }
 
+    /** Clamps an integer value to the range [min, max]. */
     private static int clamp(int val, int min, int max) {
         return Math.max(min, Math.min(max, val));
     }

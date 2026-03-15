@@ -13,6 +13,7 @@ import com.lego.model.Vector3;
  */
 public final class MeshNormalizer {
 
+    /** Non-instantiable utility class. */
     private MeshNormalizer() {
         // Utility class, prevent instantiation
     }
@@ -61,6 +62,7 @@ public final class MeshNormalizer {
         return new Mesh(normalized);
     }
 
+    /** Normalizes a single triangle's vertices into voxel-space coordinates. */
     private static Triangle normalizeTriangle(
         Triangle triangle,
         BoundingBox box,
@@ -72,6 +74,7 @@ public final class MeshNormalizer {
         return new Triangle(n1, n2, n3);
     }
 
+    /** Normalizes a single vertex by translating to origin and scaling to voxel-space. */
     private static Vector3 normalizeVertex(Vector3 v, BoundingBox box, double scale) {
         double x = (v.x() - box.minX()) * scale;
         double y = (v.y() - box.minY()) * scale;

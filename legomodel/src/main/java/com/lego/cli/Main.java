@@ -17,12 +17,13 @@ import com.lego.voxel.VoxelizationStrategy;
 /**
  * Command-line entry point for the LEGO Architecture Engine.
  *
- * <p>This class is a thin composition root: it parses arguments, validates them,
- * builds a {@link PipelineRequest}, and delegates execution to
- * {@link PipelineRunner}.</p>
+ * This class is a thin composition root: it parses arguments, validates them,
+ * builds a PipelineRequest, and delegates execution to
+ * PipelineRunner.
  */
 public final class Main {
 
+    /** Non-instantiable entry-point class. */
     private Main() {}
 
     /** Application entry point. */
@@ -94,6 +95,7 @@ public final class Main {
         return PipelineRunner.run(request, loader, strategyRegistry, catalogRepository, paletteRepository, out, err);
     }
 
+    /** Builds a validated PipelineRequest from parsed CLI options. */
     private static PipelineRequest buildRequest(
         ParsedOptions opts,
         ColorStrategyRegistry strategyRegistry,
@@ -189,6 +191,7 @@ public final class Main {
         );
     }
 
+    /** Selects the appropriate ModelLoader implementation based on the file extension. */
     private static ModelLoader resolveLoader(Path path) {
         String name = path.getFileName().toString().toLowerCase();
         if (name.endsWith(".gltf")) {

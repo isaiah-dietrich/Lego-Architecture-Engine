@@ -19,10 +19,11 @@ import com.lego.voxel.VoxelSteppingAnalyzer.VoxelSteppingMetrics;
 
 /**
  * Writes stepping analysis results to JSON and CSV files.
- * Extracted from {@code VoxelSteppingAnalyzer} to separate I/O from computation.
+ * Extracted from VoxelSteppingAnalyzer to separate I/O from computation.
  */
 public final class SteppingAnalysisWriter {
 
+    /** Non-instantiable utility class. */
     private SteppingAnalysisWriter() {}
 
     /** Writes stepping metrics to a JSON file. */
@@ -186,12 +187,14 @@ public final class SteppingAnalysisWriter {
         return builder.toString();
     }
 
+    /** Returns the sum of all values in the array. */
     private static int sum(int[] values) {
         int s = 0;
         for (int v : values) s += v;
         return s;
     }
 
+    /** Converts an int array to a JSON array string. */
     private static String intArrayToJson(int[] values) {
         StringBuilder builder = new StringBuilder();
         builder.append('[');
@@ -203,11 +206,13 @@ public final class SteppingAnalysisWriter {
         return builder.toString();
     }
 
+    /** Escapes special characters for JSON string output. */
     private static String escapeJson(String value) {
         String safe = value == null ? "" : value;
         return safe.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
+    /** Formats a double to four decimal places. */
     private static String formatDouble(double value) {
         return String.format(Locale.ROOT, "%.8f", value);
     }

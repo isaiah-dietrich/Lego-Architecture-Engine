@@ -14,6 +14,7 @@ import com.lego.voxel.Voxelizer;
  */
 public final class VoxelDiagnostic {
 
+    /** Non-instantiable diagnostic class. */
     private VoxelDiagnostic() {
         // Utility class
     }
@@ -50,6 +51,7 @@ public final class VoxelDiagnostic {
         printLayer(surface, resolution / 2);
     }
 
+    /** Prints an ASCII visualization of a single voxel grid layer. */
     private static void printLayer(VoxelGrid grid, int z) {
         int width = grid.width();
         int height = grid.height();

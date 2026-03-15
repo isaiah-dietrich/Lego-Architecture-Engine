@@ -13,6 +13,7 @@ import com.lego.model.Brick;
  */
 public final class BrickObjExporter {
 
+    /** Non-instantiable utility class. */
     private BrickObjExporter() {
         // Utility class, prevent instantiation
     }

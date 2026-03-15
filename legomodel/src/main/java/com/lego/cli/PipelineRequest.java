@@ -7,7 +7,7 @@ import com.lego.voxel.VoxelizationStrategy;
 
 /**
  * Validated, immutable description of a single pipeline execution.
- * Built from {@link ParsedOptions} after all validation has passed.
+ * Built from ParsedOptions after all validation has passed.
  */
 public record PipelineRequest(
     Path modelPath,

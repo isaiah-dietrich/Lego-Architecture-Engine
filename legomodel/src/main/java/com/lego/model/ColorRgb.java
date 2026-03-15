@@ -3,9 +3,9 @@ package com.lego.model;
 /**
  * Immutable linear RGB color with components in [0, 1].
  *
- * <p>Used as a side-channel color annotation for triangles loaded from GLB inputs.
- * {@code Triangle}, {@code Mesh}, and the voxelizer pipeline do not reference this
- * type; color data flows in a separate {@code Map<Triangle, ColorRgb>} alongside
+ * Used as a side-channel color annotation for triangles loaded from GLB inputs.
+ * Triangle, Mesh, and the voxelizer pipeline do not reference this
+ * type; color data flows in a separate Map<Triangle, ColorRgb> alongside
  * geometry without modifying any existing record types.
  */
 public record ColorRgb(float r, float g, float b) {
@@ -18,8 +18,8 @@ public record ColorRgb(float r, float g, float b) {
     }
 
     /**
-     * Parses a 6-character hex string (e.g. {@code "FF8014"}) into a {@code ColorRgb}.
-     * Characters must be uppercase or lowercase hex digits; no leading {@code #}.
+     * Parses a 6-character hex string (e.g. "FF8014") into a ColorRgb.
+     * Characters must be uppercase or lowercase hex digits; no leading #.
      */
     public static ColorRgb fromHex(String hex) {
         if (hex == null || hex.length() != 6) {

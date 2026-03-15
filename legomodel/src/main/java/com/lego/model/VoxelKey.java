@@ -9,6 +9,7 @@ public final class VoxelKey {
     private static final int BITS = 21;
     private static final long MASK = (1L << BITS) - 1;
 
+    /** Non-instantiable utility class. */
     private VoxelKey() {}
 
     /** Packs three coordinates into a single long key. */

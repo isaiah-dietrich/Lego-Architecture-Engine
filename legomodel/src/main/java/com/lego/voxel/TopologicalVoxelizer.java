@@ -12,19 +12,20 @@ import com.lego.model.Vector3;
 /**
  * Topological surface voxelizer using triangle-AABB overlap detection.
  *
- * <p>Implementation notes:
+ * Implementation notes:
  * - Triangle-driven candidate traversal (no full-grid sweep)
  * - Sparse occupancy via packed voxel keys
  * - Triangle-AABB overlap tested via the Separating Axis Theorem (SAT,
  *   Akenine-Möller 2001): 13 axes tested — 3 AABB face normals, 1 triangle
  *   face normal, 9 edge cross-products. Any triangle that overlaps a voxel
  *   AABB is guaranteed to be detected.
- * </p>
+ * 
  */
 public final class TopologicalVoxelizer {
 
     private static final double DEFAULT_EPSILON = 1e-9;
 
+    /** Non-instantiable utility class. */
     private TopologicalVoxelizer() {
         // Utility class
     }
@@ -135,6 +136,7 @@ public final class TopologicalVoxelizer {
         return current;
     }
 
+    /** Computes the axis-aligned bounding box of all triangle vertices. */
     private static Bounds computeMeshBounds(Mesh mesh) {
         double minX = Double.POSITIVE_INFINITY;
         double minY = Double.POSITIVE_INFINITY;
@@ -157,6 +159,7 @@ public final class TopologicalVoxelizer {
         return new Bounds(minX, minY, minZ, maxX, maxY, maxZ);
     }
 
+    /** Computes grid-aligned bounds for each axis using the configured voxel sizes. */
     private static AlignedBounds computeAlignedBounds(Bounds bounds, TopologicalVoxelizerConfig config, int resolution, int yResolution) {
         AxisAligned x = alignAxis(bounds.minX, bounds.maxX, config.voxelSizeX(), resolution);
         AxisAligned y = alignAxis(bounds.minY, bounds.maxY, config.voxelSizeY(), yResolution);
@@ -164,6 +167,7 @@ public final class TopologicalVoxelizer {
         return new AlignedBounds(x.min, y.min, z.min, x.max, y.max, z.max);
     }
 
+    /** Aligns a single axis range to grid cells of the given size. */
     private static AxisAligned alignAxis(double rawMin, double rawMax, double size, int resolution) {
         double span = resolution * size;
         if ((rawMax - rawMin) > span + 1e-9) {
@@ -180,6 +184,7 @@ public final class TopologicalVoxelizer {
         return new AxisAligned(min, max);
     }
 
+    /** Maps a triangle's bounding box to a range of candidate voxel indices. */
     private static int[] triangleToCandidateRange(
         Triangle tri,
         AlignedBounds bounds,
@@ -204,12 +209,14 @@ public final class TopologicalVoxelizer {
         return new int[] {iMin, iMax, jMin, jMax, kMin, kMax};
     }
 
+    /** Clamps an integer value to the range [min, max]. */
     private static int clamp(int value, int min, int max) {
         if (value < min) return min;
         if (value > max) return max;
         return value;
     }
 
+    /** Raw min/max bounds on each axis. */
     private static final class Bounds {
         final double minX, minY, minZ, maxX, maxY, maxZ;
 
@@ -219,6 +226,7 @@ public final class TopologicalVoxelizer {
         }
     }
 
+    /** Grid-aligned range for a single axis: origin, cell size, and cell count. */
     private static final class AxisAligned {
         final double min, max;
 
@@ -228,6 +236,7 @@ public final class TopologicalVoxelizer {
         }
     }
 
+    /** Combined grid-aligned bounds for all three axes. */
     private static final class AlignedBounds {
         final double minX, minY, minZ, maxX, maxY, maxZ;
 
@@ -237,6 +246,7 @@ public final class TopologicalVoxelizer {
         }
     }
 
+    /** Sparse voxel grid backed by a HashSet of packed coordinates. */
     private static final class TopologicalVoxelGrid {
         private final int width, height, depth;
         private final Set<Long> surface = new HashSet<>();
@@ -260,12 +270,16 @@ public final class TopologicalVoxelizer {
             return grid;
         }
 
+        /** Packs three coordinates into a single long key (21 bits each). */
         private static long pack(int x, int y, int z) {
             return ((long) x << 42) | ((long) y << 21) | (long) z;
         }
 
+        /** Extracts the X coordinate from a packed key. */
         private static int unpackX(long key) { return (int) (key >>> 42); }
+        /** Extracts the Y coordinate from a packed key. */
         private static int unpackY(long key) { return (int) ((key >>> 21) & 0x1FFFFF); }
+        /** Extracts the Z coordinate from a packed key. */
         private static int unpackZ(long key) { return (int) (key & 0x1FFFFF); }
     }
 }

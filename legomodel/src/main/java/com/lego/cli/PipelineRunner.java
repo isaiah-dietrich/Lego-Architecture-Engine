@@ -32,10 +32,11 @@ import com.lego.voxel.Voxelizer;
 
 /**
  * Orchestrates the end-to-end LEGO pipeline: load → voxelize → place → color → export.
- * Extracted from {@code Main} so the pipeline can be driven without CLI wiring.
+ * Extracted from Main so the pipeline can be driven without CLI wiring.
  */
 public final class PipelineRunner {
 
+    /** Non-instantiable utility class. */
     private PipelineRunner() {}
 
     /**
@@ -155,6 +156,7 @@ public final class PipelineRunner {
         }
     }
 
+    /** Resolves a PlacementPolicy by name. */
     private static PlacementPolicy resolvePolicy(String name) {
         return switch (name.toLowerCase()) {
             case "scoring" -> new ScoringPlacementPolicy();

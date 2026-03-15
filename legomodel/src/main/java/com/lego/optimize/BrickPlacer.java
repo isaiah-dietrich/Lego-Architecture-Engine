@@ -10,33 +10,34 @@ import com.lego.voxel.VoxelGrid;
 /**
  * Deterministic brick placer with pluggable placement policies.
  *
- * <p>Converts a surface voxel grid into a list of LEGO bricks using catalog-driven
+ * Converts a surface voxel grid into a list of LEGO bricks using catalog-driven
  * dimensions. The placement policy controls which brick dimension is selected at
- * each position.</p>
+ * each position.
  *
- * <p>Scan order (deterministic):</p>
- * <ul>
- *   <li>Layer-by-layer: y ascending (VoxelGrid Y = OBJ height axis)</li>
- *   <li>Within each layer: z ascending (depth), then x ascending (width)</li>
- * </ul>
+ * Scan order (deterministic):
+ * 
+ *   - Layer-by-layer: y ascending (VoxelGrid Y = OBJ height axis)
+ *   - Within each layer: z ascending (depth), then x ascending (width)
+ * 
  *
- * <p>Available policies:</p>
- * <ul>
- *   <li>{@link ScoringPlacementPolicy} (default) — accuracy-first with neighbor
- *       coverage scoring and area as tie-breaker</li>
- *   <li>{@link GreedyAreaPolicy} — legacy largest-area-first greedy selection</li>
- * </ul>
+ * Available policies:
+ * 
+ *   - ScoringPlacementPolicy (default) — accuracy-first with neighbor
+ *       coverage scoring and area as tie-breaker
+ *   - GreedyAreaPolicy — legacy largest-area-first greedy selection
+ * 
  *
  * Brick dimensions occupy the horizontal X-Z plane (one voxel tall in Y):
- * <ul>
- *   <li>studX spans VoxelGrid X (width)</li>
- *   <li>studY spans VoxelGrid Z (depth)</li>
- * </ul>
+ * 
+ *   - studX spans VoxelGrid X (width)
+ *   - studY spans VoxelGrid Z (depth)
+ * 
  */
 public final class BrickPlacer {
 
     private static final PlacementPolicy DEFAULT_POLICY = new ScoringPlacementPolicy();
 
+    /** Non-instantiable utility class. */
     private BrickPlacer() {
         // Utility class, prevent instantiation
     }
@@ -44,7 +45,7 @@ public final class BrickPlacer {
     /**
      * Generates a list of bricks from a surface voxel grid.
      * Loads allowed dimensions from the curated catalog.
-     * Uses the default {@link ScoringPlacementPolicy}.
+     * Uses the default ScoringPlacementPolicy.
      *
      * @param surface the surface voxel grid
      * @return list of bricks covering all filled voxels, deterministic order
@@ -57,7 +58,7 @@ public final class BrickPlacer {
 
     /**
      * Generates a list of bricks from a surface voxel grid using provided brick specs.
-     * Uses the default {@link ScoringPlacementPolicy}.
+     * Uses the default ScoringPlacementPolicy.
      *
      * @param surface the surface voxel grid
      * @param allowedSpecs allowed brick specs in priority order (largest first)

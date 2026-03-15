@@ -7,17 +7,17 @@ import com.lego.model.ColorRgb;
 /**
  * Per-triangle texture and material data for direct texture sampling.
  *
- * <p>Stored parallel to the mesh triangle list (same index correspondence).
+ * Stored parallel to the mesh triangle list (same index correspondence).
  * Each instance carries everything needed to sample a color at any point
  * on the triangle surface: per-vertex UV coordinates, the texture image,
  * per-vertex colors, and the material base-color factor.
  *
- * <p>Color priority matches glTF convention:
- * <ol>
- *   <li>Per-vertex colors (interpolated via barycentrics)</li>
- *   <li>Texture sampled at interpolated UV × baseColorFactor</li>
- *   <li>baseColorFactor alone</li>
- * </ol>
+ * Color priority matches glTF convention:
+ * 
+ *   - Per-vertex colors (interpolated via barycentrics)
+ *   - Texture sampled at interpolated UV × baseColorFactor
+ *   - baseColorFactor alone
+ * 
  */
 public record TexturedTriangle(
     float u0, float v0,

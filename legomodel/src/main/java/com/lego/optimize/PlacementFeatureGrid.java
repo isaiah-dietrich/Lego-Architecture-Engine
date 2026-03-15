@@ -3,10 +3,10 @@ package com.lego.optimize;
 /**
  * Precomputed per-voxel feature data consumed by placement policies.
  *
- * <p>This type is color-space-agnostic — it stores precomputed CIELAB values
+ * This type is color-space-agnostic — it stores precomputed CIELAB values
  * and a variance map, but performs no color-space conversion itself. Use
- * {@code ColorFeatureGridFactory} (in the color package) to build instances
- * from RGB voxel data.</p>
+ * ColorFeatureGridFactory (in the color package) to build instances
+ * from RGB voxel data.
  */
 public final class PlacementFeatureGrid {
 
@@ -14,8 +14,8 @@ public final class PlacementFeatureGrid {
     private final double colorDiffThreshold;
 
     /**
-     * Precomputed CIELAB values per voxel: {@code labValues[x][y][z]} is a
-     * 3-element array {@code [L, a, b]}, or {@code null} if the voxel has
+     * Precomputed CIELAB values per voxel: labValues[x][y][z] is a
+     * 3-element array [L, a, b], or null if the voxel has
      * no color data.
      */
     private final double[][][][] labValues;
@@ -54,9 +54,9 @@ public final class PlacementFeatureGrid {
     /**
      * Computes color uniformity across the given brick footprint.
      *
-     * <p>Finds the maximum pairwise CIE76 ΔE among all voxels in the
+     * Finds the maximum pairwise CIE76 ΔE among all voxels in the
      * region and maps it to [0.0, 1.0]: ΔE = 0 → 1.0 (perfectly uniform),
-     * ΔE ≥ threshold → 0.0 (maximally varied).</p>
+     * ΔE ≥ threshold → 0.0 (maximally varied).
      *
      * @return 1.0 if no color data, volume ≤ 1, or single-color region
      */

@@ -14,16 +14,19 @@ import com.lego.model.Mesh;
  */
 public final class VoxelSteppingAnalyzer {
 
+    /** Six face-adjacent neighbor offsets in 3D. */
     private static final int[][] NEIGHBORS_6 = {
         { 1, 0, 0 }, { -1, 0, 0 },
         { 0, 1, 0 }, { 0, -1, 0 },
         { 0, 0, 1 }, { 0, 0, -1 }
     };
 
+    /** Four face-adjacent neighbor offsets in 2D. */
     private static final int[][] NEIGHBORS_2D_4 = {
         { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 }
     };
 
+    /** Non-instantiable utility class. */
     private VoxelSteppingAnalyzer() {
         // Utility class
     }
@@ -107,7 +110,7 @@ public final class VoxelSteppingAnalyzer {
     }
 
     /**
-     * @deprecated Use {@link ResolutionSweepRunner#runResolutionSweep} directly.
+     * @deprecated Use ResolutionSweepRunner#runResolutionSweep directly.
      */
     public static ResolutionSweepResult runResolutionSweep(
         Mesh mesh,
@@ -122,39 +125,41 @@ public final class VoxelSteppingAnalyzer {
     }
 
     /**
-     * @deprecated Use {@link SteppingAnalysisWriter#writeMetricsJson} directly.
+     * @deprecated Use SteppingAnalysisWriter#writeMetricsJson directly.
      */
     public static void writeMetricsJson(VoxelSteppingMetrics metrics, Path filePath) throws IOException {
         SteppingAnalysisWriter.writeMetricsJson(metrics, filePath);
     }
 
     /**
-     * @deprecated Use {@link SteppingAnalysisWriter#writeLayersCsv} directly.
+     * @deprecated Use SteppingAnalysisWriter#writeLayersCsv directly.
      */
     public static void writeLayersCsv(VoxelSteppingMetrics metrics, Path filePath) throws IOException {
         SteppingAnalysisWriter.writeLayersCsv(metrics, filePath);
     }
 
     /**
-     * @deprecated Use {@link SteppingAnalysisWriter#writeSweepJson} directly.
+     * @deprecated Use SteppingAnalysisWriter#writeSweepJson directly.
      */
     public static void writeSweepJson(ResolutionSweepResult sweepResult, Path filePath) throws IOException {
         SteppingAnalysisWriter.writeSweepJson(sweepResult, filePath);
     }
 
     /**
-     * @deprecated Use {@link SteppingAnalysisWriter#writeSweepCsv} directly.
+     * @deprecated Use SteppingAnalysisWriter#writeSweepCsv directly.
      */
     public static void writeSweepCsv(ResolutionSweepResult sweepResult, Path filePath) throws IOException {
         SteppingAnalysisWriter.writeSweepCsv(sweepResult, filePath);
     }
 
+    /** Throws if the two grids have different dimensions. */
     private static void validateSameDimensions(VoxelGrid a, VoxelGrid b) {
         if (a.width() != b.width() || a.height() != b.height() || a.depth() != b.depth()) {
             throw new IllegalArgumentException("Voxel grids must have identical dimensions");
         }
     }
 
+    /** Computes per-layer delta (count[i+1] - count[i]) for stepping analysis. */
     private static int[] computeDeltas(int[] counts) {
         if (counts.length <= 1) {
             return new int[0];
@@ -166,6 +171,7 @@ public final class VoxelSteppingAnalyzer {
         return deltas;
     }
 
+    /** Computes summary statistics (mean, max, stddev) for the delta array. */
     private static DeltaStats computeDeltaStats(int[] deltas) {
         if (deltas.length == 0) {
             return new DeltaStats(0.0, 0.0, 0, 0, 0.0);
@@ -197,6 +203,7 @@ public final class VoxelSteppingAnalyzer {
         return new DeltaStats(mean, std, min, max, cv);
     }
 
+    /** Counts large jumps (deltas exceeding the threshold). */
     private static JumpStats computeJumpStats(int[] deltas, int threshold) {
         int largest = 0;
         int count = 0;
@@ -212,6 +219,7 @@ public final class VoxelSteppingAnalyzer {
         return new JumpStats(largest, threshold, count);
     }
 
+    /** Counts plateau layers where voxel count does not change. */
     private static PlateauStats computePlateauStats(int[] counts) {
         if (counts.length == 0) {
             return new PlateauStats(0, 0);
@@ -236,6 +244,7 @@ public final class VoxelSteppingAnalyzer {
         return new PlateauStats(repeatedAdjacent, longest);
     }
 
+    /** Measures voxel-level left-right symmetry across layers. */
     private static SymmetryStats computeSymmetryStats(VoxelGrid grid) {
         int width = grid.width();
         int height = grid.height();
@@ -292,6 +301,7 @@ public final class VoxelSteppingAnalyzer {
         return new SymmetryStats(xOverall, yOverall, zOverall, xPerLayer, yPerLayer, zPerLayer);
     }
 
+    /** Counts the number of 3D connected components in the voxel grid using flood fill. */
     private static int count3DConnectedComponents(VoxelGrid grid) {
         int width = grid.width();
         int height = grid.height();
@@ -338,6 +348,7 @@ public final class VoxelSteppingAnalyzer {
         return components;
     }
 
+    /** Counts 2D connected components per layer using flood fill. */
     private static int[] count2DComponentsPerLayer(VoxelGrid grid) {
         int width = grid.width();
         int height = grid.height();
@@ -385,6 +396,7 @@ public final class VoxelSteppingAnalyzer {
         return componentsPerLayer;
     }
 
+    /** Returns the sum of all values in the array. */
     private static int sum(int[] values) {
         int sum = 0;
         for (int value : values) {
@@ -393,6 +405,7 @@ public final class VoxelSteppingAnalyzer {
         return sum;
     }
 
+    /** Metadata about the analysis run: model file, resolution, timestamp. */
     public record AnalysisMetadata(
         String modelPath,
         int resolution,
@@ -401,6 +414,7 @@ public final class VoxelSteppingAnalyzer {
         String timestamp
     ) {}
 
+    /** Summary statistics for per-layer voxel count deltas. */
     public record DeltaStats(
         double mean,
         double standardDeviation,
@@ -409,17 +423,20 @@ public final class VoxelSteppingAnalyzer {
         double coefficientOfVariation
     ) {}
 
+    /** Statistics for large jumps exceeding the threshold. */
     public record JumpStats(
         int largestAbsoluteJump,
         int largeJumpThreshold,
         int largeJumpCount
     ) {}
 
+    /** Statistics for plateau layers where voxel count is unchanged. */
     public record PlateauStats(
         int repeatedAdjacentLayers,
         int longestPlateauLength
     ) {}
 
+    /** Left-right symmetry statistics across layers. */
     public record SymmetryStats(
         int xMismatchOverall,
         int yMismatchOverall,
@@ -429,6 +446,7 @@ public final class VoxelSteppingAnalyzer {
         int[] zMismatchPerLayer
     ) {}
 
+    /** Connected component statistics for the voxel grid. */
     public record ComponentStats(
         int overallFilledComponents,
         int overallSurfaceComponents,
@@ -436,6 +454,7 @@ public final class VoxelSteppingAnalyzer {
         int[] surfaceComponentsPerLayer
     ) {}
 
+    /** Complete stepping analysis metrics for a single resolution. */
     public record VoxelSteppingMetrics(
         AnalysisMetadata metadata,
         int[] filledVoxelsPerLayer,
@@ -448,7 +467,9 @@ public final class VoxelSteppingAnalyzer {
         ComponentStats componentStats
     ) {}
 
+    /** A single entry in a resolution sweep: resolution and its metrics. */
     public record SweepEntry(int resolution, VoxelSteppingMetrics metrics) {}
 
+    /** Result of a multi-resolution sweep analysis. */
     public record ResolutionSweepResult(List<SweepEntry> entries) {}
 }

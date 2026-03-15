@@ -24,6 +24,7 @@ import com.lego.model.Vector3;
  */
 public final class ObjLoader {
 
+    /** Non-instantiable utility class. */
     private ObjLoader() {
         // Utility class, prevent instantiation
     }

@@ -17,10 +17,11 @@ import de.javagl.jgltf.model.v2.MaterialModelV2;
 
 /**
  * Extracts material properties (baseColorFactor, baseColorTexture) from
- * glTF v2 PBR materials. Separated from {@link GlbLoader} for clarity.
+ * glTF v2 PBR materials. Separated from GlbLoader for clarity.
  */
 final class GlbMaterialExtractor {
 
+    /** Non-instantiable utility class. */
     private GlbMaterialExtractor() {}
 
     /**

@@ -22,6 +22,7 @@ import org.apache.commons.csv.CSVRecord;
  */
 public class Cleaning {
 
+    /** Regex pattern to extract width x depth dimensions from part names. */
     private static final Pattern DIMENSION_PATTERN = Pattern.compile(
         "(?i)(?<![A-Za-z0-9])(\\d+)\\s*x\\s*(\\d+)(?:\\s*x\\s*(\\d+/\\d+|\\d+))?(?!\\s*[xX])(?![A-Za-z0-9/])"
     );
@@ -31,6 +32,7 @@ public class Cleaning {
     private static final int PREVIEW_LIMIT = 10;
     private static final String REJECT_REASON = "reject_reason";
 
+    /** Expected headers for the output catalog CSV. */
     private static final String[] CATALOG_HEADERS = {
         "part_id",
         "name",
@@ -42,6 +44,7 @@ public class Cleaning {
         "active"
     };
 
+    /** Parsed width and depth dimensions from a part name. */
     static final class ParsedDimensions {
         private final int studX;
         private final int studY;
@@ -92,6 +95,7 @@ public class Cleaning {
         }
     }
 
+    /** Reads raw Rebrickable data, filters and validates it, and writes the catalog and rejected rows. */
     public void buildCatalog(File input, File catalogOutput, File rejectedOutput) throws IOException {
         Path inputPath = input.toPath();
         Path catalogPath = catalogOutput.toPath();
@@ -177,6 +181,7 @@ public class Cleaning {
         }
     }
 
+    /** Extracts width x depth dimensions from a part name string. Returns null if no dimensions found. */
     static ParsedDimensions parseDimensions(String name) {
         if (name == null) {
             return null;
@@ -202,6 +207,7 @@ public class Cleaning {
         return new ParsedDimensions(studX, studY, heightUnits);
     }
 
+    /** Returns true if the height_units value is a valid positive integer. */
     static boolean isValidHeightUnits(String heightUnits) {
         if (heightUnits == null || heightUnits.isBlank()) {
             return false;
@@ -220,6 +226,7 @@ public class Cleaning {
         return numerator > 0 && denominator > 0;
     }
 
+    /** Builds the CSV header row for the rejected-rows output file. */
     private static String[] buildRejectedHeaders(List<String> sourceHeaders) {
         String[] headers = new String[sourceHeaders.size() + 1];
         for (int i = 0; i < sourceHeaders.size(); i++) {
@@ -229,6 +236,7 @@ public class Cleaning {
         return headers;
     }
 
+    /** Builds a rejected-row record with the original fields plus a rejection reason. */
     private static List<String> buildRejectedRecord(
         List<String> sourceHeaders,
         CSVRecord record,
@@ -242,6 +250,7 @@ public class Cleaning {
         return values;
     }
 
+    /** Finds a header name in the list, throwing if not found. */
     private static String resolveHeader(List<String> headers, String expectedName) {
         for (String header : headers) {
             if (expectedName.equalsIgnoreCase(header)) {
@@ -251,6 +260,7 @@ public class Cleaning {
         throw new IllegalArgumentException("CSV must contain a '" + expectedName + "' header column.");
     }
 
+    /** Prints a preview of the first few items in a list to standard output. */
     private static void printPreview(String label, List<String> names) {
         System.out.println();
         System.out.println(label);
@@ -260,6 +270,7 @@ public class Cleaning {
         }
     }
 
+    /** Resolves a file path, preferring the direct path if it exists, otherwise the nested path. */
     static Path resolvePreferredPath(Path cwd, String directPath, String nestedPath) {
         Path direct = cwd.resolve(directPath);
         if (Files.exists(direct)) {
@@ -274,11 +285,13 @@ public class Cleaning {
         return null;
     }
 
+    /** Resolves the default path to the filtered Rebrickable input file. */
     static Path resolveFilteredInputPath() {
         Path cwd = Paths.get("").toAbsolutePath().normalize();
         return resolvePreferredPath(cwd, "data/parts_dimension_filtered.csv", "legomodel/data/parts_dimension_filtered.csv");
     }
 
+    /** Derives the catalog output path from the input path. */
     static Path resolveCatalogOutputPath(Path inputPath) {
         if (inputPath == null) {
             return null;
@@ -286,6 +299,7 @@ public class Cleaning {
         return inputPath.getParent().resolve("parts_catalog_v1.csv");
     }
 
+    /** Derives the rejected-rows output path from the input path. */
     static Path resolveRejectedOutputPath(Path inputPath) {
         if (inputPath == null) {
             return null;

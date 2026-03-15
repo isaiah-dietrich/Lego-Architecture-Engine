@@ -5,6 +5,7 @@ package com.lego.model;
  */
 public final class TriangleAabbTest {
 
+    /** Non-instantiable utility class. */
     private TriangleAabbTest() {}
 
     /**
@@ -56,10 +57,12 @@ public final class TriangleAabbTest {
         return true;
     }
 
+    /** Returns true if the three projections are separated from the half-extent range [-h, +h]. */
     private static boolean separating(double p0, double p1, double p2, double h) {
         return Math.min(p0, Math.min(p1, p2)) > h || Math.max(p0, Math.max(p1, p2)) < -h;
     }
 
+    /** Edge-AABB cross-product test projected onto the X axis. */
     private static boolean edgeCrossX(
         double v0y, double v0z, double v1y, double v1z, double v2y, double v2z,
         double ey, double ez, double hy, double hz
@@ -71,6 +74,7 @@ public final class TriangleAabbTest {
         return Math.min(p0, Math.min(p1, p2)) > r || Math.max(p0, Math.max(p1, p2)) < -r;
     }
 
+    /** Edge-AABB cross-product test projected onto the Y axis. */
     private static boolean edgeCrossY(
         double v0x, double v0z, double v1x, double v1z, double v2x, double v2z,
         double ex, double ez, double hx, double hz
@@ -82,6 +86,7 @@ public final class TriangleAabbTest {
         return Math.min(p0, Math.min(p1, p2)) > r || Math.max(p0, Math.max(p1, p2)) < -r;
     }
 
+    /** Edge-AABB cross-product test projected onto the Z axis. */
     private static boolean edgeCrossZ(
         double v0x, double v0y, double v1x, double v1y, double v2x, double v2y,
         double ex, double ey, double hx, double hy

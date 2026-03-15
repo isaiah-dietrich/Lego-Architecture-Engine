@@ -4,12 +4,12 @@ import com.lego.model.ColorRgb;
 import com.lego.optimize.PlacementFeatureGrid;
 
 /**
- * Builds a {@link PlacementFeatureGrid} from a per-voxel RGB color grid.
+ * Builds a PlacementFeatureGrid from a per-voxel RGB color grid.
  *
- * <p>This factory lives in the {@code color} package because it performs
+ * This factory lives in the color package because it performs
  * color-space conversion (linear RGB → CIELAB). The resulting grid is
- * color-space-agnostic and can be consumed by the {@code optimize} package
- * without any color imports.</p>
+ * color-space-agnostic and can be consumed by the optimize package
+ * without any color imports.
  */
 public final class ColorFeatureGridFactory {
 
@@ -22,6 +22,7 @@ public final class ColorFeatureGridFactory {
      */
     private static final int VARIANCE_NEIGHBOR_THRESHOLD = 2;
 
+    /** Non-instantiable factory class. */
     private ColorFeatureGridFactory() {}
 
     /**
@@ -55,6 +56,7 @@ public final class ColorFeatureGridFactory {
         return new PlacementFeatureGrid(labValues, highVariance, COLOR_DIFF_THRESHOLD);
     }
 
+    /** Computes a per-voxel boolean map: true where neighboring Lab values exceed the variance threshold. */
     private static boolean[][][] computeVarianceMap(double[][][][] labValues,
                                                      int w, int h, int d) {
         boolean[][][] map = new boolean[w][h][d];

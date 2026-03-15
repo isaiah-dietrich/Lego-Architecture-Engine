@@ -15,13 +15,13 @@ import com.lego.model.ColorRgb;
 /**
  * Maps linear RGB colors to the nearest official LDraw color code.
  *
- * <p>Uses the Rebrickable color table at {@code data/raw/rebrickable/colors.csv}.
- * Only opaque entries ({@code is_trans=FALSE}) participate in matching. Distance
+ * Uses the Rebrickable color table at data/raw/rebrickable/colors.csv.
+ * Only opaque entries (is_trans=FALSE) participate in matching. Distance
  * is computed in CIE L*a*b* (CIELAB) using the ΔE76 formula, which models
  * perceptual color difference better than Euclidean RGB distance.
  *
- * <p>The {@code id} field from the CSV is used directly as the LDraw color code
- * in {@code .ldr} output, restricted to the standard range {@code [0, 511]}.
+ * The id field from the CSV is used directly as the LDraw color code
+ * in .ldr output, restricted to the standard range [0, 511].
  */
 public final class LegoPaletteMapper {
 
@@ -44,6 +44,7 @@ public final class LegoPaletteMapper {
     private final List<PaletteEntry> opaqueEntries;
     private final List<PaletteEntry> allEntries;
 
+    /** Constructs a mapper with the given palette entries. */
     private LegoPaletteMapper(List<PaletteEntry> entries) {
         this.allEntries = List.copyOf(entries);
         this.opaqueEntries = entries.stream()
@@ -113,7 +114,7 @@ public final class LegoPaletteMapper {
      * Finds the nearest opaque LDraw color for the given linear RGB input.
      *
      * @param color linear RGB input color from GLB
-     * @return the LDraw color code (the {@code id} field from the CSV)
+     * @return the LDraw color code (the id field from the CSV)
      */
     public int nearestLDrawColor(ColorRgb color) {
         double[] lab = linearRgbToLab(color.r(), color.g(), color.b());
@@ -158,7 +159,7 @@ public final class LegoPaletteMapper {
 
     /**
      * Returns the L*a*b* coordinates for a given LDraw color code,
-     * or {@code null} if the code is not in the palette.
+     * or null if the code is not in the palette.
      */
     public double[] labForCode(int ldrawCode) {
         for (PaletteEntry e : allEntries) {
@@ -197,12 +198,12 @@ public final class LegoPaletteMapper {
     /**
      * CIEDE2000 color difference formula.
      *
-     * <p>This is the modern perceptual color difference metric that properly
+     * This is the modern perceptual color difference metric that properly
      * weights lightness, chroma, and hue differences. It dramatically reduces
      * cross-hue mismatches compared to ΔE76 (e.g., dark brown shadows being
      * matched to Dark Red or Magenta).
      *
-     * <p>Reference: Sharma, Wu, Dalal (2005), "The CIEDE2000 Color-Difference
+     * Reference: Sharma, Wu, Dalal (2005), "The CIEDE2000 Color-Difference
      * Formula: Implementation Notes, Supplementary Test Data, and Mathematical
      * Observations", Color Research & Application, 30(1), 21-30.
      *
@@ -286,7 +287,7 @@ public final class LegoPaletteMapper {
     /**
      * CIEDE2000 with a custom lightness weight (kL).
      *
-     * <p>Higher kL de-weights lightness differences, making hue and chroma
+     * Higher kL de-weights lightness differences, making hue and chroma
      * more important in the match. This is useful for textured models with
      * baked lighting where dark shadows should still match same-hue palette
      * entries rather than wrong-hue entries at similar darkness.

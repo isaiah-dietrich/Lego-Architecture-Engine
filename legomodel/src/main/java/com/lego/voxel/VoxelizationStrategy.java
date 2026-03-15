@@ -18,7 +18,7 @@ public enum VoxelizationStrategy {
         return cliValue;
     }
 
-    /** Parses a CLI argument string into a {@link VoxelizationStrategy}. */
+    /** Parses a CLI argument string into a VoxelizationStrategy. */
     public static VoxelizationStrategy fromCliValue(String value) {
         for (VoxelizationStrategy strategy : values()) {
             if (strategy.cliValue.equalsIgnoreCase(value)) {

@@ -6,18 +6,19 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Registry of available {@link ColorStrategy} implementations.
+ * Registry of available ColorStrategy implementations.
  *
- * <p>Maps short CLI names (e.g. "direct") to strategy instances. The registry
- * is used by the CLI to resolve {@code --color-algorithm=<name>} flags and to
- * list available algorithms with {@code --color-algorithm=list}.
+ * Maps short CLI names (e.g. "direct") to strategy instances. The registry
+ * is used by the CLI to resolve --color-algorithm=<name> flags and to
+ * list available algorithms with --color-algorithm=list.
  *
- * <p>To register a new algorithm, add it in {@link #createDefault()}.
+ * To register a new algorithm, add it in #createDefault().
  */
 public final class ColorStrategyRegistry {
 
     private final Map<String, ColorStrategy> strategies;
 
+    /** Constructs a registry from the given strategy map. */
     private ColorStrategyRegistry(Map<String, ColorStrategy> strategies) {
         this.strategies = Collections.unmodifiableMap(new LinkedHashMap<>(strategies));
     }
@@ -35,6 +36,7 @@ public final class ColorStrategyRegistry {
         return new ColorStrategyRegistry(map);
     }
 
+    /** Registers a strategy in the map, keyed by its name. */
     private static void register(Map<String, ColorStrategy> map, ColorStrategy strategy) {
         map.put(strategy.name(), strategy);
     }

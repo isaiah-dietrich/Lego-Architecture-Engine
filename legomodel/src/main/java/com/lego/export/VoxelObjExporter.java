@@ -13,6 +13,7 @@ import com.lego.voxel.VoxelGrid;
  */
 public final class VoxelObjExporter {
 
+    /** Non-instantiable utility class. */
     private VoxelObjExporter() {
         // Utility class, prevent instantiation
     }

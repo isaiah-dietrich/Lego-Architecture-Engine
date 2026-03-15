@@ -12,10 +12,11 @@ import com.lego.optimize.AllowedBrickDimensions.BrickSpec;
 
 /**
  * Formats and prints pipeline summary output.
- * Extracted from {@code Main} to separate display from orchestration.
+ * Extracted from Main to separate display from orchestration.
  */
 final class OutputReporter {
 
+    /** Non-instantiable utility class. */
     private OutputReporter() {}
 
     /** Prints the pipeline result summary (voxels, bricks, reduction). */
@@ -47,6 +48,7 @@ final class OutputReporter {
         }
     }
 
+    /** Prints a sorted list of unique LDraw color codes and names used in the export. */
     static void printColorList(Map<Brick, Integer> brickColorCodes, LegoPaletteMapper palette, PrintStream out) {
         if (brickColorCodes == null || brickColorCodes.isEmpty()) {
             out.println("Color list: (no colors - using default color 16)");

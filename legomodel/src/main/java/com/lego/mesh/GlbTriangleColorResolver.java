@@ -9,21 +9,22 @@ import de.javagl.jgltf.model.AccessorFloatData;
 
 /**
  * Resolves per-triangle color from vertex colors, texture sampling, and
- * material fallback. Separated from {@link GlbLoader} for clarity.
+ * material fallback. Separated from GlbLoader for clarity.
  */
 final class GlbTriangleColorResolver {
 
+    /** Non-instantiable utility class. */
     private GlbTriangleColorResolver() {}
 
     /**
      * Determines the color for a triangle. Priority:
-     * <ol>
-     *   <li>COLOR_0 vertex attribute (average of 3 vertex colors)</li>
-     *   <li>baseColorTexture multi-sampled across the triangle's UV footprint
-     *       (&times; baseColorFactor if set)</li>
-     *   <li>baseColorFactor alone</li>
-     *   <li>null (no color)</li>
-     * </ol>
+     * 
+     *   - COLOR_0 vertex attribute (average of 3 vertex colors)
+     *   - baseColorTexture multi-sampled across the triangle's UV footprint
+     *       (× baseColorFactor if set)
+     *   - baseColorFactor alone
+     *   - null (no color)
+     * 
      */
     static ColorRgb resolveTriangleColor(
         AccessorFloatData colors,

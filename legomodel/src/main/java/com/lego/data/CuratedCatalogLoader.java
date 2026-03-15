@@ -23,6 +23,7 @@ import com.lego.model.CatalogPart;
  */
 public final class CuratedCatalogLoader {
 
+    /** Non-instantiable utility class. */
     private CuratedCatalogLoader() {
         // Utility class, no instantiation
     }
@@ -115,6 +116,7 @@ public final class CuratedCatalogLoader {
         );
     }
 
+    /** Loads catalog parts from the CSV file, optionally filtering to active-only. */
     private static List<CatalogPart> loadParts(Path baseDir, boolean activeOnly) {
         Path catalogPath = resolveCatalogPath(baseDir);
 
@@ -159,6 +161,7 @@ public final class CuratedCatalogLoader {
         }
     }
 
+    /** Validates that the CSV contains all expected column headers. */
     private static void validateHeaders(Set<String> actualHeaders, Path catalogPath) {
         Set<String> missing = new HashSet<>();
         for (String required : CatalogConfig.CURATED_CATALOG_HEADERS) {
@@ -201,6 +204,7 @@ public final class CuratedCatalogLoader {
         }
     }
 
+    /** Parses a single CSV record into a CatalogPart. */
     private static CatalogPart parseRecord(CSVRecord record) {
         String partId = record.get("part_id");
         String name = record.get("name");

@@ -8,21 +8,21 @@ import com.lego.model.ColorRgb;
 /**
  * Strategy interface for mapping sampled brick RGB colors to LDraw color codes.
  *
- * <p>Each implementation encapsulates a complete algorithm for converting raw
+ * Each implementation encapsulates a complete algorithm for converting raw
  * linear RGB colors (from texture sampling) into integer LDraw palette codes.
  * Implementations may include preprocessing (shadow removal, saturation boost),
  * different distance metrics (ΔE76, CIEDE2000), or domain-specific heuristics.
  *
- * <p>Usage: select a strategy by name via {@link ColorStrategyRegistry}, then call
- * {@link #apply} with the sampled brick colors and a loaded palette. The returned
- * map can be passed directly to {@link ColorSmoother} and the LDraw exporter.
+ * Usage: select a strategy by name via ColorStrategyRegistry, then call
+ * #apply with the sampled brick colors and a loaded palette. The returned
+ * map can be passed directly to ColorSmoother and the LDraw exporter.
  *
- * <p>To add a new algorithm:
- * <ol>
- *   <li>Create a class implementing {@code ColorStrategy}</li>
- *   <li>Register it in {@link ColorStrategyRegistry#createDefault()}</li>
- *   <li>Run with {@code --color-algorithm=your-name}</li>
- * </ol>
+ * To add a new algorithm:
+ * 
+ *   - Create a class implementing ColorStrategy
+ *   - Register it in ColorStrategyRegistry#createDefault()
+ *   - Run with --color-algorithm=your-name
+ * 
  */
 public interface ColorStrategy {
 
@@ -34,7 +34,7 @@ public interface ColorStrategy {
 
     /**
      * Returns a brief description of what this algorithm does.
-     * Used in {@code --help} and {@code --color-algorithm=list} output.
+     * Used in --help and --color-algorithm=list output.
      */
     String description();
 

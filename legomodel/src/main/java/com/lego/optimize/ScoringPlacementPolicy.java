@@ -9,42 +9,42 @@ import com.lego.voxel.VoxelGrid;
 /**
  * Quality-first scoring placement policy.
  *
- * <p>For each candidate brick dimension at a position, computes a score
- * that maximizes surface quality through orientation-aware placement:</p>
+ * For each candidate brick dimension at a position, computes a score
+ * that maximizes surface quality through orientation-aware placement:
  *
- * <ol>
- *   <li><strong>Accuracy</strong> (primary): ratio of filled, uncovered voxels
+ * 
+ *   - Accuracy (primary): ratio of filled, uncovered voxels
  *       to total voxels in the candidate footprint. Higher is better.
  *       Only candidates with perfect accuracy (1.0) are placed — this
  *       matches the current requirement that every voxel under a brick
- *       must be filled.</li>
- *   <li><strong>Color uniformity</strong> (secondary, when color data available):
+ *       must be filled.
+ *   - Color uniformity (secondary, when color data available):
  *       measures how visually consistent the voxel colors are under the candidate
  *       footprint using CIELAB ΔE. A brick covering a single color region scores
  *       1.0; one straddling a sharp color boundary (e.g. eye detail) scores
- *       lower, allowing a smaller single-color brick to win.</li>
- *   <li><strong>Area</strong> (tertiary): larger bricks win over smaller
+ *       lower, allowing a smaller single-color brick to win.
+ *   - Area (tertiary): larger bricks win over smaller
  *       ones, reducing total piece count and seam count for a more
- *       cohesive surface.</li>
- *   <li><strong>Neighbor coverage</strong> (quaternary): fraction of the brick's
+ *       cohesive surface.
+ *   - Neighbor coverage (quaternary): fraction of the brick's
  *       border voxels (one step outside the footprint) that are also filled.
  *       Among same-area candidates (especially rotated orientations), the
  *       one with higher coverage is preferred — it fits more snugly in the
- *       surrounding surface.</li>
- * </ol>
+ *       surrounding surface.
+ * 
  *
- * <p><strong>Orientation exploration:</strong> unlike {@link GreedyAreaPolicy},
+ * Orientation exploration: unlike GreedyAreaPolicy,
  * this policy tries both orientations of each non-square dimension (e.g.
  * 2×4 and 4×2). This is the primary quality feature — it finds better-fitting
  * rotations that the fixed-orientation greedy policy misses. Coverage then
- * selects the rotation that meshes best with the surrounding surface.</p>
+ * selects the rotation that meshes best with the surrounding surface.
  *
- * <p><strong>Color awareness:</strong> when constructed with a {@link PlacementFeatureGrid}
- * (built via {@code ColorFeatureGridFactory}), the policy will prefer
+ * Color awareness: when constructed with a PlacementFeatureGrid
+ * (built via ColorFeatureGridFactory), the policy will prefer
  * bricks that cover visually uniform regions. In areas with intense color
  * variation (eyes, patterns), smaller bricks are chosen to preserve detail.
  * When no feature grid is provided, color uniformity defaults to 1.0 and the
- * policy behaves identically to its color-unaware mode.</p>
+ * policy behaves identically to its color-unaware mode.
  */
 public final class ScoringPlacementPolicy implements PlacementPolicy {
 
@@ -59,7 +59,7 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
      * Creates a scoring policy with optional precomputed feature data.
      *
      * @param featureGrid precomputed placement features (from
-     *                     {@code ColorFeatureGridFactory.create}),
+     *                     ColorFeatureGridFactory.create),
      *                     or null for color-unaware mode
      */
     public ScoringPlacementPolicy(PlacementFeatureGrid featureGrid) {
@@ -67,11 +67,13 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
     }
 
     @Override
+    /** Returns the policy name ("scoring"). */
     public String name() {
         return "scoring";
     }
 
     @Override
+    /** Selects the highest-scoring brick at the given position, trying both orientations. */
     public Brick selectBrick(VoxelGrid surface, boolean[][][] covered,
                               int x, int y, int z, List<BrickSpec> allowedSpecs) {
         // In high color-variance regions, force the smallest available brick
@@ -126,22 +128,22 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
     /**
      * Computes a composite placement score.
      *
-     * <p>Returns {@link Double#NEGATIVE_INFINITY} if the candidate cannot be
-     * placed (any footprint voxel is out of bounds, empty, or already covered).</p>
+     * Returns Double#NEGATIVE_INFINITY if the candidate cannot be
+     * placed (any footprint voxel is out of bounds, empty, or already covered).
      *
-     * <p>Score = accuracy × 1B + colorUniformity × area × 1K + heightUnits × 150
-     *        + neighborCoverage × 100</p>
-     * <ul>
-     *   <li>accuracy — must be 1.0 to be valid (gates all candidates)</li>
-     *   <li>colorUniformity × area × 1K — quality-weighted area: a color-uniform
+     * Score = accuracy × 1B + colorUniformity × area × 1K + heightUnits × 150
+     *        + neighborCoverage × 100
+     * 
+     *   - accuracy — must be 1.0 to be valid (gates all candidates)
+     *   - colorUniformity × area × 1K — quality-weighted area: a color-uniform
      *       brick scores its full area, while one spanning a color boundary gets
-     *       penalized, potentially letting a smaller single-color brick win</li>
-     *   <li>heightUnits × 150 — consolidation bonus: bricks (h=3) beat plates
+     *       penalized, potentially letting a smaller single-color brick win
+     *   - heightUnits × 150 — consolidation bonus: bricks (h=3) beat plates
      *       (h=1) in uniform-color areas (fewer pieces), but the 300-point gap
-     *       is easily overridden by even modest color variation across Y layers</li>
-     *   <li>neighborCoverage × 100 — among same-area candidates (e.g. rotations),
-     *       selects the orientation with the best surrounding fit</li>
-     * </ul>
+     *       is easily overridden by even modest color variation across Y layers
+     *   - neighborCoverage × 100 — among same-area candidates (e.g. rotations),
+     *       selects the orientation with the best surrounding fit
+     * 
      */
     private static double scorePlacement(VoxelGrid surface, boolean[][][] covered,
                                           PlacementFeatureGrid features,
@@ -184,9 +186,9 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
     /**
      * Computes the fraction of border-adjacent voxels that are filled.
      *
-     * <p>Border voxels are one step outside the candidate footprint in the
+     * Border voxels are one step outside the candidate footprint in the
      * X-Z plane (same Y layer). A high ratio means the brick is surrounded
-     * by more surface, indicating an interior placement.</p>
+     * by more surface, indicating an interior placement.
      */
     private static double computeNeighborCoverage(VoxelGrid surface,
                                                     int x, int y, int z,

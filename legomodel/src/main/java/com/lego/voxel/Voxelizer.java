@@ -7,11 +7,12 @@ import com.lego.model.Mesh;
 /**
  * Facade for voxelization strategy selection.
  *
- * <p>Default behavior remains the legacy ray-parity implementation to preserve
- * backward compatibility while new voxelizers are introduced incrementally.</p>
+ * Default behavior remains the legacy ray-parity implementation to preserve
+ * backward compatibility while new voxelizers are introduced incrementally.
  */
 public final class Voxelizer {
 
+    /** Non-instantiable utility class. */
     private Voxelizer() {
         // Utility class, prevent instantiation
     }

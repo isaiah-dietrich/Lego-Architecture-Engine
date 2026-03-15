@@ -118,6 +118,7 @@ public final class VoxelGrid {
         return isFilled(x, y, z - 1);
     }
 
+    /** Returns true if (x, y, z) is within the grid dimensions. */
     private boolean inBounds(int x, int y, int z) {
         return x >= 0 && x < width &&
                y >= 0 && y < height &&

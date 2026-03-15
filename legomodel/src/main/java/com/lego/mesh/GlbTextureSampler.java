@@ -7,7 +7,7 @@ import com.lego.model.ColorRgb;
 
 /**
  * Samples textures at UV coordinates, handling sRGB→linear conversion,
- * UV wrapping, and UV-padding detection. Separated from {@link GlbLoader}.
+ * UV wrapping, and UV-padding detection. Separated from GlbLoader.
  */
 final class GlbTextureSampler {
 
@@ -18,6 +18,7 @@ final class GlbTextureSampler {
      */
     private static final int UV_PADDING_SRGB_THRESHOLD = 10;
 
+    /** Non-instantiable utility class. */
     private GlbTextureSampler() {}
 
     /**

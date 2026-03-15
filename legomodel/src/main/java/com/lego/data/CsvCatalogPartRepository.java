@@ -6,8 +6,8 @@ import java.util.List;
 import com.lego.model.CatalogPart;
 
 /**
- * CSV-backed implementation of {@link CatalogPartRepository}.
- * Delegates to the existing {@link CuratedCatalogLoader}.
+ * CSV-backed implementation of CatalogPartRepository.
+ * Delegates to the existing CuratedCatalogLoader.
  */
 public final class CsvCatalogPartRepository implements CatalogPartRepository {
 
@@ -28,6 +28,7 @@ public final class CsvCatalogPartRepository implements CatalogPartRepository {
     }
 
     @Override
+    /** Loads and returns all active catalog parts from the CSV file. */
     public List<CatalogPart> findActiveParts() {
         if (baseDir != null) {
             return CuratedCatalogLoader.loadActiveParts(baseDir);

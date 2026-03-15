@@ -11,11 +11,11 @@ import com.lego.model.Triangle;
 /**
  * The result of loading a 3D model file.
  *
- * <p>{@code mesh} always contains the geometry. {@code colorMap} is present when the
+ * mesh always contains the geometry. colorMap is present when the
  * source file carried color information (e.g. GLB vertex colors or material base-color
  * factor); it is empty for formats that have no color channel (e.g. OBJ).
  *
- * <p>Color data flows as a side-channel alongside geometry. {@code Triangle}, {@code Mesh},
+ * Color data flows as a side-channel alongside geometry. Triangle, Mesh,
  * and the voxelizer pipeline are never modified to carry color.
  */
 public record LoadedModel(
@@ -23,6 +23,7 @@ public record LoadedModel(
     Optional<Map<Triangle, ColorRgb>> colorMap,
     Optional<List<TexturedTriangle>> texturedTriangles
 ) {
+    /** Validates that the mesh is non-null. */
     public LoadedModel {
         java.util.Objects.requireNonNull(mesh, "mesh");
         java.util.Objects.requireNonNull(colorMap, "colorMap");

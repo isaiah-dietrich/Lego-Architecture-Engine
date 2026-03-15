@@ -16,8 +16,8 @@ import com.lego.voxel.VoxelGrid;
  * Top-level colorization service that hides strategy dispatch, sampling,
  * fallback filling, and smoothing behind a single method call.
  *
- * <p>Replaces the {@code instanceof}-based dispatch that previously lived
- * inside the pipeline orchestrator.</p>
+ * Replaces the instanceof-based dispatch that previously lived
+ * inside the pipeline orchestrator.
  */
 public final class BrickColorizer {
 

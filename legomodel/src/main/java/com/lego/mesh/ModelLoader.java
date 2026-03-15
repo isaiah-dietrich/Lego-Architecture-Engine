@@ -6,17 +6,17 @@ import java.nio.file.Path;
 /**
  * Abstraction over model file loaders.
  *
- * <p>Implementations load a model file from the given {@code path} and return a
- * {@link LoadedModel} containing the parsed geometry and, where available, color data.
+ * Implementations load a model file from the given path and return a
+ * LoadedModel containing the parsed geometry and, where available, color data.
  *
- * <p>Current implementations:
- * <ul>
- *   <li>{@link ObjModelLoader} — loads {@code .obj} files; no color output.</li>
- *   <li>{@code GlbLoader} (Phase 1) — loads {@code .glb} files; color output in Phase 2.</li>
- * </ul>
+ * Current implementations:
+ * 
+ *   - ObjModelLoader — loads .obj files; no color output.
+ *   - GlbLoader (Phase 1) — loads .glb files; color output in Phase 2.
+ * 
  *
- * <p>The CLI selects the appropriate loader by file extension at runtime.
- * Unsupported extensions must throw {@link IllegalArgumentException} with a clear message.
+ * The CLI selects the appropriate loader by file extension at runtime.
+ * Unsupported extensions must throw IllegalArgumentException with a clear message.
  */
 @FunctionalInterface
 public interface ModelLoader {

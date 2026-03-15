@@ -13,62 +13,62 @@ import com.lego.model.ColorRgb;
  * UVLab Palette Projection — a perceptually-aware color mapping strategy
  * designed to produce more accurate LEGO color assignments from textured GLB models.
  *
- * <h2>Problem</h2>
+ * Problem
  * GLB model textures contain baked lighting: shadows, ambient occlusion, specular
  * highlights. These are correct for rendering but corrupt palette matching — a golden
  * surface in shadow becomes dark brown in the texture, which maps to Dark Red or
  * Dark Gray instead of Medium Nougat.
  *
- * <h2>Algorithm (step by step)</h2>
- * <ol>
- *   <li><b>Input:</b> {@code Map<Brick, ColorRgb>} where each color is linear RGB,
- *       already area-weighted and averaged across voxels by {@code ColorSampler}.</li>
- *   <li><b>Convert to L*a*b*:</b> Transform each brick color from linear RGB to
+ * Algorithm (step by step)
+ * 
+ *   - Input: Map<Brick, ColorRgb> where each color is linear RGB,
+ *       already area-weighted and averaged across voxels by ColorSampler.
+ *   - Convert to L*a*b*: Transform each brick color from linear RGB to
  *       CIE L*a*b* (D65 illuminant). This separates lightness (L*) from chrominance
- *       (a*, b*), allowing us to manipulate brightness without affecting hue.</li>
- *   <li><b>Compute global lightness statistics:</b> Collect L* values from all bricks
+ *       (a*, b*), allowing us to manipulate brightness without affecting hue.
+ *   - Compute global lightness statistics: Collect L* values from all bricks
  *       and compute the median and interquartile range (IQR). These robust statistics
- *       characterize the model's overall lighting without being skewed by outliers.</li>
- *   <li><b>Shadow lift (lightness normalization):</b> For each brick whose L* falls
+ *       characterize the model's overall lighting without being skewed by outliers.
+ *   - Shadow lift (lightness normalization): For each brick whose L* falls
  *       below the shadow threshold (median − 0.5*IQR), lift its L* using a smooth
  *       compression curve that maps the shadow range toward the median. This preserves
  *       relative brightness ordering while compressing the dark tail. Highlights above
- *       (median + 0.5*IQR) are similarly compressed downward.</li>
- *   <li><b>Chroma stabilization:</b> Very low-chroma colors (C* &lt; {@value #MIN_CHROMA})
+ *       (median + 0.5*IQR) are similarly compressed downward.
+ *   - Chroma stabilization: Very low-chroma colors (C* < #MIN_CHROMA)
  *       in shadow regions often map to unintended hues (gray samples near a hue boundary).
  *       If a brick's chroma is below the threshold and its neighbors have higher chroma,
  *       the brick adopts the median chroma of its neighborhood in the same hue quadrant,
- *       preventing desaturated shadows from landing on wrong-hue palette entries.</li>
- *   <li><b>CIEDE2000 palette matching:</b> Map each (L*, a*, b*) to the nearest opaque
+ *       preventing desaturated shadows from landing on wrong-hue palette entries.
+ *   - CIEDE2000 palette matching: Map each (L*, a*, b*) to the nearest opaque
  *       palette entry using the CIEDE2000 perceptual distance formula. CIEDE2000 properly
  *       weights hue, chroma, and lightness differences and includes a rotation term for
- *       the blue region — it dramatically reduces cross-hue mismatches compared to ΔE76.</li>
- * </ol>
+ *       the blue region — it dramatically reduces cross-hue mismatches compared to ΔE76.
+ * 
  *
- * <h2>Design decisions</h2>
- * <ul>
- *   <li>Statistics are computed globally (all bricks), not per-region, to keep the
- *       algorithm deterministic and independent of spatial layout.</li>
- *   <li>Shadow lifting uses a smooth sigmoid-like ramp, not a hard clamp, to preserve
- *       intentional color gradients (e.g., darker belly vs lighter back).</li>
- *   <li>Chroma stabilization is conservative: only bricks with chroma below
- *       {@value #MIN_CHROMA} are adjusted, and only if they'd be genuinely ambiguous.</li>
- *   <li>The algorithm is purely a color-space transformation + better distance metric.
+ * Design decisions
+ * 
+ *   - Statistics are computed globally (all bricks), not per-region, to keep the
+ *       algorithm deterministic and independent of spatial layout.
+ *   - Shadow lifting uses a smooth sigmoid-like ramp, not a hard clamp, to preserve
+ *       intentional color gradients (e.g., darker belly vs lighter back).
+ *   - Chroma stabilization is conservative: only bricks with chroma below
+ *       #MIN_CHROMA are adjusted, and only if they'd be genuinely ambiguous.
+ *   - The algorithm is purely a color-space transformation + better distance metric.
  *       It does not modify the sampling pipeline (GlbLoader/ColorSampler) or spatial
- *       smoothing (ColorSmoother), which run before and after it respectively.</li>
- * </ul>
+ *       smoothing (ColorSmoother), which run before and after it respectively.
+ * 
  *
- * <h2>Performance</h2>
- * <p>All operations are O(n·p) where n = brick count and p = palette size (~77).
- * No spatial indexing or texture I/O is needed. Typical runtime on 10K bricks is &lt;10ms.
+ * Performance
+ * All operations are O(n·p) where n = brick count and p = palette size (~77).
+ * No spatial indexing or texture I/O is needed. Typical runtime on 10K bricks is <10ms.
  *
- * <h2>Failure modes and fallbacks</h2>
- * <ul>
- *   <li>If fewer than 4 bricks have color (not enough for statistics), falls back to
- *       direct CIEDE2000 matching without shadow lifting.</li>
- *   <li>If all bricks have identical L* (IQR=0), shadow lifting is a no-op.</li>
- *   <li>Null colors in the input map are silently skipped (same as DirectMatchStrategy).</li>
- * </ul>
+ * Failure modes and fallbacks
+ * 
+ *   - If fewer than 4 bricks have color (not enough for statistics), falls back to
+ *       direct CIEDE2000 matching without shadow lifting.
+ *   - If all bricks have identical L* (IQR=0), shadow lifting is a no-op.
+ *   - Null colors in the input map are silently skipped (same as DirectMatchStrategy).
+ * 
  */
 public final class UVLabPaletteProjection implements ColorStrategy {
 
@@ -93,16 +93,19 @@ public final class UVLabPaletteProjection implements ColorStrategy {
     static final double HIGHLIGHT_COMPRESS_STRENGTH = 0.3;
 
     @Override
+    /** Returns the strategy name ("uvlab"). */
     public String name() {
         return "uvlab";
     }
 
     @Override
+    /** Returns a human-readable description of this strategy. */
     public String description() {
         return "Shadow-aware CIEDE2000 mapping with lightness normalization and chroma stabilization";
     }
 
     @Override
+    /** Applies shadow-lifted, chroma-stabilized Lab matching with CIEDE2000. */
     public Map<Brick, Integer> apply(Map<Brick, ColorRgb> brickColors, LegoPaletteMapper palette) {
         if (brickColors.isEmpty()) {
             return new HashMap<>();
@@ -201,11 +204,11 @@ public final class UVLabPaletteProjection implements ColorStrategy {
     /**
      * Normalizes a lightness value by lifting shadows and compressing highlights.
      *
-     * <p>Uses a smooth ramp: values well below the shadow threshold are lifted
+     * Uses a smooth ramp: values well below the shadow threshold are lifted
      * proportionally toward the median, while values near the median are untouched.
      * The strength parameter controls the compression ratio.
      *
-     * <p>Very dark values (L* &lt; {@value #DARK_FEATURE_FLOOR}) receive progressively
+     * Very dark values (L* < #DARK_FEATURE_FLOOR) receive progressively
      * less lifting to preserve intentionally dark features like eyes and noses,
      * which should map to Black rather than Dark Gray.
      */
@@ -239,12 +242,12 @@ public final class UVLabPaletteProjection implements ColorStrategy {
     /**
      * Stabilizes near-gray colors by boosting their chroma to the minimum threshold.
      *
-     * <p>Very desaturated colors (chroma &lt; MIN_CHROMA) sit near the neutral axis
+     * Very desaturated colors (chroma < MIN_CHROMA) sit near the neutral axis
      * where tiny a/b differences can cause large hue shifts in palette matching.
      * By clamping their chroma to MIN_CHROMA while preserving hue angle, we push
      * them firmly into a single hue quadrant and avoid ambiguous matches.
      *
-     * <p>Truly neutral colors (both a* and b* very close to zero) are left unchanged
+     * Truly neutral colors (both a* and b* very close to zero) are left unchanged
      * since they should match gray/black/white palette entries.
      */
     static void stabilizeChroma(double[] lab) {

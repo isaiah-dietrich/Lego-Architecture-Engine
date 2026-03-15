@@ -10,11 +10,11 @@ import com.lego.model.Triangle;
 /**
  * Bounding Volume Hierarchy for nearest-surface-point queries on a triangle mesh.
  *
- * <p>Construction: top-down median split along the longest AABB axis.
+ * Construction: top-down median split along the longest AABB axis.
  * Query: iterative DFS with distance-based pruning, visiting the closer
  * child first to maximize early termination.
  *
- * <p>Closest-point-on-triangle uses the Voronoi region algorithm from
+ * Closest-point-on-triangle uses the Voronoi region algorithm from
  * Ericson, "Real-Time Collision Detection" (2004), Section 5.1.5.
  */
 public final class TriangleBVH {
@@ -23,6 +23,7 @@ public final class TriangleBVH {
 
     // ---- AABB ----
 
+    /** Axis-aligned bounding box with min/max corners. */
     record AABB(double minX, double minY, double minZ,
                 double maxX, double maxY, double maxZ) {
 
@@ -33,6 +34,7 @@ public final class TriangleBVH {
             return dx * dx + dy * dy + dz * dz;
         }
 
+        /** Computes the AABB enclosing a single triangle. */
         static AABB fromTriangle(Triangle t) {
             return new AABB(
                 Math.min(t.v1().x(), Math.min(t.v2().x(), t.v3().x())),
@@ -73,6 +75,7 @@ public final class TriangleBVH {
 
     // ---- BVH node ----
 
+    /** Internal BVH tree node: leaf or split node with two children. */
     private static final class Node {
         final AABB bounds;
         final Node left, right;
@@ -102,6 +105,7 @@ public final class TriangleBVH {
     private final Node root;
     private final List<Triangle> triangles;
 
+    /** Constructs a BVH from a prebuilt root node and triangle list. */
     private TriangleBVH(Node root, List<Triangle> triangles) {
         this.root = root;
         this.triangles = triangles;
@@ -136,6 +140,7 @@ public final class TriangleBVH {
         return new TriangleBVH(root, triangles);
     }
 
+    /** Recursively builds the BVH tree by partitioning triangles along the widest axis. */
     private static Node buildNode(int[] indices, int start, int end,
                                    double[] centroids, AABB[] boxes) {
         AABB bounds = boxes[indices[start]];
@@ -295,6 +300,7 @@ public final class TriangleBVH {
         return result(rx, ry, rz, px, py, pz, 1 - v - w, v, w);
     }
 
+    /** Packs a nearest-point result into a double array: [x, y, z, triangleIndex, distSq, u, v]. */
     private static double[] result(double rx, double ry, double rz,
                                     double px, double py, double pz,
                                     double b0, double b1, double b2) {

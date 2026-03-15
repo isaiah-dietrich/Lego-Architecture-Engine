@@ -7,6 +7,7 @@ import java.util.Objects;
  */
 public final class SurfaceExtractor {
 
+    /** Non-instantiable utility class. */
     private SurfaceExtractor() {
         // Utility class, prevent instantiation
     }
@@ -44,6 +45,7 @@ public final class SurfaceExtractor {
         return surface;
     }
 
+    /** Returns true if any of the six face-adjacent neighbors is empty or out of bounds. */
     private static boolean hasEmptyNeighbor(VoxelGrid grid, int x, int y, int z) {
         return !grid.isFilledPosX(x, y, z) ||
                !grid.isFilledNegX(x, y, z) ||

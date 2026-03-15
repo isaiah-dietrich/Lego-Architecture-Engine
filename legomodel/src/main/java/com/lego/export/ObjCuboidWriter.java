@@ -3,11 +3,12 @@ package com.lego.export;
 /**
  * Shared OBJ cuboid-writing primitives used by brick and voxel exporters.
  *
- * <p>Appends 8 vertices and 12 triangulated faces for an axis-aligned cuboid
- * to a {@link StringBuilder}. Callers provide the object label and bounds.</p>
+ * Appends 8 vertices and 12 triangulated faces for an axis-aligned cuboid
+ * to a StringBuilder. Callers provide the object label and bounds.
  */
 final class ObjCuboidWriter {
 
+    /** Non-instantiable utility class. */
     private ObjCuboidWriter() {}
 
     /**
@@ -58,6 +59,7 @@ final class ObjCuboidWriter {
     /** Vertices per cuboid. */
     static final int VERTICES_PER_CUBOID = 8;
 
+    /** Writes a single triangle face to the OBJ output. */
     private static void writeTri(StringBuilder obj, int vertexOffset, int a, int b, int c) {
         obj.append("f ")
             .append(vertexOffset + a - 1).append(' ')

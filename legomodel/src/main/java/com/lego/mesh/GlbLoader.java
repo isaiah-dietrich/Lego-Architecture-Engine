@@ -27,20 +27,20 @@ import de.javagl.jgltf.model.SceneModel;
 import de.javagl.jgltf.model.io.GltfModelReader;
 
 /**
- * Loads {@code .glb} files using the {@code de.javagl:jgltf-model} library.
+ * Loads .glb files using the de.javagl:jgltf-model library.
  *
- * <p>Phase 1 (geometry): Walks the scene graph, applies node transforms to
- * positions, and triangulates indexed {@code GL_TRIANGLES} primitives.
+ * Phase 1 (geometry): Walks the scene graph, applies node transforms to
+ * positions, and triangulates indexed GL_TRIANGLES primitives.
  *
- * <p>Phase 2 (color): Extracts per-triangle color using this priority:
- * <ol>
- *   <li>{@code COLOR_0} vertex attribute (average of 3 vertex colors)</li>
- *   <li>{@code baseColorTexture} sampled at the triangle's UV centroid
- *       (from {@code TEXCOORD_0}), multiplied by {@code baseColorFactor}</li>
- *   <li>{@code baseColorFactor} material property (standalone fallback)</li>
- * </ol>
- * Color is returned as a side-channel {@code Map<Triangle, ColorRgb>}
- * inside {@link LoadedModel}. Texture samples are converted from sRGB to
+ * Phase 2 (color): Extracts per-triangle color using this priority:
+ * 
+ *   - COLOR_0 vertex attribute (average of 3 vertex colors)
+ *   - baseColorTexture sampled at the triangle's UV centroid
+ *       (from TEXCOORD_0), multiplied by baseColorFactor
+ *   - baseColorFactor material property (standalone fallback)
+ * 
+ * Color is returned as a side-channel Map<Triangle, ColorRgb>
+ * inside LoadedModel. Texture samples are converted from sRGB to
  * linear RGB to match the pipeline's color-space convention.
  */
 public final class GlbLoader implements ModelLoader {
@@ -48,6 +48,7 @@ public final class GlbLoader implements ModelLoader {
     private static final int GL_TRIANGLES = 4;
 
     @Override
+    /** Loads a GLB file, extracting geometry and per-triangle color data. */
     public LoadedModel load(Path path) throws IOException {
         String filename = path.getFileName().toString().toLowerCase();
         if (filename.endsWith(".gltf")) {
@@ -238,7 +239,7 @@ public final class GlbLoader implements ModelLoader {
 
     /**
      * Reads a vertex position, applies the 4x4 global transform, and returns a Vector3.
-     * The transform matrix {@code m} is in column-major order (OpenGL/glTF convention).
+     * The transform matrix m is in column-major order (OpenGL/glTF convention).
      */
     private Vector3 transformPosition(AccessorFloatData positions, int index, float[] m) {
         float px = positions.get(index, 0);

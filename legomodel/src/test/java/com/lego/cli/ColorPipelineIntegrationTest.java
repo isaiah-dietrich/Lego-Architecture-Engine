@@ -20,9 +20,9 @@ import com.lego.data.CatalogConfig;
 /**
  * End-to-end integration test verifying that colors extracted from a GLB file
  * flow through the full pipeline and appear as correct LDraw color codes in
- * the exported {@code .ldr} file.
+ * the exported .ldr file.
  *
- * <p>Pipeline under test:
+ * Pipeline under test:
  * GLB (baseColorFactor) → GlbLoader → ColorRgb → MeshNormalizer →
  * Voxelizer → ColorSampler → LegoPaletteMapper → LDrawExporter → .ldr
  */

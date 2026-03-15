@@ -16,11 +16,12 @@ import com.lego.voxel.VoxelSteppingAnalyzer.VoxelSteppingMetrics;
 
 /**
  * Runs stepping analysis at multiple resolutions.
- * Extracted from {@code VoxelSteppingAnalyzer} to separate sweep orchestration
+ * Extracted from VoxelSteppingAnalyzer to separate sweep orchestration
  * from pure analysis computation.
  */
 public final class ResolutionSweepRunner {
 
+    /** Non-instantiable utility class. */
     private ResolutionSweepRunner() {}
 
     /** Runs stepping analysis at each resolution and returns aggregated results. */

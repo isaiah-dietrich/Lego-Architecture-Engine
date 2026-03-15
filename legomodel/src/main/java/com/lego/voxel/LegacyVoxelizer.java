@@ -35,6 +35,7 @@ public final class LegacyVoxelizer {
     // Lower threshold reduces stair-stepping by including partially-occupied voxels
     private static final int FILL_THRESHOLD = 16;
 
+    /** Non-instantiable utility class. */
     private LegacyVoxelizer() {
         // Utility class, prevent instantiation
     }
@@ -99,6 +100,7 @@ public final class LegacyVoxelizer {
         return grid;
     }
 
+    /** Tests whether a point is inside the mesh using ray-parity (ray cast along +X). */
     private static boolean isInside(Mesh mesh, double ox, double oy, double oz) {
         int intersections = 0;
         for (Triangle triangle : mesh.triangles()) {

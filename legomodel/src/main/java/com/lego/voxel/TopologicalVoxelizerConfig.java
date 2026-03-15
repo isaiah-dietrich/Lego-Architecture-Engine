@@ -3,8 +3,8 @@ package com.lego.voxel;
 /**
  * Configuration for topological surface voxelization.
  *
- * <p>Anisotropic voxel sizes are supported to allow non-cubic voxels
- * when normalized meshes have anisotropic scaling applied.</p>
+ * Anisotropic voxel sizes are supported to allow non-cubic voxels
+ * when normalized meshes have anisotropic scaling applied.
  */
 public final class TopologicalVoxelizerConfig {
     private final double voxelSizeX;

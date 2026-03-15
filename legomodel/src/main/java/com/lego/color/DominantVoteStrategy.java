@@ -14,49 +14,51 @@ import com.lego.model.ColorRgb;
  * Color strategy that assigns each brick the palette color that wins a
  * majority vote across the brick's constituent voxels.
  *
- * <h2>How it works</h2>
- * <ol>
- *   <li>Each voxel in a brick has a raw sampled color (from the dominant
- *       overlapping triangle — no averaging at the voxel level).</li>
- *   <li>All voxel colors are converted to L*a*b* and preprocessed with
+ * How it works
+ * 
+ *   - Each voxel in a brick has a raw sampled color (from the dominant
+ *       overlapping triangle — no averaging at the voxel level).
+ *   - All voxel colors are converted to L*a*b* and preprocessed with
  *       UVLab's shadow lifting and chroma stabilization to compensate for
- *       baked lighting in GLB textures.</li>
- *   <li>Each preprocessed voxel color is independently mapped to the nearest
- *       LEGO palette entry using CIEDE2000.</li>
- *   <li>The palette code that appears most often across the brick's voxels
- *       wins and is assigned to the entire brick.</li>
- * </ol>
+ *       baked lighting in GLB textures.
+ *   - Each preprocessed voxel color is independently mapped to the nearest
+ *       LEGO palette entry using CIEDE2000.
+ *   - The palette code that appears most often across the brick's voxels
+ *       wins and is assigned to the entire brick.
+ * 
  *
- * <h2>Why this is better than averaging</h2>
- * <p>The default pipeline averages colors at two levels (triangle→voxel,
+ * Why this is better than averaging
+ * The default pipeline averages colors at two levels (triangle→voxel,
  * voxel→brick), producing blended intermediate colors that may match
  * an unintended palette entry. Voting avoids this: each voxel votes for
  * a discrete palette color, and the majority wins. Color boundaries stay
  * sharp, and a single noisy voxel can't drag the average into wrong-hue
  * territory.
  *
- * <h2>Fallback</h2>
- * <p>When called through the standard {@link #apply} interface (which
+ * Fallback
+ * When called through the standard #apply interface (which
  * receives pre-averaged brick colors), this strategy falls back to
  * CIEDE2000 nearest-match on the averaged color — identical to UVLab
  * without shadow lifting. For full benefit, use via
- * {@link #applyWithVoxelColors}.
+ * #applyWithVoxelColors.
  */
 public final class DominantVoteStrategy implements ColorStrategy {
 
     @Override
+    /** Returns the strategy name ("dominant"). */
     public String name() {
         return "dominant";
     }
 
     @Override
+    /** Returns a human-readable description of this strategy. */
     public String description() {
         return "Per-voxel palette voting — each voxel votes for a palette color, majority wins per brick";
     }
 
     /**
      * Fallback: maps pre-averaged brick colors using CIEDE2000.
-     * For full dominant-vote behavior, use {@link #applyWithVoxelColors}.
+     * For full dominant-vote behavior, use #applyWithVoxelColors.
      */
     @Override
     public Map<Brick, Integer> apply(Map<Brick, ColorRgb> brickColors, LegoPaletteMapper palette) {

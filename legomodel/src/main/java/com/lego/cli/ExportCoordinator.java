@@ -15,10 +15,11 @@ import com.lego.voxel.VoxelGrid;
 
 /**
  * Routes export requests to the appropriate exporter based on the export mode.
- * Extracted from {@code Main} to separate export dispatch from pipeline orchestration.
+ * Extracted from Main to separate export dispatch from pipeline orchestration.
  */
 final class ExportCoordinator {
 
+    /** Non-instantiable utility class. */
     private ExportCoordinator() {}
 
     /**

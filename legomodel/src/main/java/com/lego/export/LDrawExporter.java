@@ -17,18 +17,18 @@ import com.lego.model.Brick;
 import com.lego.model.CatalogPart;
 
 /**
- * Exports a placed brick list to an LDraw {@code .ldr} file for rendering in tools like BrickLink Studio.
+ * Exports a placed brick list to an LDraw .ldr file for rendering in tools like BrickLink Studio.
  *
- * <p>This exporter outputs an assembly (parts + transforms), not triangle geometry. Part geometry and
- * exact dimensions are provided by the LDraw parts library installed in the viewer.</p>
+ * This exporter outputs an assembly (parts + transforms), not triangle geometry. Part geometry and
+ * exact dimensions are provided by the LDraw parts library installed in the viewer.
  *
- * <p>Coordinate conventions used here (LDraw standard):</p>
- * <ul>
- *   <li>Stud pitch: 20 LDU</li>
- *   <li>Brick height: 24 LDU (per full brick height unit of 3)</li>
- *   <li>Vertical axis is Y, with -Y being "up" in LDraw, so stacking upward decreases Y.</li>
- *   <li>Standard brick parts are centered in X/Z around their origin and use Y=0 at the top surface.</li>
- * </ul>
+ * Coordinate conventions used here (LDraw standard):
+ * 
+ *   - Stud pitch: 20 LDU
+ *   - Brick height: 24 LDU (per full brick height unit of 3)
+ *   - Vertical axis is Y, with -Y being "up" in LDraw, so stacking upward decreases Y.
+ *   - Standard brick parts are centered in X/Z around their origin and use Y=0 at the top surface.
+ * 
  */
 public final class LDrawExporter {
 
@@ -40,6 +40,7 @@ public final class LDrawExporter {
     private static final double LAYER_HEIGHT_LDU = HEIGHT_UNIT_LDU;
     private static final int DEFAULT_COLOR = 16; // "current color" in LDraw workflows
 
+    /** Non-instantiable utility class. */
     private LDrawExporter() {
         // Utility class
     }
@@ -50,8 +51,8 @@ public final class LDrawExporter {
     }
 
     /**
-     * Exports bricks using catalog-derived part ids as LDraw part file names ({@code <part_id>.dat}).
-     * If {@code catalogBaseDir} is non-null, it is used to resolve the curated catalog path.
+     * Exports bricks using catalog-derived part ids as LDraw part file names (<part_id>.dat).
+     * If catalogBaseDir is non-null, it is used to resolve the curated catalog path.
      */
     public static void export(List<Brick> bricks, Path outputPath, Path catalogBaseDir) throws IOException {
         export(bricks, outputPath, catalogBaseDir, null);
@@ -62,7 +63,7 @@ public final class LDrawExporter {
      *
      * @param bricks          placed bricks
      * @param outputPath      output .ldr path
-     * @param repository      catalog part data source; {@code null} uses default catalog
+     * @param repository      catalog part data source; null uses default catalog
      * @param brickColorCodes optional per-brick LDraw color code map
      */
     public static void export(
@@ -89,16 +90,16 @@ public final class LDrawExporter {
     /**
      * Exports bricks with optional per-brick LDraw color codes.
      *
-     * <p>Uses the brick's {@code partId} to determine the LDraw part file name
-     * ({@code partId + ".dat"}). Rotation is determined by comparing the brick's
-     * placed orientation against the catalog part's canonical dimensions.</p>
+     * Uses the brick's partId to determine the LDraw part file name
+     * (partId + ".dat"). Rotation is determined by comparing the brick's
+     * placed orientation against the catalog part's canonical dimensions.
      *
      * @param bricks         placed bricks
      * @param outputPath     output .ldr path
      * @param catalogBaseDir optional catalog base directory (test-only)
-     * @param brickColorCodes optional per-brick LDraw color code map; {@code null} or absent
-     *                        entries use {@link #DEFAULT_COLOR} (16, "current color")
-     * @deprecated Use the {@link CatalogPartRepository}-based overload instead.
+     * @param brickColorCodes optional per-brick LDraw color code map; null or absent
+     *                        entries use #DEFAULT_COLOR (16, "current color")
+     * @deprecated Use the CatalogPartRepository-based overload instead.
      */
     @Deprecated
     public static void export(
@@ -110,6 +111,7 @@ public final class LDrawExporter {
         export(bricks, outputPath, new CsvCatalogPartRepository(catalogBaseDir), brickColorCodes);
     }
 
+    /** Formats a double as an LDU coordinate string (integer if whole, otherwise 2 decimal places). */
     private static String formatLdu(double value) {
         // Keep output stable and readable for Studio.
         if (Math.abs(value - Math.rint(value)) < 1e-9) {
@@ -201,10 +203,10 @@ public final class LDrawExporter {
     /**
      * Resolves the part file and rotation for a brick.
      *
-     * <p>When the brick has a known partId, uses it directly and determines rotation
-     * by comparing placed orientation with catalog canonical dimensions.</p>
+     * When the brick has a known partId, uses it directly and determines rotation
+     * by comparing placed orientation with catalog canonical dimensions.
      *
-     * <p>Falls back to StudKey lookup for bricks with "unknown" partId.</p>
+     * Falls back to StudKey lookup for bricks with "unknown" partId.
      */
     private static PartPlacement resolvePlacement(Brick brick,
                                                    Map<String, CatalogPart> partById,
@@ -235,6 +237,7 @@ public final class LDrawExporter {
         return resolvePartByStudKey(studKeyIndex, brick.studX(), brick.studY());
     }
 
+    /** Looks up a brick's part file and rotation by its stud dimensions in the index. */
     private static PartPlacement resolvePartByStudKey(Map<StudKey, String> index, int studX, int studY) {
         // Identity: catalog stud_y = world X span
         String forIdentity = index.get(new StudKey(studY, studX));
@@ -254,12 +257,15 @@ public final class LDrawExporter {
         );
     }
 
+    /** Composite key of (studX, studY) for part lookup. */
     private record StudKey(int studX, int studY) { }
 
+    /** Holds a 3x3 rotation matrix and part file name for LDraw line output. */
     private static final class PartPlacement {
         final int a, b, c, d, e, f, g, h, i;
         final String partFile;
 
+        /** Constructs a placement with the given 3x3 rotation matrix and part file name. */
         private PartPlacement(int a, int b, int c, int d, int e, int f, int g, int h, int i, String partFile) {
             this.a = a;
             this.b = b;
@@ -273,11 +279,13 @@ public final class LDrawExporter {
             this.partFile = partFile;
         }
 
+        /** Creates an identity (no rotation) placement for the given part file. */
         static PartPlacement identity(String partFile) {
             return new PartPlacement(1, 0, 0, 0, 1, 0, 0, 0, 1, partFile);
         }
 
         // +90 degrees about Y: X -> Z, Z -> -X
+        /** Creates a 90-degree Y-axis rotation placement for the given part file. */
         static PartPlacement rotateY90(String partFile) {
             return new PartPlacement(0, 0, 1, 0, 1, 0, -1, 0, 0, partFile);
         }

@@ -18,24 +18,24 @@ import com.lego.voxel.VoxelGrid;
 /**
  * BVH-accelerated supersampled voxel color pipeline.
  *
- * <h2>Algorithm</h2>
- * <ol>
- *   <li>Build a BVH from the normalized mesh triangles.</li>
- *   <li>For each surface voxel, generate stratified sample points inside
- *       the voxel cube.</li>
- *   <li>For each sample point, find the nearest surface point on the mesh
- *       via the BVH. This yields barycentric coordinates on a triangle.</li>
- *   <li>Use the barycentrics to interpolate UV coordinates, then bilinearly
+ * Algorithm
+ * 
+ *   - Build a BVH from the normalized mesh triangles.
+ *   - For each surface voxel, generate stratified sample points inside
+ *       the voxel cube.
+ *   - For each sample point, find the nearest surface point on the mesh
+ *       via the BVH. This yields barycentric coordinates on a triangle.
+ *   - Use the barycentrics to interpolate UV coordinates, then bilinearly
  *       sample the base-color texture. If the triangle has vertex colors,
- *       interpolate those instead.</li>
- *   <li>Average all valid samples in linear RGB (gamma-correct averaging).</li>
- *   <li>Convert the average to CIE L*a*b* and find the nearest LEGO
- *       palette entry using CIEDE2000.</li>
- *   <li>Each voxel independently votes for a palette color; per-brick
- *       majority vote determines the final assignment.</li>
- * </ol>
+ *       interpolate those instead.
+ *   - Average all valid samples in linear RGB (gamma-correct averaging).
+ *   - Convert the average to CIE L*a*b* and find the nearest LEGO
+ *       palette entry using CIEDE2000.
+ *   - Each voxel independently votes for a palette color; per-brick
+ *       majority vote determines the final assignment.
+ * 
  *
- * <p>This pipeline reads texture pixels directly via BVH + barycentric
+ * This pipeline reads texture pixels directly via BVH + barycentric
  * interpolation. After sampling, it applies shadow lifting and chroma
  * stabilization (from UVLabPaletteProjection) to compensate for baked
  * lighting in GLB textures before palette matching.
@@ -45,11 +45,13 @@ public final class SupersampledVoxelColorPipeline implements ColorStrategy {
     static final int DEFAULT_SAMPLES_PER_VOXEL = 64;
 
     @Override
+    /** Returns the strategy name ("supersampled"). */
     public String name() {
         return "supersampled";
     }
 
     @Override
+    /** Returns a human-readable description of this strategy. */
     public String description() {
         return "BVH-accelerated supersampled texture sampling with bilinear "
              + "interpolation and CIEDE2000 palette matching";
@@ -120,6 +122,7 @@ public final class SupersampledVoxelColorPipeline implements ColorStrategy {
         // Each sample is independently converted to L*a*b* for per-sample voting.
         // This preserves sub-voxel features (eyes, nose) that would be destroyed
         // by averaging samples in RGB before palette matching.
+        /** Associates a brick with a Lab color sample for voting. */
         record SampleLab(Brick brick, double[] lab) {}
         java.util.List<SampleLab> allSamples = new java.util.ArrayList<>();
         java.util.List<Double> allL = new java.util.ArrayList<>();
@@ -228,7 +231,7 @@ public final class SupersampledVoxelColorPipeline implements ColorStrategy {
     /**
      * Samples the color at a BVH hit point using the triangle's texture data.
      *
-     * <p>Priority: vertex colors → texture × materialColor → materialColor.
+     * Priority: vertex colors → texture × materialColor → materialColor.
      */
     private static ColorRgb sampleColorAtHit(TriangleBVH.Hit hit,
                                               List<TexturedTriangle> texTris) {
@@ -310,11 +313,13 @@ public final class SupersampledVoxelColorPipeline implements ColorStrategy {
         return new ColorRgb(ColorMath.clamp01(r), ColorMath.clamp01(g), ColorMath.clamp01(b));
     }
 
+    /** Wraps a pixel coordinate to stay within texture bounds. */
     private static int wrapPixel(int p, int size) {
         p = p % size;
         return p < 0 ? p + size : p;
     }
 
+    /** Reads a pixel from the image and converts sRGB to linear RGB. */
     private static float[] readPixelLinear(BufferedImage image, int x, int y) {
         int argb = image.getRGB(x, y);
         float sR = ((argb >> 16) & 0xFF) / 255f;
@@ -327,6 +332,7 @@ public final class SupersampledVoxelColorPipeline implements ColorStrategy {
         };
     }
 
+    /** Linearly interpolates between two float values. */
     private static float lerp(float a, float b, float t) {
         return a + t * (b - a);
     }

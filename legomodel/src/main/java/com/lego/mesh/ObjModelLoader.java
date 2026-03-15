@@ -4,17 +4,18 @@ import java.io.IOException;
 import java.nio.file.Path;
 
 /**
- * {@link ModelLoader} implementation for {@code .obj} files.
+ * ModelLoader implementation for .obj files.
  *
- * <p>Delegates to the existing {@link ObjLoader} for geometry parsing. OBJ files carry
- * no color information, so {@link LoadedModel#colorMap()} is always empty.
+ * Delegates to the existing ObjLoader for geometry parsing. OBJ files carry
+ * no color information, so LoadedModel#colorMap() is always empty.
  *
- * <p>Rejects {@code .gltf} inputs with an explicit error message directing users to
- * convert to {@code .glb} first.
+ * Rejects .gltf inputs with an explicit error message directing users to
+ * convert to .glb first.
  */
 public final class ObjModelLoader implements ModelLoader {
 
     @Override
+    /** Loads an OBJ file and returns the model with geometry only (no color data). */
     public LoadedModel load(Path path) throws IOException {
         String filename = path.getFileName().toString().toLowerCase();
 

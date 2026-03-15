@@ -14,10 +14,11 @@ import com.lego.voxel.VoxelSteppingAnalyzer.VoxelSteppingMetrics;
 
 /**
  * Coordinates stepping analysis and resolution sweeps.
- * Extracted from {@code Main} to separate analysis dispatch from pipeline orchestration.
+ * Extracted from Main to separate analysis dispatch from pipeline orchestration.
  */
 final class AnalysisCoordinator {
 
+    /** Non-instantiable utility class. */
     private AnalysisCoordinator() {}
 
     /**
@@ -85,6 +86,7 @@ final class AnalysisCoordinator {
         }
     }
 
+    /** Resolves the analysis output directory, falling back to the parent of the output path. */
     private static Path resolveAnalysisDir(Path explicitAnalysisDir, Path outputPath) {
         if (explicitAnalysisDir != null) {
             return explicitAnalysisDir;

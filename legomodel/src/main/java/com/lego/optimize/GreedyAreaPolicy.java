@@ -9,18 +9,20 @@ import com.lego.voxel.VoxelGrid;
 /**
  * Legacy greedy placement: always picks the largest-area brick that fits.
  *
- * <p>This is the original placement strategy. It minimizes piece count but
+ * This is the original placement strategy. It minimizes piece count but
  * may overhang into regions where not all voxels are filled, reducing
- * surface accuracy.</p>
+ * surface accuracy.
  */
 public final class GreedyAreaPolicy implements PlacementPolicy {
 
     @Override
+    /** Returns the policy name ("greedy-area"). */
     public String name() {
         return "greedy-area";
     }
 
     @Override
+    /** Selects the largest-area brick that fits at the given position. */
     public Brick selectBrick(VoxelGrid surface, boolean[][][] covered,
                               int x, int y, int z, List<BrickSpec> allowedSpecs) {
         for (BrickSpec spec : allowedSpecs) {
@@ -35,6 +37,7 @@ public final class GreedyAreaPolicy implements PlacementPolicy {
         );
     }
 
+    /** Returns true if a brick of the given size can be placed without overhanging empty space. */
     private static boolean canPlace(VoxelGrid surface, boolean[][][] covered,
                                      int x, int y, int z, int studX, int studY, int heightUnits) {
         for (int dy = 0; dy < heightUnits; dy++) {

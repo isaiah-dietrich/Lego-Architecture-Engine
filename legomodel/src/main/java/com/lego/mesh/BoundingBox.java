@@ -103,14 +103,17 @@ public final class BoundingBox {
         return maxZ - minZ;
     }
 
+    /** Returns the first vertex of a triangle. */
     private static Vector3 firstVertex(Triangle triangle) {
         return triangle.v1();
     }
 
+    /** Returns the minimum of four double values. */
     private static double min(double a, double b, double c, double d) {
         return Math.min(Math.min(a, b), Math.min(c, d));
     }
 
+    /** Returns the maximum of four double values. */
     private static double max(double a, double b, double c, double d) {
         return Math.max(Math.max(a, b), Math.max(c, d));
     }

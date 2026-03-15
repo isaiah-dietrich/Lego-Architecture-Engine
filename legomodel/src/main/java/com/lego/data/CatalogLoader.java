@@ -83,6 +83,7 @@ public final class CatalogLoader {
         return catalogPath;
     }
 
+    /** Non-instantiable utility class. */
     private CatalogLoader() {
         // Utility class, no instantiation
     }

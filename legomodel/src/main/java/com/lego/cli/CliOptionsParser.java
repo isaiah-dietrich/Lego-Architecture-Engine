@@ -5,14 +5,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Parses command-line arguments into a validated {@link ParsedOptions} record.
- * Extracted from {@code Main} to separate CLI parsing from pipeline orchestration.
+ * Parses command-line arguments into a validated ParsedOptions record.
+ * Extracted from Main to separate CLI parsing from pipeline orchestration.
  */
 final class CliOptionsParser {
 
+    /** Non-instantiable utility class. */
     private CliOptionsParser() {}
 
-    /** Parses command-line arguments into a validated {@link ParsedOptions}. */
+    /** Parses command-line arguments into a validated ParsedOptions. */
     static ParsedOptions parse(String[] args) {
         List<String> positional = new ArrayList<>();
         boolean analyzeStepping = false;
@@ -27,40 +28,39 @@ final class CliOptionsParser {
 
         for (int i = 0; i < args.length; i++) {
             String arg = args[i];
-            if ("--analyze-stepping".equals(arg)) {
-                analyzeStepping = true;
-            } else if (arg.startsWith("--analysis-dir=")) {
-                analysisDir = Path.of(arg.substring("--analysis-dir=".length()));
-            } else if ("--analysis-dir".equals(arg)) {
-                if (i + 1 >= args.length) {
-                    throw new IllegalArgumentException("--analysis-dir requires a value");
+            int eq = arg.indexOf('=');
+            String key = eq >= 0 ? arg.substring(0, eq) : arg;
+            String val = eq >= 0 ? arg.substring(eq + 1) : null;
+
+            switch (key) {
+                case "--analyze-stepping" -> analyzeStepping = true;
+                case "--analysis-dir" -> {
+                    if (val != null) {
+                        analysisDir = Path.of(val);
+                    } else if (i + 1 >= args.length) {
+                        throw new IllegalArgumentException("--analysis-dir requires a value");
+                    } else {
+                        analysisDir = Path.of(args[++i]);
+                    }
                 }
-                analysisDir = Path.of(args[++i]);
-            } else if (arg.startsWith("--jump-threshold=")) {
-                String value = arg.substring("--jump-threshold=".length());
-                jumpThreshold = parseNonNegativeInt(value, "jump-threshold");
-            } else if (arg.startsWith("--sweep=")) {
-                String value = arg.substring("--sweep=".length());
-                sweepResolutions = parseSweepResolutions(value);
-            } else if (arg.startsWith("--color-mode=")) {
-                colorMode = arg.substring("--color-mode=".length());
-                if (!"none".equals(colorMode) && !"glb-color".equals(colorMode)) {
-                    throw new IllegalArgumentException(
-                        "Invalid --color-mode: " + colorMode + ". Use 'none' or 'glb-color'."
-                    );
+                case "--jump-threshold" ->
+                    jumpThreshold = parseNonNegativeInt(val, "jump-threshold");
+                case "--sweep" ->
+                    sweepResolutions = parseSweepResolutions(val);
+                case "--color-mode" -> {
+                    colorMode = val;
+                    if (!"none".equals(colorMode) && !"glb-color".equals(colorMode)) {
+                        throw new IllegalArgumentException(
+                            "Invalid --color-mode: " + colorMode + ". Use 'none' or 'glb-color'."
+                        );
+                    }
                 }
-            } else if (arg.startsWith("--color-fallback=")) {
-                colorFallback = parseNonNegativeInt(
-                    arg.substring("--color-fallback=".length()), "color-fallback"
-                );
-            } else if ("--color-list".equals(arg)) {
-                colorList = true;
-            } else if (arg.startsWith("--color-algorithm=")) {
-                colorAlgorithm = arg.substring("--color-algorithm=".length());
-            } else if (arg.startsWith("--placement-policy=")) {
-                placementPolicy = arg.substring("--placement-policy=".length());
-            } else {
-                positional.add(arg);
+                case "--color-fallback" ->
+                    colorFallback = parseNonNegativeInt(val, "color-fallback");
+                case "--color-list" -> colorList = true;
+                case "--color-algorithm" -> colorAlgorithm = val;
+                case "--placement-policy" -> placementPolicy = val;
+                default -> positional.add(arg);
             }
         }
 
@@ -83,6 +83,7 @@ final class CliOptionsParser {
         return parsed;
     }
 
+    /** Parses a comma-separated string of resolution values into a list of integers. */
     private static List<Integer> parseSweepResolutions(String csv) {
         if (csv == null || csv.isBlank()) {
             throw new IllegalArgumentException("sweep resolutions must not be empty");
