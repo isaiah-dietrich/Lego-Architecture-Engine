@@ -18,6 +18,7 @@ public final class VoxelDiagnostic {
         // Utility class
     }
 
+    /** Diagnostic entry point: loads a model and prints voxel layer data. */
     public static void main(String[] args) throws Exception {
         if (args.length < 2) {
             System.err.println("Usage: java VoxelDiagnostic <objPath> <resolution>");

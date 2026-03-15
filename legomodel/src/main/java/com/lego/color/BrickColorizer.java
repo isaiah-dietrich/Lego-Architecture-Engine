@@ -24,6 +24,7 @@ public final class BrickColorizer {
     private final ColorStrategyRegistry strategyRegistry;
     private final PaletteRepository paletteRepository;
 
+    /** Creates a colorizer with the given strategy registry and palette source. */
     public BrickColorizer(ColorStrategyRegistry strategyRegistry,
                           PaletteRepository paletteRepository) {
         this.strategyRegistry = strategyRegistry;

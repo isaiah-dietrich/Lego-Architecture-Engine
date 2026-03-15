@@ -18,6 +18,7 @@ final class OutputReporter {
 
     private OutputReporter() {}
 
+    /** Prints the pipeline result summary (voxels, bricks, reduction). */
     static void printSummary(PipelineResult result, PrintStream out) {
         out.println("Triangles: " + result.triangleCount());
         out.println("Resolution: " + result.resolution() + "x" + result.resolution() + "x" + result.resolution());
@@ -35,6 +36,7 @@ final class OutputReporter {
         }
     }
 
+    /** Prints color mode information for the pipeline result. */
     static void printColorInfo(PipelineResult result, PrintStream out) {
         if (result.brickColorCodes() != null) {
             out.println("Color mode: glb-color (" + result.coloredBrickCount()
@@ -64,6 +66,7 @@ final class OutputReporter {
         }
     }
 
+    /** Prints a breakdown of block types and their counts. */
     static void printBlockTypeSummary(List<Brick> bricks, List<BrickSpec> allowedSpecs, PrintStream out) {
         Map<String, String> partNames = new HashMap<>();
         for (BrickSpec spec : allowedSpecs) {
@@ -89,6 +92,7 @@ final class OutputReporter {
         }
     }
 
+    /** Prints command-line usage instructions. */
     static void printUsage(PrintStream stream) {
         stream.println("Usage: java -jar legomodel.jar <modelPath> <resolution> [outputObjPath] [exportMode] [voxelizerMode] [options]");
         stream.println("  modelPath: path to a .obj or .glb model file");

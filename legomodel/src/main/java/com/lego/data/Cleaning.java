@@ -66,6 +66,7 @@ public class Cleaning {
         }
     }
 
+    /** Runs the catalog cleaning pipeline: filters, validates, and writes output files. */
     public static void main(String[] args) {
         Cleaning cleaning = new Cleaning();
 

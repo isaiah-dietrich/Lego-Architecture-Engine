@@ -33,14 +33,17 @@ public final class VoxelGrid {
         this.grid = new boolean[width][height][depth];
     }
 
+    /** Returns the grid width (X dimension). */
     public int width() {
         return width;
     }
 
+    /** Returns the grid height (Y dimension). */
     public int height() {
         return height;
     }
 
+    /** Returns the grid depth (Z dimension). */
     public int depth() {
         return depth;
     }
@@ -85,26 +88,32 @@ public final class VoxelGrid {
         return count;
     }
 
+    /** Returns whether the voxel at (x+1, y, z) is filled. */
     public boolean isFilledPosX(int x, int y, int z) {
         return isFilled(x + 1, y, z);
     }
 
+    /** Returns whether the voxel at (x-1, y, z) is filled. */
     public boolean isFilledNegX(int x, int y, int z) {
         return isFilled(x - 1, y, z);
     }
 
+    /** Returns whether the voxel at (x, y+1, z) is filled. */
     public boolean isFilledPosY(int x, int y, int z) {
         return isFilled(x, y + 1, z);
     }
 
+    /** Returns whether the voxel at (x, y-1, z) is filled. */
     public boolean isFilledNegY(int x, int y, int z) {
         return isFilled(x, y - 1, z);
     }
 
+    /** Returns whether the voxel at (x, y, z+1) is filled. */
     public boolean isFilledPosZ(int x, int y, int z) {
         return isFilled(x, y, z + 1);
     }
 
+    /** Returns whether the voxel at (x, y, z-1) is filled. */
     public boolean isFilledNegZ(int x, int y, int z) {
         return isFilled(x, y, z - 1);
     }

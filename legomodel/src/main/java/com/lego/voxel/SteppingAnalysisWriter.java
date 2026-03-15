@@ -25,6 +25,7 @@ public final class SteppingAnalysisWriter {
 
     private SteppingAnalysisWriter() {}
 
+    /** Writes stepping metrics to a JSON file. */
     public static void writeMetricsJson(VoxelSteppingMetrics metrics, Path filePath) throws IOException {
         Objects.requireNonNull(metrics, "metrics must not be null");
         Objects.requireNonNull(filePath, "filePath must not be null");
@@ -33,6 +34,7 @@ public final class SteppingAnalysisWriter {
         Files.writeString(filePath, metricsToJson(metrics));
     }
 
+    /** Writes per-layer voxel counts to a CSV file. */
     public static void writeLayersCsv(VoxelSteppingMetrics metrics, Path filePath) throws IOException {
         Objects.requireNonNull(metrics, "metrics must not be null");
         Objects.requireNonNull(filePath, "filePath must not be null");
@@ -58,6 +60,7 @@ public final class SteppingAnalysisWriter {
         Files.writeString(filePath, builder.toString());
     }
 
+    /** Writes resolution sweep results to a JSON file. */
     public static void writeSweepJson(ResolutionSweepResult sweepResult, Path filePath) throws IOException {
         Objects.requireNonNull(sweepResult, "sweepResult must not be null");
         Objects.requireNonNull(filePath, "filePath must not be null");
@@ -90,6 +93,7 @@ public final class SteppingAnalysisWriter {
         Files.writeString(filePath, builder.toString());
     }
 
+    /** Writes resolution sweep results to a CSV file. */
     public static void writeSweepCsv(ResolutionSweepResult sweepResult, Path filePath) throws IOException {
         Objects.requireNonNull(sweepResult, "sweepResult must not be null");
         Objects.requireNonNull(filePath, "filePath must not be null");
@@ -118,6 +122,7 @@ public final class SteppingAnalysisWriter {
         Files.writeString(filePath, builder.toString());
     }
 
+    /** Converts stepping metrics to a JSON string. */
     static String metricsToJson(VoxelSteppingMetrics metrics) {
         StringBuilder builder = new StringBuilder();
         builder.append("{\n");

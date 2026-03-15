@@ -11,11 +11,15 @@ public final class VoxelKey {
 
     private VoxelKey() {}
 
+    /** Packs three coordinates into a single long key. */
     public static long pack(int x, int y, int z) {
         return ((long) x << (2 * BITS)) | ((long) (y & MASK) << BITS) | (z & MASK);
     }
 
+    /** Extracts the X coordinate from a packed key. */
     public static int unpackX(long key) { return (int) (key >>> (2 * BITS)); }
+    /** Extracts the Y coordinate from a packed key. */
     public static int unpackY(long key) { return (int) ((key >>> BITS) & MASK); }
+    /** Extracts the Z coordinate from a packed key. */
     public static int unpackZ(long key) { return (int) (key & MASK); }
 }

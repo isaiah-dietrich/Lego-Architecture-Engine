@@ -25,6 +25,7 @@ public final class Main {
 
     private Main() {}
 
+    /** Application entry point. */
     public static void main(String[] args) {
         int exitCode = run(args, System.out, System.err);
         if (exitCode != 0) {
@@ -32,10 +33,12 @@ public final class Main {
         }
     }
 
+    /** Runs the pipeline, returning the process exit code. */
     static int run(String[] args, PrintStream out, PrintStream err) {
         return run(args, out, err, null);
     }
 
+    /** Runs the pipeline with an optional catalog base directory override. */
     static int run(String[] args, PrintStream out, PrintStream err, Path catalogBaseDir) {
         if (args == null) {
             OutputReporter.printUsage(err);

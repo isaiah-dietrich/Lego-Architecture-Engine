@@ -49,8 +49,12 @@ public final class TopologicalVoxelizerConfig {
         this.epsilon = epsilon;
     }
 
+    /** Returns the voxel size along the X axis. */
     public double voxelSizeX() { return voxelSizeX; }
+    /** Returns the voxel size along the Y axis. */
     public double voxelSizeY() { return voxelSizeY; }
+    /** Returns the voxel size along the Z axis. */
     public double voxelSizeZ() { return voxelSizeZ; }
+    /** Returns the numerical tolerance. */
     public double epsilon()    { return epsilon; }
 }

@@ -28,6 +28,7 @@ public final class VoxelSteppingAnalyzer {
         // Utility class
     }
 
+    /** Analyzes stepping artifacts between voxel grid layers. */
     public static VoxelSteppingMetrics analyze(
         VoxelGrid solid,
         VoxelGrid surface,

@@ -58,38 +58,47 @@ public final class BoundingBox {
         this.maxZ = maxZ;
     }
 
+    /** Returns the minimum X coordinate. */
     public double minX() {
         return minX;
     }
 
+    /** Returns the minimum Y coordinate. */
     public double minY() {
         return minY;
     }
 
+    /** Returns the minimum Z coordinate. */
     public double minZ() {
         return minZ;
     }
 
+    /** Returns the maximum X coordinate. */
     public double maxX() {
         return maxX;
     }
 
+    /** Returns the maximum Y coordinate. */
     public double maxY() {
         return maxY;
     }
 
+    /** Returns the maximum Z coordinate. */
     public double maxZ() {
         return maxZ;
     }
 
+    /** Returns the width (maxX - minX). */
     public double width() {
         return maxX - minX;
     }
 
+    /** Returns the height (maxY - minY). */
     public double height() {
         return maxY - minY;
     }
 
+    /** Returns the depth (maxZ - minZ). */
     public double depth() {
         return maxZ - minZ;
     }

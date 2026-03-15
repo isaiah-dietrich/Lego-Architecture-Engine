@@ -61,30 +61,37 @@ public final class AllowedBrickDimensions {
             this(studX, studY, heightUnits, category, partId, partId);
         }
 
+        /** Returns the stud count in the X direction. */
         public int studX() {
             return studX;
         }
 
+        /** Returns the stud count in the Y direction. */
         public int studY() {
             return studY;
         }
 
+        /** Returns the height in plate units. */
         public int heightUnits() {
             return heightUnits;
         }
 
+        /** Returns the part category (e.g. "brick", "plate"). */
         public String category() {
             return category;
         }
 
+        /** Returns the catalog part identifier. */
         public String partId() {
             return partId;
         }
 
+        /** Returns the human-readable part name. */
         public String name() {
             return name;
         }
 
+        /** Returns the stud area (studX × studY). */
         public int area() {
             return studX * studY;
         }

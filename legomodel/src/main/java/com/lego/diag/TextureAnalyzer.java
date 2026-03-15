@@ -56,6 +56,7 @@ public final class TextureAnalyzer {
     /** Bucket size for color clustering (round sRGB 0-255 to nearest this value). */
     private static final int BUCKET_SIZE = 20;
 
+    /** Analyzes a GLB file's UV-referenced texture colors and exports diagnostics. */
     public static void main(String[] args) throws IOException {
         String glbPath;
         if (args.length > 0) {

@@ -10,6 +10,7 @@ package com.lego.model;
  */
 public record ColorRgb(float r, float g, float b) {
 
+    /** Validates that all components are within [0, 1]. */
     public ColorRgb {
         if (r < 0f || r > 1f) throw new IllegalArgumentException("r out of [0,1]: " + r);
         if (g < 0f || g > 1f) throw new IllegalArgumentException("g out of [0,1]: " + g);

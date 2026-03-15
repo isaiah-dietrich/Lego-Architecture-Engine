@@ -12,6 +12,7 @@ final class CliOptionsParser {
 
     private CliOptionsParser() {}
 
+    /** Parses command-line arguments into a validated {@link ParsedOptions}. */
     static ParsedOptions parse(String[] args) {
         List<String> positional = new ArrayList<>();
         boolean analyzeStepping = false;
@@ -68,6 +69,7 @@ final class CliOptionsParser {
             placementPolicy);
     }
 
+    /** Parses a string as a non-negative integer, throwing on invalid input. */
     static int parseNonNegativeInt(String value, String fieldName) {
         int parsed;
         try {

@@ -44,6 +44,7 @@ public final class LDrawExporter {
         // Utility class
     }
 
+    /** Exports bricks to an LDraw file using default catalog and no color codes. */
     public static void export(List<Brick> bricks, Path outputPath) throws IOException {
         export(bricks, outputPath, (CatalogPartRepository) null, null);
     }

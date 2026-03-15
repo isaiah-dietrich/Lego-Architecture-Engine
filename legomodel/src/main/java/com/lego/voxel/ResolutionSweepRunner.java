@@ -23,6 +23,7 @@ public final class ResolutionSweepRunner {
 
     private ResolutionSweepRunner() {}
 
+    /** Runs stepping analysis at each resolution and returns aggregated results. */
     public static ResolutionSweepResult runResolutionSweep(
         Mesh mesh,
         Path modelPath,

@@ -29,6 +29,7 @@ public final class TopologicalVoxelizer {
         // Utility class
     }
 
+    /** Voxelizes a mesh surface using triangle-AABB overlap with default config. */
     public static VoxelGrid voxelizeSurface(Mesh mesh, int resolution) {
         Objects.requireNonNull(mesh, "Mesh cannot be null");
         if (resolution < 2) {
@@ -42,6 +43,7 @@ public final class TopologicalVoxelizer {
         return voxelizeSurfaceWithConfig(mesh, resolution, config);
     }
 
+    /** Voxelizes a mesh surface using triangle-AABB overlap with the given config. */
     public static VoxelGrid voxelizeSurfaceWithConfig(
         Mesh mesh,
         int resolution,
