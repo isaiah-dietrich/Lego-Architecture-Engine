@@ -175,6 +175,11 @@ public final class ColorSmoother {
             }
             if (rareColors.isEmpty()) break;
 
+            // Preserve rare colors that form spatial clusters (intentional accent features)
+            rareColors.removeIf(code ->
+                    isSpatiallyClustered(code, bricks, brickColorCodes, voxelToBrick));
+            if (rareColors.isEmpty()) break;
+
             // For each brick with a rare color, try to replace with non-rare neighbor majority
             Map<Brick, Integer> corrections = new HashMap<>();
             for (Brick brick : bricks) {
@@ -298,6 +303,35 @@ public final class ColorSmoother {
         if (neighbor != null && seen.add(neighbor)) {
             out.add(neighbor);
         }
+    }
+
+    /**
+     * Returns true if at least two bricks with the given color code are
+     * face-adjacent, indicating an intentional accent cluster rather than
+     * isolated noise. Preserves features like a red tongue (2 adjacent
+     * red bricks) that the rarity threshold would otherwise remove.
+     */
+    private static boolean isSpatiallyClustered(int colorCode, List<Brick> allBricks,
+                                                 Map<Brick, Integer> brickColorCodes,
+                                                 Map<Long, Brick> voxelToBrick) {
+        List<Brick> bricksOfColor = new ArrayList<>();
+        for (Brick b : allBricks) {
+            Integer code = brickColorCodes.get(b);
+            if (code != null && code.intValue() == colorCode) {
+                bricksOfColor.add(b);
+            }
+        }
+        if (bricksOfColor.size() < 2) return false;
+        Set<Brick> colorSet = new HashSet<>(bricksOfColor);
+        for (Brick brick : bricksOfColor) {
+            List<Brick> neighbors = findNeighbors(brick, voxelToBrick);
+            for (Brick neighbor : neighbors) {
+                if (colorSet.contains(neighbor)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**

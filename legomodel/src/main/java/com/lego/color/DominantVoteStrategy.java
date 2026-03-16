@@ -67,7 +67,7 @@ public final class DominantVoteStrategy implements ColorStrategy {
         for (Map.Entry<Brick, ColorRgb> entry : brickColors.entrySet()) {
             ColorRgb rgb = entry.getValue();
             double[] lab = LegoPaletteMapper.linearRgbToLab(rgb.r(), rgb.g(), rgb.b());
-            result.put(entry.getKey(), LegoPaletteMapper.nearestCiede2000(lab[0], lab[1], lab[2], entries, KL));
+            result.put(entry.getKey(), Ciede2000.nearestPaletteEntry(lab[0], lab[1], lab[2], entries, KL));
         }
         return result;
     }
@@ -114,7 +114,7 @@ public final class DominantVoteStrategy implements ColorStrategy {
         for (Map.Entry<Brick, List<double[]>> entry : brickVoxelLab.entrySet()) {
             Map<Integer, Integer> votes = new HashMap<>();
             for (double[] lab : entry.getValue()) {
-                int code = LegoPaletteMapper.nearestCiede2000(lab[0], lab[1], lab[2], entries, KL);
+                int code = Ciede2000.nearestPaletteEntry(lab[0], lab[1], lab[2], entries, KL);
                 votes.merge(code, 1, Integer::sum);
             }
 

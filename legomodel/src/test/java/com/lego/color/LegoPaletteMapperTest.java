@@ -241,4 +241,46 @@ class LegoPaletteMapperTest {
         assertEquals("Pearl White", mapper.getColorName(183));
         assertEquals("White", mapper.getColorName(15));
     }
+
+    // ---- CIEDE2000 upgrade tests ----
+
+    @Test
+    void nearestLDrawColorStillMatchesBasicColors() throws IOException {
+        LegoPaletteMapper mapper = LegoPaletteMapper.loadDefault();
+        // Verify CIEDE2000 still matches basic palette colors correctly
+        assertEquals(4, mapper.nearestLDrawColor(new ColorRgb(0.585f, 0.010f, 0.003f)),
+            "LEGO Red linear should still map to Red (4)");
+        assertEquals(0, mapper.nearestLDrawColor(new ColorRgb(0f, 0f, 0f)),
+            "Black should still map to Black (0)");
+        assertEquals(15, mapper.nearestLDrawColor(new ColorRgb(1f, 1f, 1f)),
+            "White should still map to White (15)");
+    }
+
+    @Test
+    void ciede2000SameColorReturnsZeroDistance() {
+        double de = Ciede2000.deltaE(50, 20, -30, 50, 20, -30);
+        assertEquals(0.0, de, 1e-10, "Same color should have zero CIEDE2000 distance");
+    }
+
+    @Test
+    void ciede2000DifferentColorsReturnsPositiveDistance() {
+        double de = Ciede2000.deltaE(50, 20, -30, 60, 10, -20);
+        assertTrue(de > 0, "Different colors should have positive CIEDE2000 distance");
+    }
+
+    @Test
+    void ciede2000IsSymmetric() {
+        double de12 = Ciede2000.deltaE(50, 20, -30, 70, -10, 40);
+        double de21 = Ciede2000.deltaE(70, -10, 40, 50, 20, -30);
+        assertEquals(de12, de21, 0.01, "CIEDE2000 should be symmetric");
+    }
+
+    @Test
+    void ciede2000WithKlDeweightsLightness() {
+        // Two colors that differ mainly in lightness
+        double deStandard = Ciede2000.deltaE(80, 10, 20, 40, 10, 20);
+        double deKl2 = Ciede2000.deltaE(80, 10, 20, 40, 10, 20, 2.0);
+        assertTrue(deKl2 < deStandard,
+            "Higher kL should reduce perceived distance for lightness-dominated differences");
+    }
 }

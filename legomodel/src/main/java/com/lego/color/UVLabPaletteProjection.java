@@ -143,7 +143,7 @@ public final class UVLabPaletteProjection implements ColorStrategy {
 
         for (Map.Entry<Brick, double[]> entry : brickLab.entrySet()) {
             double[] lab = entry.getValue();
-            int code = LegoPaletteMapper.nearestCiede2000(lab[0], lab[1], lab[2], entries, KL);
+            int code = Ciede2000.nearestPaletteEntry(lab[0], lab[1], lab[2], entries, KL);
             result.put(entry.getKey(), code);
         }
 

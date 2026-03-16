@@ -78,6 +78,13 @@ public final class BrickColorizer {
                 );
             brickColorCodes = dominantStrategy.applyWithVoxelColors(brickVoxelColors, palette);
             coloredCount = brickVoxelColors.size();
+        } else if (strategy instanceof RegionColorStrategy regionStrategy) {
+            Map<Brick, List<ColorRgb>> brickVoxelColors =
+                ColorSampler.sampleBrickVoxelColors(
+                    mesh, normalized, triColorMap, surface, bricks, resolution
+                );
+            brickColorCodes = regionStrategy.applyWithVoxelColors(brickVoxelColors, palette);
+            coloredCount = brickVoxelColors.size();
         } else {
             Map<Brick, ColorRgb> brickRgbColors = ColorSampler.sampleBrickColors(
                 mesh, normalized, triColorMap, surface, bricks, resolution

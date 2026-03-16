@@ -22,7 +22,8 @@ public final class BoundingBox {
     /**
      * Constructs a bounding box from a mesh.
      *
-     * @param mesh input mesh (must be non-null and contain at least one triangle)
+     * @param mesh input mesh (must be non-null and contain at least one
+     * triangle)
      */
     public BoundingBox(Mesh mesh) {
         Objects.requireNonNull(mesh, "Mesh cannot be null");
@@ -58,62 +59,86 @@ public final class BoundingBox {
         this.maxZ = maxZ;
     }
 
-    /** Returns the minimum X coordinate. */
+    /**
+     * Returns the minimum X coordinate.
+     */
     public double minX() {
         return minX;
     }
 
-    /** Returns the minimum Y coordinate. */
+    /**
+     * Returns the minimum Y coordinate.
+     */
     public double minY() {
         return minY;
     }
 
-    /** Returns the minimum Z coordinate. */
+    /**
+     * Returns the minimum Z coordinate.
+     */
     public double minZ() {
         return minZ;
     }
 
-    /** Returns the maximum X coordinate. */
+    /**
+     * Returns the maximum X coordinate.
+     */
     public double maxX() {
         return maxX;
     }
 
-    /** Returns the maximum Y coordinate. */
+    /**
+     * Returns the maximum Y coordinate.
+     */
     public double maxY() {
         return maxY;
     }
 
-    /** Returns the maximum Z coordinate. */
+    /**
+     * Returns the maximum Z coordinate.
+     */
     public double maxZ() {
         return maxZ;
     }
 
-    /** Returns the width (maxX - minX). */
+    /**
+     * Returns the width (maxX - minX).
+     */
     public double width() {
         return maxX - minX;
     }
 
-    /** Returns the height (maxY - minY). */
+    /**
+     * Returns the height (maxY - minY).
+     */
     public double height() {
         return maxY - minY;
     }
 
-    /** Returns the depth (maxZ - minZ). */
+    /**
+     * Returns the depth (maxZ - minZ).
+     */
     public double depth() {
         return maxZ - minZ;
     }
 
-    /** Returns the first vertex of a triangle. */
+    /**
+     * Returns the first vertex of a triangle.
+     */
     private static Vector3 firstVertex(Triangle triangle) {
         return triangle.v1();
     }
 
-    /** Returns the minimum of four double values. */
+    /**
+     * Returns the minimum of four double values.
+     */
     private static double min(double a, double b, double c, double d) {
         return Math.min(Math.min(a, b), Math.min(c, d));
     }
 
-    /** Returns the maximum of four double values. */
+    /**
+     * Returns the maximum of four double values.
+     */
     private static double max(double a, double b, double c, double d) {
         return Math.max(Math.max(a, b), Math.max(c, d));
     }

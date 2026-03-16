@@ -69,7 +69,7 @@ public final class SupersampledVoxelColorPipeline implements ColorStrategy {
         for (Map.Entry<Brick, ColorRgb> e : brickColors.entrySet()) {
             ColorRgb rgb = e.getValue();
             double[] lab = LegoPaletteMapper.linearRgbToLab(rgb.r(), rgb.g(), rgb.b());
-            result.put(e.getKey(), LegoPaletteMapper.nearestCiede2000(lab[0], lab[1], lab[2], entries, KL));
+            result.put(e.getKey(), Ciede2000.nearestPaletteEntry(lab[0], lab[1], lab[2], entries, KL));
         }
         return result;
     }
@@ -172,7 +172,7 @@ public final class SupersampledVoxelColorPipeline implements ColorStrategy {
         // correctly votes Black instead of averaging to muddy brown.
         Map<Brick, Map<Integer, Integer>> brickVotes = new HashMap<>();
         for (SampleLab sl : allSamples) {
-            int code = LegoPaletteMapper.nearestCiede2000(sl.lab[0], sl.lab[1], sl.lab[2], entries, KL);
+            int code = Ciede2000.nearestPaletteEntry(sl.lab[0], sl.lab[1], sl.lab[2], entries, KL);
             brickVotes.computeIfAbsent(sl.brick, k -> new HashMap<>())
                       .merge(code, 1, Integer::sum);
         }

@@ -33,6 +33,7 @@ public final class ColorStrategyRegistry {
         register(map, new UVLabPaletteProjection());
         register(map, new DominantVoteStrategy());
         register(map, new SupersampledVoxelColorPipeline());
+        register(map, new RegionColorStrategy());
         return new ColorStrategyRegistry(map);
     }
 
