@@ -44,17 +44,21 @@ import com.lego.model.ColorRgb;
 public final class RegionColorStrategy implements ColorStrategy {
 
     /**
-     * Maximum hue-weighted ΔE between adjacent bricks for them to merge into
-     * the same region. This uses a custom distance that heavily down-weights
-     * lightness differences (shadows) and emphasizes hue/chroma shifts.
+     * Maximum hue-weighted distance between adjacent bricks for them to merge
+     * into the same region. Uses a custom distance that down-weights lightness
+     * differences (shadows) and emphasizes hue/chroma shifts.
+     *
+     * Set high enough to absorb the a/b color shifts that baked-lighting
+     * introduces (warm shadows shift toward red). The seed-anchored flood
+     * fill prevents global drift even with a generous threshold.
      */
-    static final double MERGE_THRESHOLD = 18.0;
+    static final double MERGE_THRESHOLD = 25.0;
 
     /**
      * Regions with fewer bricks than this are treated as fine detail and
      * assigned per-brick colors instead of a single uniform color.
      */
-    static final int DETAIL_REGION_SIZE = 6;
+    static final int DETAIL_REGION_SIZE = 10;
 
     /**
      * Lightness weight for CIEDE2000 palette matching. Higher values down-weight
@@ -120,10 +124,13 @@ public final class RegionColorStrategy implements ColorStrategy {
         return result;
     }
 
+
+
     /**
-     * Full per-voxel pathway: applies shadow lifting and chroma stabilization
-     * to per-voxel colors, then segments bricks into regions and assigns
-     * uniform colors via per-voxel majority voting within each region.
+     * Full per-voxel pathway: applies aggressive shadow lifting and chroma
+     * stabilization to per-voxel colors, then segments bricks into regions
+     * and assigns uniform colors via per-voxel majority voting within each
+     * region.
      *
      * This pathway avoids the information loss from pre-averaging voxel colors
      * into a single brick color, giving region segmentation and voting access
@@ -156,15 +163,15 @@ public final class RegionColorStrategy implements ColorStrategy {
             brickVoxelLab.put(entry.getKey(), labs);
         }
 
-        // Step 2: Shadow lifting + chroma stabilization on all voxel colors
-        UVLabPaletteProjection.LightnessStats stats =
-                UVLabPaletteProjection.computeLightnessStats(allL);
+        // Step 2: Aggressive shadow lifting for region coloring
+        ShadowRemover.LightnessStats stats =
+                ShadowRemover.computeLightnessStats(allL);
         for (List<double[]> labs : brickVoxelLab.values()) {
             for (double[] lab : labs) {
                 if (stats != null) {
-                    lab[0] = UVLabPaletteProjection.normalizeLightness(lab[0], stats);
+                    lab[0] = ShadowRemover.normalizeLightnessForRegion(lab[0], stats);
                 }
-                UVLabPaletteProjection.stabilizeChroma(lab);
+                ShadowRemover.stabilizeChroma(lab);
             }
         }
 
@@ -305,6 +312,13 @@ public final class RegionColorStrategy implements ColorStrategy {
      * Flood-fill segmentation: groups bricks into contiguous regions where
      * adjacent bricks have similar hue/chroma (ignoring lightness shifts from
      * shadows and lighting).
+     *
+     * To prevent gradual color drift from merging an entire model into one
+     * region (e.g., smooth baked-lighting gradients where each adjacent pair
+     * is similar but endpoints are very different), each candidate brick must
+     * be close to both its immediate neighbor AND the region's seed brick.
+     * The seed acts as a fixed anchor — unlike a running average, it cannot
+     * drift with the expanding frontier.
      */
     static List<List<Brick>> segmentRegions(List<Brick> bricks,
                                             Map<Brick, List<Brick>> adjacency,
@@ -320,6 +334,8 @@ public final class RegionColorStrategy implements ColorStrategy {
             queue.add(seed);
             visited.put(seed, true);
 
+            double[] seedLab = brickLab.get(seed);
+
             while (!queue.isEmpty()) {
                 Brick current = queue.poll();
                 region.add(current);
@@ -328,7 +344,10 @@ public final class RegionColorStrategy implements ColorStrategy {
                 for (Brick neighbor : adjacency.getOrDefault(current, List.of())) {
                     if (visited.containsKey(neighbor)) continue;
                     double[] neighborLab = brickLab.get(neighbor);
-                    if (shouldMerge(currentLab, neighborLab)) {
+
+                    // Must be close to both the neighbor AND the region seed
+                    if (shouldMerge(currentLab, neighborLab)
+                            && shouldMerge(seedLab, neighborLab)) {
                         visited.put(neighbor, true);
                         queue.add(neighbor);
                     }
@@ -341,6 +360,8 @@ public final class RegionColorStrategy implements ColorStrategy {
         return regions;
     }
 
+
+
     /**
      * Determines whether two adjacent bricks should merge into the same region.
      *
@@ -351,10 +372,11 @@ public final class RegionColorStrategy implements ColorStrategy {
      * The distance is computed as:
      *   sqrt( (0.3 * ΔL)² + (Δa)² + (Δb)² )
      *
-     * The 0.3 weight on lightness means a ΔL of 30 (typical shadow range)
-     * contributes only 9 units of distance, while a Δa or Δb of 30 (strong
+     * The 0.3 weight on lightness means a DL of 30 (typical shadow range)
+     * contributes only 9 units of distance, while a Da or Db of 30 (strong
      * hue shift) contributes the full 30. This makes the algorithm blind to
-     * shadows while still detecting real color boundaries.
+     * shadows while still detecting real color boundaries. The seed-anchored
+     * flood fill prevents gradual drift even with aggressive lightness deweighting.
      */
     static boolean shouldMerge(double[] lab1, double[] lab2) {
         double dl = lab1[0] - lab2[0];

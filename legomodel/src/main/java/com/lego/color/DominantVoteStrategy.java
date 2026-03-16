@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.lego.color.LegoPaletteMapper.PaletteEntry;
-import com.lego.color.UVLabPaletteProjection.LightnessStats;
+import com.lego.color.ShadowRemover.LightnessStats;
 import com.lego.model.Brick;
 import com.lego.model.ColorRgb;
 
@@ -100,13 +100,13 @@ public final class DominantVoteStrategy implements ColorStrategy {
         }
 
         // Compute global lightness stats and apply shadow lifting + chroma stabilization
-        LightnessStats stats = UVLabPaletteProjection.computeLightnessStats(allL);
+        LightnessStats stats = ShadowRemover.computeLightnessStats(allL);
         for (List<double[]> labs : brickVoxelLab.values()) {
             for (double[] lab : labs) {
                 if (stats != null) {
-                    lab[0] = UVLabPaletteProjection.normalizeLightness(lab[0], stats);
+                    lab[0] = ShadowRemover.normalizeLightness(lab[0], stats);
                 }
-                UVLabPaletteProjection.stabilizeChroma(lab);
+                ShadowRemover.stabilizeChroma(lab);
             }
         }
 

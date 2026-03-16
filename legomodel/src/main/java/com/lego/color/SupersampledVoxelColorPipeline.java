@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.lego.color.LegoPaletteMapper.PaletteEntry;
-import com.lego.color.UVLabPaletteProjection.LightnessStats;
+import com.lego.color.ShadowRemover.LightnessStats;
 import com.lego.mesh.TexturedTriangle;
 import com.lego.model.Brick;
 import com.lego.model.ColorMath;
@@ -158,12 +158,12 @@ public final class SupersampledVoxelColorPipeline implements ColorStrategy {
         }
 
         // 5. Shadow lifting + chroma stabilization (per sample)
-        LightnessStats stats = UVLabPaletteProjection.computeLightnessStats(allL);
+        LightnessStats stats = ShadowRemover.computeLightnessStats(allL);
         for (SampleLab sl : allSamples) {
             if (stats != null) {
-                sl.lab[0] = UVLabPaletteProjection.normalizeLightness(sl.lab[0], stats);
+                sl.lab[0] = ShadowRemover.normalizeLightness(sl.lab[0], stats);
             }
-            UVLabPaletteProjection.stabilizeChroma(sl.lab);
+            ShadowRemover.stabilizeChroma(sl.lab);
         }
 
         // 6. Per-sample palette match → per-brick majority vote

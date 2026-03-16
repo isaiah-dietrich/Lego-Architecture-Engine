@@ -11,7 +11,7 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import com.lego.color.UVLabPaletteProjection.LightnessStats;
+import com.lego.color.ShadowRemover.LightnessStats;
 import com.lego.model.Brick;
 import com.lego.model.ColorRgb;
 
@@ -42,7 +42,7 @@ class UVLabPaletteProjectionTest {
     void lightnessStatsComputesMedianAndIqr() {
         // Values: 10, 20, 30, 40, 50, 60, 70, 80
         List<Double> values = List.of(10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0);
-        LightnessStats stats = UVLabPaletteProjection.computeLightnessStats(values);
+        LightnessStats stats = ShadowRemover.computeLightnessStats(values);
         assertNotNull(stats);
         assertEquals(45.0, stats.median(), 1.0);
         assertTrue(stats.iqr() > 0, "IQR should be positive");
@@ -50,13 +50,13 @@ class UVLabPaletteProjectionTest {
 
     @Test
     void lightnessStatsReturnsNullForTooFewValues() {
-        assertNull(UVLabPaletteProjection.computeLightnessStats(List.of(50.0, 60.0, 70.0)));
+        assertNull(ShadowRemover.computeLightnessStats(List.of(50.0, 60.0, 70.0)));
     }
 
     @Test
     void lightnessStatsHandlesUniformValues() {
         List<Double> uniform = List.of(50.0, 50.0, 50.0, 50.0, 50.0);
-        LightnessStats stats = UVLabPaletteProjection.computeLightnessStats(uniform);
+        LightnessStats stats = ShadowRemover.computeLightnessStats(uniform);
         assertNotNull(stats);
         assertEquals(50.0, stats.median(), 0.01);
         assertEquals(0.0, stats.iqr(), 0.01);
@@ -69,7 +69,7 @@ class UVLabPaletteProjectionTest {
         LightnessStats stats = new LightnessStats(60.0, 45.0, 75.0, 30.0);
         // Shadow threshold = 60 - 15 = 45
         // A value of 20 is well below the threshold
-        double lifted = UVLabPaletteProjection.normalizeLightness(20.0, stats);
+        double lifted = ShadowRemover.normalizeLightness(20.0, stats);
         assertTrue(lifted > 20.0, "Shadow lifting should raise L* from 20. Got: " + lifted);
         assertTrue(lifted < 60.0, "Shadow lifting should not exceed median. Got: " + lifted);
     }
@@ -78,7 +78,7 @@ class UVLabPaletteProjectionTest {
     void highlightCompressionLowersHighLightness() {
         LightnessStats stats = new LightnessStats(60.0, 45.0, 75.0, 30.0);
         // Highlight threshold = 60 + 15 = 75
-        double compressed = UVLabPaletteProjection.normalizeLightness(95.0, stats);
+        double compressed = ShadowRemover.normalizeLightness(95.0, stats);
         assertTrue(compressed < 95.0, "Highlight compression should lower L* from 95. Got: " + compressed);
         assertTrue(compressed > 60.0, "Should still be above median. Got: " + compressed);
     }
@@ -86,23 +86,23 @@ class UVLabPaletteProjectionTest {
     @Test
     void normalizeLightnessDoesNotChangeMiddleValues() {
         LightnessStats stats = new LightnessStats(60.0, 45.0, 75.0, 30.0);
-        double mid = UVLabPaletteProjection.normalizeLightness(60.0, stats);
+        double mid = ShadowRemover.normalizeLightness(60.0, stats);
         assertEquals(60.0, mid, 0.01, "Values at median should not change");
     }
 
     @Test
     void normalizeLightnessNoOpWhenIqrIsZero() {
         LightnessStats stats = new LightnessStats(50.0, 50.0, 50.0, 0.0);
-        double result = UVLabPaletteProjection.normalizeLightness(30.0, stats);
+        double result = ShadowRemover.normalizeLightness(30.0, stats);
         assertEquals(30.0, result, 0.01, "No-op when IQR is zero");
     }
 
     @Test
     void normalizeLightnessClampsToValidRange() {
         LightnessStats stats = new LightnessStats(50.0, 30.0, 70.0, 40.0);
-        double result = UVLabPaletteProjection.normalizeLightness(-10.0, stats);
+        double result = ShadowRemover.normalizeLightness(-10.0, stats);
         assertTrue(result >= 0, "Should not go below 0");
-        result = UVLabPaletteProjection.normalizeLightness(110.0, stats);
+        result = ShadowRemover.normalizeLightness(110.0, stats);
         assertTrue(result <= 100, "Should not exceed 100");
     }
 
@@ -111,9 +111,9 @@ class UVLabPaletteProjectionTest {
     @Test
     void stabilizeChromaBoostsLowChromaColors() {
         double[] lab = {50.0, 2.0, 3.0}; // chroma = sqrt(4+9) ≈ 3.6
-        UVLabPaletteProjection.stabilizeChroma(lab);
+        ShadowRemover.stabilizeChroma(lab);
         double newChroma = Math.sqrt(lab[1] * lab[1] + lab[2] * lab[2]);
-        assertEquals(UVLabPaletteProjection.MIN_CHROMA, newChroma, 0.1,
+        assertEquals(ShadowRemover.MIN_CHROMA, newChroma, 0.1,
             "Low chroma should be boosted to MIN_CHROMA");
     }
 
@@ -121,7 +121,7 @@ class UVLabPaletteProjectionTest {
     void stabilizeChromaPreservesHueAngle() {
         double[] lab = {50.0, 3.0, 4.0};
         double originalAngle = Math.atan2(lab[2], lab[1]);
-        UVLabPaletteProjection.stabilizeChroma(lab);
+        ShadowRemover.stabilizeChroma(lab);
         double newAngle = Math.atan2(lab[2], lab[1]);
         assertEquals(originalAngle, newAngle, 0.001, "Hue angle should be preserved");
     }
@@ -130,7 +130,7 @@ class UVLabPaletteProjectionTest {
     void stabilizeChromaLeavesHighChromaAlone() {
         double[] lab = {50.0, 20.0, 30.0};
         double originalA = lab[1], originalB = lab[2];
-        UVLabPaletteProjection.stabilizeChroma(lab);
+        ShadowRemover.stabilizeChroma(lab);
         assertEquals(originalA, lab[1], 0.001);
         assertEquals(originalB, lab[2], 0.001);
     }
@@ -139,7 +139,7 @@ class UVLabPaletteProjectionTest {
     void stabilizeChromaLeavesNearlyAchromaticAlone() {
         double[] lab = {50.0, 0.3, 0.4}; // chroma ≈ 0.5, truly gray
         double originalA = lab[1], originalB = lab[2];
-        UVLabPaletteProjection.stabilizeChroma(lab);
+        ShadowRemover.stabilizeChroma(lab);
         assertEquals(originalA, lab[1], 0.001, "Nearly achromatic should be left alone");
         assertEquals(originalB, lab[2], 0.001);
     }

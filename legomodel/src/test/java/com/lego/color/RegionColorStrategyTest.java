@@ -137,7 +137,7 @@ class RegionColorStrategyTest {
         // Yellow vs slightly darker yellow (only lightness difference)
         double[] lab1 = {75.0, 10.0, 80.0};
         double[] lab2 = {55.0, 10.0, 80.0};
-        // Weighted distance: sqrt(0.09*400 + 0 + 0) = sqrt(36) = 6 < 18
+        // Weighted distance: sqrt(0.09*400 + 0 + 0) = sqrt(36) = 6 < 15
         assertTrue(RegionColorStrategy.shouldMerge(lab1, lab2),
             "Bricks with same hue but different lightness should merge");
     }
@@ -250,6 +250,27 @@ class RegionColorStrategyTest {
 
         List<List<Brick>> regions = RegionColorStrategy.segmentRegions(bricks, adj, brickLab);
         assertEquals(2, regions.size(), "Disconnected bricks should be in separate regions");
+    }
+
+    @Test
+    void segmentationPreventsGradualDrift() {
+        // Chain of 6 bricks where each adjacent pair differs by only 10 in a*,
+        // but the endpoints differ by 50. Without the seed check, flood-fill
+        // would merge them all; with it, bricks that drift too far from the
+        // seed get split into a separate region. Using a* (not L*) to ensure
+        // the full merge weight applies.
+        List<Brick> bricks = new ArrayList<>();
+        Map<Brick, double[]> brickLab = new HashMap<>();
+        for (int i = 0; i < 6; i++) {
+            Brick b = new Brick(i, 0, 0, 1, 1, 1);
+            bricks.add(b);
+            brickLab.put(b, new double[]{50, i * 10, 0}); // a* goes 0→50
+        }
+        Map<Brick, List<Brick>> adj = RegionColorStrategy.buildAdjacencyGraph(bricks);
+
+        List<List<Brick>> regions = RegionColorStrategy.segmentRegions(bricks, adj, brickLab);
+        assertTrue(regions.size() > 1,
+            "Gradual drift chain should be split into multiple regions, got " + regions.size());
     }
 
     // ---- applyWithVoxelColors — per-voxel pathway ----

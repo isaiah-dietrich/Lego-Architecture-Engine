@@ -100,9 +100,10 @@ public final class BrickColorizer {
             }
         }
 
-        // Smoothing (skip for direct strategy which uses raw nearest-match)
+        // Smoothing (skip for direct strategy and region strategy)
+        // Region strategy produces deliberately uniform regions; smoothing would undo that.
         int smoothedCount = 0;
-        if (!"direct".equals(strategy.name())) {
+        if (!"direct".equals(strategy.name()) && !"region".equals(strategy.name())) {
             smoothedCount = ColorSmoother.smoothIterative(brickColorCodes, bricks, 3, palette);
         }
 

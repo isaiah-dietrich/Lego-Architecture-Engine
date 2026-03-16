@@ -72,26 +72,6 @@ import com.lego.model.ColorRgb;
  */
 public final class UVLabPaletteProjection implements ColorStrategy {
 
-    /**
-     * Minimum chroma (sqrt(a² + b²)) below which a color is considered
-     * "desaturated" and eligible for chroma stabilization. This corresponds
-     * to colors that are perceptually near-gray.
-     */
-    static final double MIN_CHROMA = 8.0;
-
-    /**
-     * Controls how aggressively shadow lifting compresses the dark tail.
-     * 0.0 = no lifting, 1.0 = clamp to median. Default 0.6 provides a
-     * good balance between shadow removal and preserving tonal variation.
-     */
-    static final double SHADOW_LIFT_STRENGTH = 0.6;
-
-    /**
-     * Controls how aggressively highlight compression compresses the bright tail.
-     * Lower than shadow strength because highlights are less problematic.
-     */
-    static final double HIGHLIGHT_COMPRESS_STRENGTH = 0.3;
-
     @Override
     /** Returns the strategy name ("uvlab"). */
     public String name() {
@@ -123,18 +103,18 @@ public final class UVLabPaletteProjection implements ColorStrategy {
         }
 
         // Step 2: Compute lightness statistics
-        LightnessStats stats = computeLightnessStats(allL);
+        ShadowRemover.LightnessStats stats = ShadowRemover.computeLightnessStats(allL);
 
         // Step 3: Apply shadow lifting and highlight compression
         if (stats != null) {
             for (double[] lab : brickLab.values()) {
-                lab[0] = normalizeLightness(lab[0], stats);
+                lab[0] = ShadowRemover.normalizeLightness(lab[0], stats);
             }
         }
 
         // Step 4: Chroma stabilization for near-gray colors
         for (double[] lab : brickLab.values()) {
-            stabilizeChroma(lab);
+            ShadowRemover.stabilizeChroma(lab);
         }
 
         // Step 5: CIEDE2000 palette matching
@@ -148,122 +128,6 @@ public final class UVLabPaletteProjection implements ColorStrategy {
         }
 
         return result;
-    }
-
-    // ---- Lightness statistics ----
-
-    /**
-     * Robust statistics for lightness distribution: median and IQR.
-     */
-    record LightnessStats(double median, double q1, double q3, double iqr) {
-        double shadowThreshold() { return median - 0.5 * iqr; }
-        double highlightThreshold() { return median + 0.5 * iqr; }
-    }
-
-    /**
-     * Computes median and IQR of the lightness values.
-     * Returns null if fewer than 4 values (not enough for meaningful statistics).
-     */
-    static LightnessStats computeLightnessStats(List<Double> values) {
-        if (values.size() < 4) return null;
-
-        List<Double> sorted = new ArrayList<>(values);
-        sorted.sort(Double::compareTo);
-
-        double median = percentile(sorted, 50);
-        double q1 = percentile(sorted, 25);
-        double q3 = percentile(sorted, 75);
-        double iqr = q3 - q1;
-
-        return new LightnessStats(median, q1, q3, iqr);
-    }
-
-    /**
-     * Computes a percentile using linear interpolation.
-     * @param sorted sorted list of values
-     * @param p percentile (0-100)
-     */
-    private static double percentile(List<Double> sorted, double p) {
-        double index = (p / 100.0) * (sorted.size() - 1);
-        int lo = (int) Math.floor(index);
-        int hi = Math.min(lo + 1, sorted.size() - 1);
-        double frac = index - lo;
-        return sorted.get(lo) * (1 - frac) + sorted.get(hi) * frac;
-    }
-
-    // ---- Shadow lifting ----
-
-    /**
-     * L* floor below which shadow lifting is progressively reduced.
-     * Values below this are likely intentionally dark features (eyes, nose)
-     * rather than shadow-affected colored surfaces. Lift strength scales
-     * linearly from 0 at L*=0 to full at L*=DARK_FEATURE_FLOOR.
-     */
-    static final double DARK_FEATURE_FLOOR = 20.0;
-
-    /**
-     * Normalizes a lightness value by lifting shadows and compressing highlights.
-     *
-     * Uses a smooth ramp: values well below the shadow threshold are lifted
-     * proportionally toward the median, while values near the median are untouched.
-     * The strength parameter controls the compression ratio.
-     *
-     * Very dark values (L* < #DARK_FEATURE_FLOOR) receive progressively
-     * less lifting to preserve intentionally dark features like eyes and noses,
-     * which should map to Black rather than Dark Gray.
-     */
-    static double normalizeLightness(double l, LightnessStats stats) {
-        if (stats.iqr() <= 0) return l; // all same lightness, nothing to normalize
-
-        double shadowThresh = stats.shadowThreshold();
-        double highlightThresh = stats.highlightThreshold();
-
-        if (l < shadowThresh) {
-            // Shadow region: lift toward shadow threshold
-            double deficit = shadowThresh - l;
-            // Reduce lift strength for very dark values to preserve intentional dark features
-            double effectiveStrength = SHADOW_LIFT_STRENGTH;
-            if (l < DARK_FEATURE_FLOOR) {
-                effectiveStrength *= (l / DARK_FEATURE_FLOOR);
-            }
-            l = shadowThresh - deficit * (1.0 - effectiveStrength);
-        } else if (l > highlightThresh) {
-            // Highlight region: compress toward highlight threshold
-            double excess = l - highlightThresh;
-            l = highlightThresh + excess * (1.0 - HIGHLIGHT_COMPRESS_STRENGTH);
-        }
-
-        // Clamp to valid L* range
-        return Math.max(0, Math.min(100, l));
-    }
-
-    // ---- Chroma stabilization ----
-
-    /**
-     * Stabilizes near-gray colors by boosting their chroma to the minimum threshold.
-     *
-     * Very desaturated colors (chroma < MIN_CHROMA) sit near the neutral axis
-     * where tiny a/b differences can cause large hue shifts in palette matching.
-     * By clamping their chroma to MIN_CHROMA while preserving hue angle, we push
-     * them firmly into a single hue quadrant and avoid ambiguous matches.
-     *
-     * Truly neutral colors (both a* and b* very close to zero) are left unchanged
-     * since they should match gray/black/white palette entries.
-     */
-    static void stabilizeChroma(double[] lab) {
-        double a = lab[1];
-        double b = lab[2];
-        double chroma = Math.sqrt(a * a + b * b);
-
-        // If chroma is extremely low (nearly achromatic), leave it — it's a genuine gray
-        if (chroma < 1.0) return;
-
-        // If chroma is below threshold, scale it up to the threshold
-        if (chroma < MIN_CHROMA) {
-            double scale = MIN_CHROMA / chroma;
-            lab[1] = a * scale;
-            lab[2] = b * scale;
-        }
     }
 
     // ---- CIEDE2000 matching ----
