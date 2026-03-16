@@ -99,13 +99,22 @@ public final class DominantVoteStrategy implements ColorStrategy {
             brickVoxelLab.put(entry.getKey(), labs);
         }
 
-        // Compute global lightness stats and apply shadow lifting + chroma stabilization
+        // Compute global lightness stats and apply shadow lifting + chrominance normalization
         LightnessStats stats = ShadowRemover.computeLightnessStats(allL);
+        List<double[]> allLabs = new java.util.ArrayList<>();
+        for (List<double[]> labs : brickVoxelLab.values()) {
+            allLabs.addAll(labs);
+        }
+        ShadowRemover.ChrominanceStats chromStats =
+                ShadowRemover.computeChrominanceStats(allLabs);
+
         for (List<double[]> labs : brickVoxelLab.values()) {
             for (double[] lab : labs) {
+                double originalL = lab[0];
                 if (stats != null) {
                     lab[0] = ShadowRemover.normalizeLightness(lab[0], stats);
                 }
+                ShadowRemover.normalizeChrominance(lab, originalL, stats, chromStats);
                 ShadowRemover.stabilizeChroma(lab);
             }
         }

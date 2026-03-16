@@ -11,6 +11,7 @@ part_id,name,category,category_name,stud_x,stud_y,height_units,material,active
 3003,Brick 2 x 2,11,Bricks,2,2,1,Plastic,true
 3004,Brick 1 x 2,11,Bricks,1,2,1,Plastic,true
 3005,Brick 1 x 1,11,Bricks,1,1,1,Plastic,true
+3010,Brick 1 x 4,11,Bricks,1,4,1,Plastic,true
 3020,Plate 2 x 4,14,Plates,2,4,1/3,Plastic,true
 3021,Plate 2 x 3,14,Plates,2,3,1/3,Plastic,true
 3022,Plate 2 x 2,14,Plates,2,2,1/3,Plastic,true
@@ -30,6 +31,7 @@ part_id,name,category,category_name,stud_x,stud_y,height_units,material,active
 3623,Plate 1 x 3,14,Plates,1,3,1,Plastic,false
 3660,"Slope Inverted 45° 2 x 2 [Ovoid Bottom Pin, Bar-sized Stud Holes]",3,Bricks Sloped,2,2,1,Plastic,false
 3665,Slope Inverted 45° 2 x 1,3,Bricks Sloped,2,1,1,Plastic,false
+3710,Plate 1 x 4,14,Plates,1,4,1/3,Plastic,true
 3794b,Plate Special 1 x 2 with 1 Stud with Groove (Jumper),9,Plates Special,1,2,1/3,Plastic,false
 4070,Brick Special 1 x 1 with Headlight,5,Bricks Special,1,1,1,Plastic,false
 4286,Slope 33° 3 x 1,3,Bricks Sloped,3,1,1,Plastic,false

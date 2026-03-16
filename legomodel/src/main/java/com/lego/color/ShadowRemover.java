@@ -67,6 +67,14 @@ public final class ShadowRemover {
      */
     static final double DARK_FEATURE_FLOOR = 20.0;
 
+    /**
+     * How aggressively to compress a/b warm shifts in shadow regions.
+     * 0.0 = no compression, 1.0 = snap to median. Default is moderate.
+     */
+    static final double CHROMINANCE_COMPRESS_STRENGTH = 0.7;
+
+    /**
+     * Maximum hue angle difference (radians) from the model's dominant hue
     // ---- Lightness statistics ----
 
     /**
@@ -76,6 +84,11 @@ public final class ShadowRemover {
         public double shadowThreshold() { return median - 0.5 * iqr; }
         public double highlightThreshold() { return median + 0.5 * iqr; }
     }
+
+    /**
+     * Statistics for chrominance channels: medians for normalization.
+     */
+    public record ChrominanceStats(double medianA, double medianB) {}
 
     /**
      * Computes median and IQR of the lightness values.
@@ -93,6 +106,27 @@ public final class ShadowRemover {
         double iqr = q3 - q1;
 
         return new LightnessStats(median, q1, q3, iqr);
+    }
+
+    /**
+     * Computes median a* and b* from a list of Lab arrays.
+     * Returns null if fewer than 4 values.
+     */
+    public static ChrominanceStats computeChrominanceStats(List<double[]> labValues) {
+        if (labValues.size() < 4) return null;
+
+        List<Double> aVals = new ArrayList<>(labValues.size());
+        List<Double> bVals = new ArrayList<>(labValues.size());
+        for (double[] lab : labValues) {
+            aVals.add(lab[1]);
+            bVals.add(lab[2]);
+        }
+        aVals.sort(Double::compareTo);
+        bVals.sort(Double::compareTo);
+
+        return new ChrominanceStats(
+                percentile(aVals, 50),
+                percentile(bVals, 50));
     }
 
     /**
@@ -158,6 +192,52 @@ public final class ShadowRemover {
         }
 
         return Math.max(0, Math.min(100, l));
+    }
+
+    // ---- Chrominance normalization ----
+
+    /**
+     * Compresses chrominance toward the global median for voxels in shadow regions.
+     *
+     * Baked lighting doesn't just darken shadows -- it shifts their hue warm
+     * (increased a, increased b). This produces spurious red/pink palette
+     * matches (Sand Red, Dark Pink, Sand Purple) on surfaces that should be
+     * a uniform golden/tan.
+     *
+     * For voxels whose original (pre-lift) lightness was below the shadow
+     * threshold, compress their chrominance toward the model median proportionally
+     * to how deep in shadow they were. Non-shadow voxels are untouched.
+     * Very dark voxels (below {@link #DARK_FEATURE_FLOOR}) get reduced
+     * compression to preserve genuinely dark features.
+     *
+     * @param lab              Lab array, modified in place (a and b channels)
+     * @param originalL        the voxel's L before shadow lifting
+     * @param lightnessStats   lightness statistics for the model
+     * @param chromStats       chrominance statistics (median a, median b)
+     */
+    public static void normalizeChrominance(double[] lab, double originalL,
+                                            LightnessStats lightnessStats,
+                                            ChrominanceStats chromStats) {
+        if (lightnessStats == null || chromStats == null) return;
+        if (lightnessStats.iqr() <= 0) return;
+
+        double shadowThresh = lightnessStats.shadowThreshold();
+        if (originalL >= shadowThresh) return; // not in shadow — leave alone
+
+        // How deep in shadow: 0 at threshold, 1 at well below threshold
+        double depth = (shadowThresh - originalL) / (lightnessStats.iqr() + 1e-9);
+        double t = Math.min(1.0, depth) * CHROMINANCE_COMPRESS_STRENGTH;
+
+        // Reduce compression for dark values to preserve genuinely dark features.
+        // Below L*=10: no compression. L*=10–25: gradual ramp. Above L*=25: full.
+        if (originalL < 10.0) return;
+        if (originalL < 25.0) {
+            t *= (originalL - 10.0) / 15.0;
+        }
+
+        // Compress a*/b* toward median
+        lab[1] = lab[1] + (chromStats.medianA() - lab[1]) * t;
+        lab[2] = lab[2] + (chromStats.medianB() - lab[2]) * t;
     }
 
     // ---- Chroma stabilization ----

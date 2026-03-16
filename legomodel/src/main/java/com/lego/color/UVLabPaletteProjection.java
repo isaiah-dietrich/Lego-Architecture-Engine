@@ -102,14 +102,18 @@ public final class UVLabPaletteProjection implements ColorStrategy {
             allL.add(lab[0]);
         }
 
-        // Step 2: Compute lightness statistics
+        // Step 2: Compute lightness and chrominance statistics
         ShadowRemover.LightnessStats stats = ShadowRemover.computeLightnessStats(allL);
+        ShadowRemover.ChrominanceStats chromStats =
+                ShadowRemover.computeChrominanceStats(new ArrayList<>(brickLab.values()));
 
-        // Step 3: Apply shadow lifting and highlight compression
-        if (stats != null) {
-            for (double[] lab : brickLab.values()) {
+        // Step 3: Apply shadow lifting, chrominance normalization, and chroma stabilization
+        for (double[] lab : brickLab.values()) {
+            double originalL = lab[0];
+            if (stats != null) {
                 lab[0] = ShadowRemover.normalizeLightness(lab[0], stats);
             }
+            ShadowRemover.normalizeChrominance(lab, originalL, stats, chromStats);
         }
 
         // Step 4: Chroma stabilization for near-gray colors

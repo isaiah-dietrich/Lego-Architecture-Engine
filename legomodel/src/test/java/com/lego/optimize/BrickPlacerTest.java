@@ -297,7 +297,7 @@ class BrickPlacerTest {
     }
 
     @Test
-    void testMixedPattern_Uses2x2ThenDeterministicFallbacks() {
+    void testMixedPattern_Uses4x1ThenDeterministicFallbacks() {
         VoxelGrid surface = new VoxelGrid(5, 1, 2);
 
         // 2x2 patch in X-Z plane at y=0 (studX=2, studY=2)
@@ -306,34 +306,36 @@ class BrickPlacerTest {
         surface.setFilled(0, 0, 1, true);
         surface.setFilled(1, 0, 1, true);
 
-        // Extra voxels in X direction at z=0, y=0 — become one 2x1 and one 1x1
+        // Extra voxels in X direction at z=0, y=0
         surface.setFilled(2, 0, 0, true);
         surface.setFilled(3, 0, 0, true);
         surface.setFilled(4, 0, 0, true);
 
         List<Brick> bricks = BrickPlacer.placeBricks(surface);
 
+        // With 1x4 brick in catalog, rotated 4x1 scores higher than 2x2
+        // due to better neighbor coverage (0.6 vs 0.5)
         assertEquals(3, bricks.size());
 
         Brick first = bricks.get(0);
         assertEquals(0, first.x());
         assertEquals(0, first.y());
         assertEquals(0, first.z());
-        assertEquals(2, first.studX());
-        assertEquals(2, first.studY());
+        assertEquals(4, first.studX());
+        assertEquals(1, first.studY());
 
         Brick second = bricks.get(1);
-        assertEquals(2, second.x());
+        assertEquals(4, second.x());
         assertEquals(0, second.y());
         assertEquals(0, second.z());
-        assertEquals(2, second.studX());
+        assertEquals(1, second.studX());
         assertEquals(1, second.studY());
 
         Brick third = bricks.get(2);
-        assertEquals(4, third.x());
+        assertEquals(0, third.x());
         assertEquals(0, third.y());
-        assertEquals(0, third.z());
-        assertEquals(1, third.studX());
+        assertEquals(1, third.z());
+        assertEquals(2, third.studX());
         assertEquals(1, third.studY());
     }
 

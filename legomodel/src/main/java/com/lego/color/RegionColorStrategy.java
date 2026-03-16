@@ -163,19 +163,28 @@ public final class RegionColorStrategy implements ColorStrategy {
             brickVoxelLab.put(entry.getKey(), labs);
         }
 
-        // Step 2: Aggressive shadow lifting for region coloring
+        // Step 2: Shadow lifting + hue-aware chrominance normalization + chroma stabilization
         ShadowRemover.LightnessStats stats =
                 ShadowRemover.computeLightnessStats(allL);
+        List<double[]> allLabs = new ArrayList<>();
+        for (List<double[]> labs : brickVoxelLab.values()) {
+            allLabs.addAll(labs);
+        }
+        ShadowRemover.ChrominanceStats chromStats =
+                ShadowRemover.computeChrominanceStats(allLabs);
+
         for (List<double[]> labs : brickVoxelLab.values()) {
             for (double[] lab : labs) {
+                double originalL = lab[0];
                 if (stats != null) {
                     lab[0] = ShadowRemover.normalizeLightnessForRegion(lab[0], stats);
                 }
+                ShadowRemover.normalizeChrominance(lab, originalL, stats, chromStats);
                 ShadowRemover.stabilizeChroma(lab);
             }
         }
 
-        // Step 3: Compute representative Lab per brick (average of lifted voxels)
+        // Step 3: Compute representative Lab per brick (average of normalized voxels)
         Map<Brick, double[]> brickLab = new HashMap<>(bricks.size());
         for (Brick brick : bricks) {
             List<double[]> labs = brickVoxelLab.get(brick);

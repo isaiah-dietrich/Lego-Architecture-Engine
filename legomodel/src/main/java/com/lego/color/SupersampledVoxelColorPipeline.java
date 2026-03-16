@@ -157,12 +157,21 @@ public final class SupersampledVoxelColorPipeline implements ColorStrategy {
             }
         }
 
-        // 5. Shadow lifting + chroma stabilization (per sample)
+        // 5. Shadow lifting + chrominance normalization + chroma stabilization
         LightnessStats stats = ShadowRemover.computeLightnessStats(allL);
+        java.util.List<double[]> allLabArrays = new java.util.ArrayList<>(allSamples.size());
         for (SampleLab sl : allSamples) {
+            allLabArrays.add(sl.lab);
+        }
+        ShadowRemover.ChrominanceStats chromStats =
+                ShadowRemover.computeChrominanceStats(allLabArrays);
+
+        for (SampleLab sl : allSamples) {
+            double originalL = sl.lab[0];
             if (stats != null) {
                 sl.lab[0] = ShadowRemover.normalizeLightness(sl.lab[0], stats);
             }
+            ShadowRemover.normalizeChrominance(sl.lab, originalL, stats, chromStats);
             ShadowRemover.stabilizeChroma(sl.lab);
         }
 
