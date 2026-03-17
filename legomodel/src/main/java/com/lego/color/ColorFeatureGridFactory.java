@@ -14,13 +14,13 @@ import com.lego.optimize.PlacementFeatureGrid;
 public final class ColorFeatureGridFactory {
 
     /** ΔE threshold: above this, colors are considered perceptually different. */
-    private static final double COLOR_DIFF_THRESHOLD = 25.0;
+    private static final double COLOR_DIFF_THRESHOLD = 12.0;
 
     /**
      * Minimum 6-connected neighbors with ΔE above threshold for a voxel
      * to be considered high-variance.
      */
-    private static final int VARIANCE_NEIGHBOR_THRESHOLD = 2;
+    private static final int VARIANCE_NEIGHBOR_THRESHOLD = 1;
 
     /** Non-instantiable factory class. */
     private ColorFeatureGridFactory() {}

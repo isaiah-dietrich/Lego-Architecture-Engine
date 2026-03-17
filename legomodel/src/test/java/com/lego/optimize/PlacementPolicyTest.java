@@ -442,14 +442,15 @@ class PlacementPolicyTest {
         List<Brick> noColor = BrickPlacer.placeBricks(surface, STANDARD_DIMS,
             new ScoringPlacementPolicy());
 
-        // Without color: 1 brick (2×2). With color: 2 bricks (each 2×1, single color).
+        // Without color: 1 brick (2×2). With color: 4 × 1×1 bricks
+        // (lowered ΔE threshold makes all boundary voxels high-variance).
         assertEquals(1, noColor.size(), "No-color mode should use 1 × 2x2 brick");
-        assertEquals(2, colorAware.size(), "Color-aware should split at boundary into 2 bricks");
+        assertEquals(4, colorAware.size(), "Color-aware should split at boundary into 1x1 bricks");
 
-        // Verify each color-aware brick is 2×1 (covers one color row)
+        // Verify each color-aware brick is 1×1 (forced by high-variance detection)
         for (Brick b : colorAware) {
-            assertTrue(b.studX() * b.studY() <= 2,
-                "Color-boundary bricks should be small: " + b.studX() + "x" + b.studY());
+            assertEquals(1, b.studX() * b.studY(),
+                "Color-boundary bricks should be 1x1: " + b.studX() + "x" + b.studY());
         }
     }
 
@@ -549,8 +550,8 @@ class PlacementPolicyTest {
         assertFalse(grid.isHighVariance(0, 0, 0), "Red corner with all-red neighbors should NOT be high-variance");
 
         // Adjacent to blue: (1,0,0) has neighbors: (0,0,0)=red, (2,0,0)=red, (1,0,1)=blue
-        // Only 1 different → below threshold of 2
-        assertFalse(grid.isHighVariance(1, 0, 0), "Voxel with only 1 different neighbor should NOT be high-variance");
+        // 1 different neighbor → meets lowered threshold of 1
+        assertTrue(grid.isHighVariance(1, 0, 0), "Voxel with 1 different neighbor should be high-variance");
     }
 
     @Test

@@ -213,7 +213,7 @@ class RegionColorStrategyTest {
         brickLab.put(b, new double[]{70, 10, 80});
         brickLab.put(c, new double[]{70, 10, 80});
 
-        List<List<Brick>> regions = RegionColorStrategy.segmentRegions(bricks, adj, brickLab);
+        List<List<Brick>> regions = RegionColorStrategy.segmentRegions(bricks, adj, brickLab, brickLab);
         assertEquals(1, regions.size(), "All similar adjacent bricks should form one region");
         assertEquals(3, regions.get(0).size());
     }
@@ -232,7 +232,7 @@ class RegionColorStrategyTest {
         brickLab.put(b, new double[]{70, 10, 80});    // yellow
         brickLab.put(c, new double[]{50, -20, -50});   // blue
 
-        List<List<Brick>> regions = RegionColorStrategy.segmentRegions(bricks, adj, brickLab);
+        List<List<Brick>> regions = RegionColorStrategy.segmentRegions(bricks, adj, brickLab, brickLab);
         assertEquals(2, regions.size(), "Dissimilar adjacent bricks should form separate regions");
     }
 
@@ -248,7 +248,7 @@ class RegionColorStrategyTest {
         brickLab.put(a, new double[]{70, 10, 80});
         brickLab.put(b, new double[]{70, 10, 80});
 
-        List<List<Brick>> regions = RegionColorStrategy.segmentRegions(bricks, adj, brickLab);
+        List<List<Brick>> regions = RegionColorStrategy.segmentRegions(bricks, adj, brickLab, brickLab);
         assertEquals(2, regions.size(), "Disconnected bricks should be in separate regions");
     }
 
@@ -268,7 +268,7 @@ class RegionColorStrategyTest {
         }
         Map<Brick, List<Brick>> adj = RegionColorStrategy.buildAdjacencyGraph(bricks);
 
-        List<List<Brick>> regions = RegionColorStrategy.segmentRegions(bricks, adj, brickLab);
+        List<List<Brick>> regions = RegionColorStrategy.segmentRegions(bricks, adj, brickLab, brickLab);
         assertTrue(regions.size() > 1,
             "Gradual drift chain should be split into multiple regions, got " + regions.size());
     }

@@ -6,10 +6,10 @@ import java.util.List;
 import java.util.Map;
 
 import com.lego.color.BrickColorizer;
-import com.lego.color.ColorizationResult;
 import com.lego.color.ColorFeatureGridFactory;
 import com.lego.color.ColorSampler;
 import com.lego.color.ColorStrategyRegistry;
+import com.lego.color.ColorizationResult;
 import com.lego.color.LegoPaletteMapper;
 import com.lego.data.CatalogPartRepository;
 import com.lego.data.PaletteRepository;
@@ -76,7 +76,7 @@ public final class PipelineRunner {
             if (placementPolicy instanceof ScoringPlacementPolicy
                     && "glb-color".equals(request.colorMode())
                     && loaded.colorMap().isPresent()) {
-                ColorRgb[][][] voxelColors = ColorSampler.sampleVoxelColorGrid(
+                ColorRgb[][][] voxelColors = ColorSampler.sampleVoxelColorGridDominant(
                     mesh, normalized, loaded.colorMap().get(), surface, request.resolution());
                 PlacementFeatureGrid featureGrid = ColorFeatureGridFactory.create(voxelColors);
                 placementPolicy = new ScoringPlacementPolicy(featureGrid);

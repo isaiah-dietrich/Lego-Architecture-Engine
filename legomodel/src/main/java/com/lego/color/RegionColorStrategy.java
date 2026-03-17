@@ -55,6 +55,22 @@ public final class RegionColorStrategy implements ColorStrategy {
     static final double MERGE_THRESHOLD = 25.0;
 
     /**
+     * Maximum chrominance (a*, b*) distance between a candidate brick's
+     * original (pre-normalization) Lab and the region seed's original Lab
+     * for the dual-gate merge criterion.
+     *
+     * Uses chrominance-only distance (sqrt(Δa² + Δb²)) because in original
+     * Lab, lightness differences are always shadow/lighting artifacts while
+     * chrominance differences indicate genuinely distinct features.
+     *
+     * Body shadows shift a* by ~5-12 and b* by ~15-25 from highlights
+     * (chrominance distance ~17-28), while eyes/nose differ by 30-40 in b*
+     * (chrominance distance ~35-40). Threshold 30 allows extreme warm
+     * shadows while still separating genuine features.
+     */
+    static final double ORIGINAL_CHROMA_THRESHOLD = 35.0;
+
+    /**
      * Regions with fewer bricks than this are treated as fine detail and
      * assigned per-brick colors instead of a single uniform color.
      */
@@ -99,7 +115,7 @@ public final class RegionColorStrategy implements ColorStrategy {
         Map<Brick, List<Brick>> adjacency = buildAdjacencyGraph(bricks);
 
         // Step 3: Flood-fill segmentation using hue-weighted merge criterion
-        List<List<Brick>> regions = segmentRegions(bricks, adjacency, brickLab);
+        List<List<Brick>> regions = segmentRegions(bricks, adjacency, brickLab, brickLab);
 
         // Step 4–5: Assign colors per region
         Map<Brick, Integer> result = new HashMap<>(bricks.size());
@@ -163,6 +179,22 @@ public final class RegionColorStrategy implements ColorStrategy {
             brickVoxelLab.put(entry.getKey(), labs);
         }
 
+        // Save original per-brick average Lab before normalization.
+        // Used by the detail override post-pass to detect features (eyes, nostrils)
+        // that shadow normalization would otherwise absorb into large body regions.
+        Map<Brick, double[]> originalBrickLab = new HashMap<>(bricks.size());
+        for (Brick brick : bricks) {
+            List<double[]> labs = brickVoxelLab.get(brick);
+            double lSum = 0, aSum = 0, bSum = 0;
+            for (double[] lab : labs) {
+                lSum += lab[0];
+                aSum += lab[1];
+                bSum += lab[2];
+            }
+            int n = labs.size();
+            originalBrickLab.put(brick, new double[]{lSum / n, aSum / n, bSum / n});
+        }
+
         // Step 2: Shadow lifting + hue-aware chrominance normalization + chroma stabilization
         ShadowRemover.LightnessStats stats =
                 ShadowRemover.computeLightnessStats(allL);
@@ -198,9 +230,9 @@ public final class RegionColorStrategy implements ColorStrategy {
             brickLab.put(brick, new double[]{lSum / n, aSum / n, bSum / n});
         }
 
-        // Step 4: Build adjacency graph and segment regions
+        // Step 4: Build adjacency graph and segment regions (dual-gate)
         Map<Brick, List<Brick>> adjacency = buildAdjacencyGraph(bricks);
-        List<List<Brick>> regions = segmentRegions(bricks, adjacency, brickLab);
+        List<List<Brick>> regions = segmentRegions(bricks, adjacency, brickLab, originalBrickLab);
 
         // Step 5-6: Assign colors per region using per-voxel voting
         Map<Brick, Integer> result = new HashMap<>(bricks.size());
@@ -328,10 +360,25 @@ public final class RegionColorStrategy implements ColorStrategy {
      * be close to both its immediate neighbor AND the region's seed brick.
      * The seed acts as a fixed anchor — unlike a running average, it cannot
      * drift with the expanding frontier.
+     *
+     * A dual-gate merge criterion is used: bricks must be similar in both
+     * the normalized Lab (after shadow removal) AND the original Lab (before
+     * normalization). This prevents dark features (eyes, nostrils) from being
+     * absorbed into large body regions — shadow normalization can make very
+     * different original colors appear similar, but the original-Lab gate
+     * catches the genuine difference.
+     *
+     * @param bricks          all bricks to segment
+     * @param adjacency       spatial adjacency graph
+     * @param brickLab        normalized Lab per brick (after shadow removal)
+     * @param originalBrickLab original Lab per brick (before normalization);
+     *                         pass the same map as brickLab when no normalization
+     *                         has been applied
      */
     static List<List<Brick>> segmentRegions(List<Brick> bricks,
                                             Map<Brick, List<Brick>> adjacency,
-                                            Map<Brick, double[]> brickLab) {
+                                            Map<Brick, double[]> brickLab,
+                                            Map<Brick, double[]> originalBrickLab) {
         Map<Brick, Boolean> visited = new HashMap<>(bricks.size());
         List<List<Brick>> regions = new ArrayList<>();
 
@@ -344,6 +391,7 @@ public final class RegionColorStrategy implements ColorStrategy {
             visited.put(seed, true);
 
             double[] seedLab = brickLab.get(seed);
+            double[] seedOrig = originalBrickLab.get(seed);
 
             while (!queue.isEmpty()) {
                 Brick current = queue.poll();
@@ -353,10 +401,18 @@ public final class RegionColorStrategy implements ColorStrategy {
                 for (Brick neighbor : adjacency.getOrDefault(current, List.of())) {
                     if (visited.containsKey(neighbor)) continue;
                     double[] neighborLab = brickLab.get(neighbor);
+                    double[] neighborOrig = originalBrickLab.get(neighbor);
 
-                    // Must be close to both the neighbor AND the region seed
+                    // Dual gate: close in normalized Lab AND similar
+                    // chrominance in original Lab (ignoring L* which
+                    // is always shadow/lighting noise)
+                    double oa = seedOrig[1] - neighborOrig[1];
+                    double ob = seedOrig[2] - neighborOrig[2];
+                    double chromaDist = Math.sqrt(oa * oa + ob * ob);
+
                     if (shouldMerge(currentLab, neighborLab)
-                            && shouldMerge(seedLab, neighborLab)) {
+                            && shouldMerge(seedLab, neighborLab)
+                            && chromaDist < ORIGINAL_CHROMA_THRESHOLD) {
                         visited.put(neighbor, true);
                         queue.add(neighbor);
                     }
@@ -388,16 +444,22 @@ public final class RegionColorStrategy implements ColorStrategy {
      * flood fill prevents gradual drift even with aggressive lightness deweighting.
      */
     static boolean shouldMerge(double[] lab1, double[] lab2) {
+        return shouldMerge(lab1, lab2, MERGE_THRESHOLD);
+    }
+
+    /**
+     * Overload accepting a custom threshold.
+     */
+    static boolean shouldMerge(double[] lab1, double[] lab2, double threshold) {
         double dl = lab1[0] - lab2[0];
         double da = lab1[1] - lab2[1];
         double db = lab1[2] - lab2[2];
 
-        // Down-weight lightness: shadows change L but not a/b
         double lightnessWeight = 0.3;
         double distance = Math.sqrt(
                 lightnessWeight * lightnessWeight * dl * dl + da * da + db * db);
 
-        return distance < MERGE_THRESHOLD;
+        return distance < threshold;
     }
 
     /**

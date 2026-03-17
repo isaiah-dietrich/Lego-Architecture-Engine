@@ -100,6 +100,36 @@ public final class ColorSampler {
     }
 
     /**
+     * Samples per-voxel colors using dominant-triangle selection.
+     *
+     * Each voxel gets the color of the triangle with the largest overlap
+     * area, rather than an area-weighted average. This preserves sharp
+     * color boundaries (e.g. eyes, nose) that averaging would wash out.
+     *
+     * Use this for building feature grids where boundary detection is
+     * critical.
+     *
+     * @param originalMesh    mesh before normalization (triangle keys match colorMap)
+     * @param normalizedMesh  mesh after normalization (same triangle count and order)
+     * @param colorMap        triangle → color from the loader
+     * @param surface         filled surface voxel grid
+     * @param resolution      voxel grid resolution
+     * @return 3D array of per-voxel dominant colors (null where no color data)
+     */
+    public static ColorRgb[][][] sampleVoxelColorGridDominant(
+        Mesh originalMesh,
+        Mesh normalizedMesh,
+        Map<Triangle, ColorRgb> colorMap,
+        VoxelGrid surface,
+        int resolution
+    ) {
+        Map<Triangle, ColorRgb> normalizedColorMap = remapColors(
+            originalMesh, normalizedMesh, colorMap
+        );
+        return sampleVoxelColorsDominant(normalizedMesh, normalizedColorMap, surface, resolution);
+    }
+
+    /**
      * Returns per-voxel colors for each brick without any brick-level averaging.
      *
      * At the voxel level, each voxel gets the color of the triangle with the
@@ -186,8 +216,11 @@ public final class ColorSampler {
     }
 
     /**
-     * For each filled voxel, picks the color of the triangle with the highest area overlap.
+     * For each filled voxel, picks the color with the highest total area overlap.
      * This preserves sharp color boundaries that averaging would blur.
+     *
+     * Area contributions are summed per unique color so that coplanar triangles
+     * from the same primitive accumulate correctly at shared faces.
      */
     private static ColorRgb[][][] sampleVoxelColorsDominant(
         Mesh normalizedMesh,
@@ -197,18 +230,27 @@ public final class ColorSampler {
     ) {
         Map<Long, List<WeightedColor>> voxelVotes = collectVoxelTriangleOverlaps(normalizedMesh, colorMap, surface, resolution);
 
-        // Pick the highest-area triangle color per voxel
+        // Sum area per distinct color, then pick the color with the highest total
         ColorRgb[][][] result = new ColorRgb[surface.width()][surface.height()][surface.depth()];
         for (Map.Entry<Long, List<WeightedColor>> entry : voxelVotes.entrySet()) {
             long key = entry.getKey();
             List<WeightedColor> samples = entry.getValue();
-            WeightedColor best = samples.get(0);
-            for (int i = 1; i < samples.size(); i++) {
-                if (samples.get(i).weight() > best.weight()) {
-                    best = samples.get(i);
+
+            // Aggregate weights by color identity
+            Map<ColorRgb, Double> colorWeights = new HashMap<>();
+            for (WeightedColor wc : samples) {
+                colorWeights.merge(wc.color(), wc.weight(), Double::sum);
+            }
+
+            ColorRgb bestColor = null;
+            double bestWeight = -1;
+            for (Map.Entry<ColorRgb, Double> cw : colorWeights.entrySet()) {
+                if (cw.getValue() > bestWeight) {
+                    bestWeight = cw.getValue();
+                    bestColor = cw.getKey();
                 }
             }
-            result[VoxelKey.unpackX(key)][VoxelKey.unpackY(key)][VoxelKey.unpackZ(key)] = best.color();
+            result[VoxelKey.unpackX(key)][VoxelKey.unpackY(key)][VoxelKey.unpackZ(key)] = bestColor;
         }
         return result;
     }

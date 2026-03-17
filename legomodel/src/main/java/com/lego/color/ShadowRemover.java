@@ -57,8 +57,10 @@ public final class ShadowRemover {
 
     /**
      * Highlight compression strength for the region pipeline.
+     * Moderate value to avoid compressing genuinely bright colors (White)
+     * so far that they map to gray palette entries.
      */
-    static final double REGION_HIGHLIGHT_COMPRESS = 0.5;
+    static final double REGION_HIGHLIGHT_COMPRESS = 0.3;
 
     /**
      * L* floor below which shadow lifting is progressively reduced.
@@ -72,6 +74,18 @@ public final class ShadowRemover {
      * 0.0 = no compression, 1.0 = snap to median. Default is moderate.
      */
     static final double CHROMINANCE_COMPRESS_STRENGTH = 0.7;
+
+    /**
+     * Minimum chroma ratio (voxel chroma / median chroma) below which
+     * chrominance normalization is skipped. Voxels with much lower chroma
+     * than the model median are genuinely different features (dark neutral
+     * eyes, black nose) rather than warm-shifted shadows. Compressing them
+     * toward the warm median would destroy their identity.
+     *
+     * Body shadows typically have 60-80% of the median chroma. Eye/nose
+     * features have 20-40%. Threshold 0.5 cleanly separates these.
+     */
+    static final double CHROMA_RATIO_FLOOR = 0.5;
 
     /**
      * Maximum hue angle difference (radians) from the model's dominant hue
@@ -235,6 +249,28 @@ public final class ShadowRemover {
             t *= (originalL - 10.0) / 15.0;
         }
 
+        // Skip compression if the voxel's hue is far from the median hue.
+        // Chrominance normalization is designed to correct warm shifts in shadows
+        // of a uniform-color surface.  If a voxel's hue angle differs by >90°
+        // from the median, it is a genuinely different color (e.g. blue on a
+        // warm model) and compressing toward the median would destroy it.
+        double medianHue = Math.atan2(chromStats.medianB(), chromStats.medianA());
+        double voxelHue  = Math.atan2(lab[2], lab[1]);
+        double hueDiff   = Math.abs(medianHue - voxelHue);
+        if (hueDiff > Math.PI) hueDiff = 2 * Math.PI - hueDiff;
+        if (hueDiff > Math.PI / 2) return;
+
+        // Skip compression if the voxel's chroma is much lower than the
+        // median chroma. Low-chroma voxels in shadow regions are genuinely
+        // different features (dark neutral eyes, black nose), not warm-shifted
+        // shadows. Compressing them toward the warm median would make them
+        // match body colors instead of their correct dark palette entries.
+        double voxelChroma = Math.sqrt(lab[1] * lab[1] + lab[2] * lab[2]);
+        double medianChroma = Math.sqrt(
+                chromStats.medianA() * chromStats.medianA()
+                + chromStats.medianB() * chromStats.medianB());
+        if (medianChroma > 1.0 && voxelChroma / medianChroma < CHROMA_RATIO_FLOOR) return;
+
         // Compress a*/b* toward median
         lab[1] = lab[1] + (chromStats.medianA() - lab[1]) * t;
         lab[2] = lab[2] + (chromStats.medianB() - lab[2]) * t;
@@ -258,7 +294,7 @@ public final class ShadowRemover {
         double b = lab[2];
         double chroma = Math.sqrt(a * a + b * b);
 
-        if (chroma < 1.0) return;
+        if (chroma < 3.0) return;
 
         if (chroma < MIN_CHROMA) {
             double scale = MIN_CHROMA / chroma;

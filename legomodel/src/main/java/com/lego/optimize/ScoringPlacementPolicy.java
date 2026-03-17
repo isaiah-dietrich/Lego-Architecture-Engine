@@ -76,8 +76,10 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
     /** Selects the highest-scoring brick at the given position, trying both orientations. */
     public Brick selectBrick(VoxelGrid surface, boolean[][][] covered,
                               int x, int y, int z, List<BrickSpec> allowedSpecs) {
-        // In high color-variance regions, force the smallest available brick
-        if (featureGrid != null && featureGrid.isHighVariance(x, y, z)) {
+        // In high color-variance regions, force the smallest available brick.
+        // Check the anchor voxel and the footprint of the smallest brick —
+        // if ANY voxel in the footprint is high-variance, force 1×1.
+        if (featureGrid != null && hasAnyHighVariance(featureGrid, x, y, z, allowedSpecs)) {
             BrickSpec smallest = allowedSpecs.get(allowedSpecs.size() - 1);
             return new Brick(x, y, z, smallest.studX(), smallest.studY(),
                              smallest.heightUnits(), smallest.partId());
@@ -179,7 +181,7 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
         // The 300-point gap lets bricks win in uniform areas (fewer pieces).
         // For a 2×4 brick, a ~4% uniformity drop wipes out the bonus;
         // for a 1×1, the high-variance map handles detail forcing.
-        return 1_000_000_000 + colorUniformity * area * 1_000
+        return 1_000_000_000 + colorUniformity * colorUniformity * area * 1_000
              + heightUnits * 150 + neighborCoverage * 100;
     }
 
@@ -252,5 +254,32 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
             return 1.0;  // No border = perfect fit (brick fills entire region)
         }
         return (double) filledNeighbors / neighborCount;
+    }
+
+    /**
+     * Checks whether ANY voxel that the largest candidate brick would cover
+     * is marked high-variance. This prevents large bricks from extending
+     * from a uniform region into a detail region.
+     */
+    private static boolean hasAnyHighVariance(PlacementFeatureGrid featureGrid,
+                                               int x, int y, int z,
+                                               List<BrickSpec> allowedSpecs) {
+        // Use the largest brick spec to define the scan region —
+        // if any voxel in that area is high-variance, fall back to 1×1.
+        BrickSpec largest = allowedSpecs.get(0);
+        int maxStudX = Math.max(largest.studX(), largest.studY());
+        int maxStudY = Math.max(largest.studX(), largest.studY());
+        int maxH = largest.heightUnits();
+
+        for (int dy = 0; dy < maxH; dy++) {
+            for (int dx = 0; dx < maxStudX; dx++) {
+                for (int dz = 0; dz < maxStudY; dz++) {
+                    if (featureGrid.isHighVariance(x + dx, y + dy, z + dz)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 }

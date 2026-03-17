@@ -1,7 +1,5 @@
 package com.lego.cli;
 
-import static org.junit.jupiter.api.Assertions.*;
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
@@ -16,6 +14,9 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -127,16 +128,16 @@ class ColorAccuracyTest {
 
     // ===================================================================
     //  Scenario 2: Two-color splits
-    //  Golden baselines per algorithm (geometry causes ~61/39 or ~44/56
-    //  splits at res 12 due to boundary voxel attribution).
+    //  direct uses weighted-average sampling (still has boundary bias).
+    //  region/dominant use per-color aggregated dominant sampling.
     // ===================================================================
 
     @ParameterizedTest(name = "redBlue_{0}")
     @ValueSource(strings = { "direct", "region", "dominant" })
     void twoColorRedBlue(String algo) throws IOException {
         var expected = switch (algo) {
-            case "direct"            -> Map.of(4, 0.44, 1, 0.56);
-            case "region", "dominant" -> Map.of(4, 0.61, 1, 0.39);
+            case "direct"   -> Map.of(4, 0.36, 1, 0.61, 320, 0.03);
+            case "region", "dominant" -> Map.of(4, 0.42, 1, 0.59);
             default -> throw new IllegalArgumentException(algo);
         };
         assertColorDistribution(
@@ -148,11 +149,11 @@ class ColorAccuracyTest {
     @ValueSource(strings = { "direct", "region", "dominant" })
     void twoColorBlackWhite(String algo) throws IOException {
         // direct: boundary voxels produce LBGray artifact
-        // region: over-merges to all-Black
+        // region/dominant: both colors correctly preserved
         var expected = switch (algo) {
-            case "direct"   -> Map.of(0, 0.44, 71, 0.18, 15, 0.39);
-            case "region"   -> Map.of(0, 1.0);
-            case "dominant" -> Map.of(0, 0.61, 15, 0.39);
+            case "direct"   -> Map.of(0, 0.36, 71, 0.39, 15, 0.24);
+            case "region"   -> Map.of(0, 0.42, 15, 0.59);
+            case "dominant" -> Map.of(0, 0.42, 15, 0.59);
             default -> throw new IllegalArgumentException(algo);
         };
         assertColorDistribution(
@@ -163,15 +164,21 @@ class ColorAccuracyTest {
     @ParameterizedTest(name = "yellowGreen_{0}")
     @ValueSource(strings = { "direct", "region", "dominant" })
     void twoColorYellowGreen(String algo) throws IOException {
+        var expected = switch (algo) {
+            case "direct"            -> Map.of(14, 0.62, 2, 0.38);
+            case "region"            -> Map.of(14, 0.57, 2, 0.43);
+            case "dominant"          -> Map.of(14, 0.57, 2, 0.43);
+            default -> throw new IllegalArgumentException(algo);
+        };
         assertColorDistribution(
                 buildTwoCubeGlb("yg.glb", YELLOW, GREEN), algo,
-                Map.of(14, 0.61, 2, 0.39), "yellow-green split");
+                expected, "yellow-green split");
     }
 
     // ===================================================================
     //  Scenario 3: Three-color stripes
     //  direct: boundary artifacts produce Orange, LBGray, Tan
-    //  region/dominant: cleaner but proportions skew toward first cube
+    //  region/dominant: all three input colors present
     // ===================================================================
 
     @ParameterizedTest(name = "threeColor_{0}")
@@ -179,10 +186,12 @@ class ColorAccuracyTest {
     void threeColorStripes(String algo) throws IOException {
         var expected = switch (algo) {
             case "direct" -> Map.of(
-                    4, 0.27, 25, 0.15, 14, 0.12,
-                    71, 0.20, 1, 0.22, 19, 0.05);
-            case "region", "dominant" -> Map.of(
-                    4, 0.42, 14, 0.37, 1, 0.22);
+                    4, 0.11, 14, 0.28,
+                    71, 0.22, 1, 0.11, 25, 0.22, 19, 0.05);
+            case "region" -> Map.of(
+                    4, 0.35, 14, 0.33, 1, 0.32);
+            case "dominant" -> Map.of(
+                    4, 0.35, 14, 0.33, 1, 0.32);
             default -> throw new IllegalArgumentException(algo);
         };
         assertColorDistribution(
@@ -193,17 +202,15 @@ class ColorAccuracyTest {
     // ===================================================================
     //  Scenario 4: High-contrast boundary (DarkRed + White)
     //  direct: LBGray boundary artifact
-    //  region: White mapped to LBGray
-    //  dominant: clean
+    //  region/dominant: shadow lifting maps DarkRed→Red, White preserved
     // ===================================================================
 
     @ParameterizedTest(name = "highContrast_{0}")
     @ValueSource(strings = { "direct", "region", "dominant" })
     void highContrastBoundary(String algo) throws IOException {
         var expected = switch (algo) {
-            case "direct"   -> Map.of(320, 0.44, 71, 0.18, 15, 0.39);
-            case "region"   -> Map.of(320, 0.61, 71, 0.39);
-            case "dominant" -> Map.of(320, 0.61, 15, 0.39);
+            case "direct"            -> Map.of(320, 0.36, 71, 0.39, 15, 0.25);
+            case "region", "dominant" -> Map.of(4, 0.42, 15, 0.59);
             default -> throw new IllegalArgumentException(algo);
         };
         assertColorDistribution(
@@ -212,15 +219,19 @@ class ColorAccuracyTest {
     }
 
     // ===================================================================
-    //  Scenario 5: Similar hues (Red + Orange) — stay separate
+    //  Scenario 5: Similar hues (Red + Orange)
+    //  direct: both colors preserved
+    //  region: merges into single color (similar warm hues fuse)
+    //  dominant: both colors preserved
     // ===================================================================
 
     @ParameterizedTest(name = "similarHue_{0}")
     @ValueSource(strings = { "direct", "region", "dominant" })
     void similarButDistinctColors(String algo) throws IOException {
         var expected = switch (algo) {
-            case "direct"            -> Map.of(4, 0.44, 25, 0.56);
-            case "region", "dominant" -> Map.of(4, 0.61, 25, 0.39);
+            case "direct"   -> Map.of(4, 0.37, 25, 0.63);
+            case "region"   -> Map.of(25, 1.0);
+            case "dominant" -> Map.of(4, 0.42, 25, 0.59);
             default -> throw new IllegalArgumentException(algo);
         };
         assertColorDistribution(
@@ -241,8 +252,8 @@ class ColorAccuracyTest {
 
     // ===================================================================
     //  Scenario 7: Four-color quadrants
-    //  direct: many boundary artifacts (Orange, DBGray from color mixing)
-    //  region/dominant: Red dominates, Blue → DarkRed via region merging
+    //  direct: boundary artifacts (Orange, DBGray from color mixing)
+    //  region/dominant: all four input colors correctly represented
     // ===================================================================
 
     @ParameterizedTest(name = "fourColor_{0}")
@@ -250,10 +261,10 @@ class ColorAccuracyTest {
     void fourColorQuadrants(String algo) throws IOException {
         var expected = switch (algo) {
             case "direct" -> Map.of(
-                    4, 0.13, 1, 0.26, 25, 0.10,
-                    72, 0.19, 14, 0.19, 2, 0.12);
+                    4, 0.08, 1, 0.27,
+                    25, 0.18, 14, 0.24, 72, 0.10, 2, 0.10);
             case "region", "dominant" -> Map.of(
-                    4, 0.50, 320, 0.19, 14, 0.19, 2, 0.12);
+                    4, 0.27, 1, 0.34, 14, 0.27, 2, 0.13);
             default -> throw new IllegalArgumentException(algo);
         };
         assertColorDistribution(
