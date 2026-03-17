@@ -87,6 +87,19 @@ public final class UVLabPaletteProjection implements ColorStrategy {
     @Override
     /** Applies shadow-lifted, chroma-stabilized Lab matching with CIEDE2000. */
     public Map<Brick, Integer> apply(Map<Brick, ColorRgb> brickColors, LegoPaletteMapper palette) {
+        return apply(brickColors, palette, false);
+    }
+
+    /**
+     * Applies Lab matching with CIEDE2000, optionally skipping shadow removal.
+     *
+     * @param brickColors        map from brick to sampled linear RGB
+     * @param palette            the loaded LEGO palette
+     * @param skipShadowRemoval  true for KHR_materials_unlit models (albedo already clean)
+     * @return map from brick to LDraw color code
+     */
+    public Map<Brick, Integer> apply(Map<Brick, ColorRgb> brickColors, LegoPaletteMapper palette,
+                                     boolean skipShadowRemoval) {
         if (brickColors.isEmpty()) {
             return new HashMap<>();
         }
@@ -102,23 +115,25 @@ public final class UVLabPaletteProjection implements ColorStrategy {
             allL.add(lab[0]);
         }
 
-        // Step 2: Compute lightness and chrominance statistics
-        ShadowRemover.LightnessStats stats = ShadowRemover.computeLightnessStats(allL);
-        ShadowRemover.ChrominanceStats chromStats =
-                ShadowRemover.computeChrominanceStats(new ArrayList<>(brickLab.values()));
+        if (!skipShadowRemoval) {
+            // Step 2: Compute lightness and chrominance statistics
+            ShadowRemover.LightnessStats stats = ShadowRemover.computeLightnessStats(allL);
+            ShadowRemover.ChrominanceStats chromStats =
+                    ShadowRemover.computeChrominanceStats(new ArrayList<>(brickLab.values()));
 
-        // Step 3: Apply shadow lifting, chrominance normalization, and chroma stabilization
-        for (double[] lab : brickLab.values()) {
-            double originalL = lab[0];
-            if (stats != null) {
-                lab[0] = ShadowRemover.normalizeLightness(lab[0], stats);
+            // Step 3: Apply shadow lifting, chrominance normalization, and chroma stabilization
+            for (double[] lab : brickLab.values()) {
+                double originalL = lab[0];
+                if (stats != null) {
+                    lab[0] = ShadowRemover.normalizeLightness(lab[0], stats);
+                }
+                ShadowRemover.normalizeChrominance(lab, originalL, stats, chromStats);
             }
-            ShadowRemover.normalizeChrominance(lab, originalL, stats, chromStats);
-        }
 
-        // Step 4: Chroma stabilization for near-gray colors
-        for (double[] lab : brickLab.values()) {
-            ShadowRemover.stabilizeChroma(lab);
+            // Step 4: Chroma stabilization for near-gray colors
+            for (double[] lab : brickLab.values()) {
+                ShadowRemover.stabilizeChroma(lab);
+            }
         }
 
         // Step 5: CIEDE2000 palette matching

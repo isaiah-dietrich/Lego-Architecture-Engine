@@ -2,6 +2,9 @@ package com.lego.mesh;
 
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -92,9 +95,38 @@ public final class GlbLoader implements ModelLoader {
 
         Mesh mesh = new Mesh(triangles);
         if (hasAnyColor) {
-            return LoadedModel.withColorAndTexture(mesh, colorMap, texturedTriangles);
+            boolean unlit = detectUnlit(path);
+            return LoadedModel.withColorAndTexture(mesh, colorMap, texturedTriangles, unlit);
         }
         return LoadedModel.geometryOnly(mesh);
+    }
+
+    /**
+     * Detects whether this GLB file uses the KHR_materials_unlit extension
+     * by reading the JSON chunk from the binary container header.
+     *
+     * When a model is unlit, its textures already contain pure albedo —
+     * shadow removal would over-correct and shift colors.
+     */
+    private static boolean detectUnlit(Path path) throws IOException {
+        try (InputStream is = Files.newInputStream(path)) {
+            // GLB header: 4 bytes magic + 4 bytes version + 4 bytes total length
+            byte[] header = is.readNBytes(12);
+            if (header.length < 12) return false;
+
+            // Chunk 0 header: 4 bytes length (little-endian) + 4 bytes type
+            byte[] chunkHeader = is.readNBytes(8);
+            if (chunkHeader.length < 8) return false;
+
+            int jsonLength = (chunkHeader[0] & 0xFF)
+                           | ((chunkHeader[1] & 0xFF) << 8)
+                           | ((chunkHeader[2] & 0xFF) << 16)
+                           | ((chunkHeader[3] & 0xFF) << 24);
+
+            byte[] jsonBytes = is.readNBytes(jsonLength);
+            return new String(jsonBytes, StandardCharsets.UTF_8)
+                    .contains("KHR_materials_unlit");
+        }
     }
 
     /**

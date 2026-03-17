@@ -98,6 +98,22 @@ public final class SupersampledVoxelColorPipeline implements ColorStrategy {
             int resolution,
             LegoPaletteMapper palette,
             int samplesPerVoxel) {
+        return colorize(normalizedMesh, texturedTriangles, surface, bricks,
+                resolution, palette, samplesPerVoxel, false);
+    }
+
+    /**
+     * Runs the full supersampled color pipeline with optional shadow removal bypass.
+     */
+    public Map<Brick, Integer> colorize(
+            Mesh normalizedMesh,
+            List<TexturedTriangle> texturedTriangles,
+            VoxelGrid surface,
+            List<Brick> bricks,
+            int resolution,
+            LegoPaletteMapper palette,
+            int samplesPerVoxel,
+            boolean skipShadowRemoval) {
 
         // 1. Build BVH from normalized mesh
         TriangleBVH bvh = TriangleBVH.build(normalizedMesh.triangles());
@@ -158,21 +174,23 @@ public final class SupersampledVoxelColorPipeline implements ColorStrategy {
         }
 
         // 5. Shadow lifting + chrominance normalization + chroma stabilization
-        LightnessStats stats = ShadowRemover.computeLightnessStats(allL);
-        java.util.List<double[]> allLabArrays = new java.util.ArrayList<>(allSamples.size());
-        for (SampleLab sl : allSamples) {
-            allLabArrays.add(sl.lab);
-        }
-        ShadowRemover.ChrominanceStats chromStats =
-                ShadowRemover.computeChrominanceStats(allLabArrays);
-
-        for (SampleLab sl : allSamples) {
-            double originalL = sl.lab[0];
-            if (stats != null) {
-                sl.lab[0] = ShadowRemover.normalizeLightness(sl.lab[0], stats);
+        if (!skipShadowRemoval) {
+            LightnessStats stats = ShadowRemover.computeLightnessStats(allL);
+            java.util.List<double[]> allLabArrays = new java.util.ArrayList<>(allSamples.size());
+            for (SampleLab sl : allSamples) {
+                allLabArrays.add(sl.lab);
             }
-            ShadowRemover.normalizeChrominance(sl.lab, originalL, stats, chromStats);
-            ShadowRemover.stabilizeChroma(sl.lab);
+            ShadowRemover.ChrominanceStats chromStats =
+                    ShadowRemover.computeChrominanceStats(allLabArrays);
+
+            for (SampleLab sl : allSamples) {
+                double originalL = sl.lab[0];
+                if (stats != null) {
+                    sl.lab[0] = ShadowRemover.normalizeLightness(sl.lab[0], stats);
+                }
+                ShadowRemover.normalizeChrominance(sl.lab, originalL, stats, chromStats);
+                ShadowRemover.stabilizeChroma(sl.lab);
+            }
         }
 
         // 6. Per-sample palette match → per-brick majority vote

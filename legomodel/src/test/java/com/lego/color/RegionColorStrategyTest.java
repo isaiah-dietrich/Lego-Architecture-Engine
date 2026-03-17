@@ -1,13 +1,15 @@
 package com.lego.color;
 
-import static org.junit.jupiter.api.Assertions.*;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -271,6 +273,58 @@ class RegionColorStrategyTest {
         List<List<Brick>> regions = RegionColorStrategy.segmentRegions(bricks, adj, brickLab, brickLab);
         assertTrue(regions.size() > 1,
             "Gradual drift chain should be split into multiple regions, got " + regions.size());
+    }
+
+    @Test
+    void segmentationLightnessRatioBlocksDarkFeatureMerge() {
+        // Dark eye brick (L*=25) adjacent to light face brick (L*=60).
+        // After shadow lifting, their normalized Lab might be close enough
+        // to pass the hue-weighted merge check, but the lightness ratio
+        // (25/60 = 0.42 < 0.5) should prevent merging.
+        Brick face = new Brick(0, 0, 0, 1, 1, 1);
+        Brick eye  = new Brick(1, 0, 0, 1, 1, 1);
+        List<Brick> bricks = List.of(face, eye);
+
+        Map<Brick, List<Brick>> adj = RegionColorStrategy.buildAdjacencyGraph(bricks);
+
+        // Normalized Lab: close enough to pass hue-weighted merge
+        Map<Brick, double[]> normalizedLab = new HashMap<>();
+        normalizedLab.put(face, new double[]{55, 12, 30});
+        normalizedLab.put(eye,  new double[]{42, 10, 25});
+
+        // Original Lab: eye is genuinely much darker
+        Map<Brick, double[]> originalLab = new HashMap<>();
+        originalLab.put(face, new double[]{60, 12, 30});
+        originalLab.put(eye,  new double[]{25, 10, 15});
+
+        List<List<Brick>> regions = RegionColorStrategy.segmentRegions(
+            bricks, adj, normalizedLab, originalLab);
+        assertEquals(2, regions.size(),
+            "Dark eye brick should not merge into face region due to lightness ratio gate");
+    }
+
+    @Test
+    void segmentationLightnessRatioAllowsShadowMerge() {
+        // Shadow brick (L*=45) adjacent to lit brick (L*=65).
+        // Ratio 45/65 = 0.69 > 0.5, so shadow should merge normally.
+        Brick lit = new Brick(0, 0, 0, 1, 1, 1);
+        Brick shadow = new Brick(1, 0, 0, 1, 1, 1);
+        List<Brick> bricks = List.of(lit, shadow);
+
+        Map<Brick, List<Brick>> adj = RegionColorStrategy.buildAdjacencyGraph(bricks);
+
+        Map<Brick, double[]> normalizedLab = new HashMap<>();
+        normalizedLab.put(lit,    new double[]{55, 12, 30});
+        normalizedLab.put(shadow, new double[]{50, 12, 28});
+
+        Map<Brick, double[]> originalLab = new HashMap<>();
+        originalLab.put(lit,    new double[]{65, 12, 30});
+        originalLab.put(shadow, new double[]{45, 13, 28});
+
+        List<List<Brick>> regions = RegionColorStrategy.segmentRegions(
+            bricks, adj, normalizedLab, originalLab);
+        assertEquals(1, regions.size(),
+            "Shadowed brick should merge with lit brick (lightness ratio 0.69 > 0.5)");
     }
 
     // ---- applyWithVoxelColors — per-voxel pathway ----

@@ -1,7 +1,5 @@
 package com.lego.mesh;
 
-import static org.junit.jupiter.api.Assertions.*;
-
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -14,6 +12,9 @@ import java.util.Map;
 
 import javax.imageio.ImageIO;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -168,7 +169,7 @@ class GlbLoaderTest {
         };
         int[] indices = { 0, 1, 2 };
         float[] vertexColors = { 1f, 0f, 0f, 1f, 0f, 0f, 1f, 0f, 0f }; // all red
-        float[] baseColorFactor = { 0f, 0f, 1f, 1f }; // blue
+        float[] baseColorFactor = { 1f, 1f, 1f, 1f }; // white (neutral tint)
 
         Path glb = writeGlb(tempDir.resolve("priority.glb"), positions, indices, vertexColors, baseColorFactor);
 
@@ -177,10 +178,34 @@ class GlbLoaderTest {
 
         assertTrue(loaded.colorMap().isPresent());
         ColorRgb color = loaded.colorMap().get().values().iterator().next();
-        // Should be red (vertex color) not blue (material)
+        // Vertex color red × white factor = red (per glTF 2.0 spec)
         assertEquals(1f, color.r(), 0.01f);
         assertEquals(0f, color.g(), 0.01f);
         assertEquals(0f, color.b(), 0.01f);
+    }
+
+    @Test
+    void vertexColorsMultipliedByBaseColorFactor() throws IOException {
+        float[] positions = {
+            0f, 0f, 0f,
+            1f, 0f, 0f,
+            0f, 1f, 0f
+        };
+        int[] indices = { 0, 1, 2 };
+        float[] vertexColors = { 1f, 0.8f, 0.6f, 1f, 0.8f, 0.6f, 1f, 0.8f, 0.6f };
+        float[] baseColorFactor = { 0.5f, 1f, 0.5f, 1f }; // green tint
+
+        Path glb = writeGlb(tempDir.resolve("multiply.glb"), positions, indices, vertexColors, baseColorFactor);
+
+        GlbLoader loader = new GlbLoader();
+        LoadedModel loaded = loader.load(glb);
+
+        assertTrue(loaded.colorMap().isPresent());
+        ColorRgb color = loaded.colorMap().get().values().iterator().next();
+        // Per glTF 2.0 spec: vertex color × baseColorFactor
+        assertEquals(0.5f, color.r(), 0.01f);   // 1.0 × 0.5
+        assertEquals(0.8f, color.g(), 0.01f);   // 0.8 × 1.0
+        assertEquals(0.3f, color.b(), 0.01f);   // 0.6 × 0.5
     }
 
     // ---- Phase 3: Texture sampling tests ----

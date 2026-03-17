@@ -61,6 +61,7 @@ public final class BrickColorizer {
 
         LegoPaletteMapper palette = paletteRepository.loadPalette();
         ColorStrategy strategy = strategyRegistry.get(colorAlgorithm);
+        boolean skipShadow = loaded.unlit();
 
         Map<Brick, Integer> brickColorCodes;
         int coloredCount;
@@ -69,22 +70,28 @@ public final class BrickColorizer {
                 && loaded.texturedTriangles().isPresent()) {
             brickColorCodes = supersampledPipeline.colorize(
                 normalized, loaded.texturedTriangles().get(),
-                surface, bricks, resolution, palette, 64);
+                surface, bricks, resolution, palette, 64, skipShadow);
             coloredCount = brickColorCodes.size();
         } else if (strategy instanceof DominantVoteStrategy dominantStrategy) {
             Map<Brick, List<ColorRgb>> brickVoxelColors =
                 ColorSampler.sampleBrickVoxelColors(
                     mesh, normalized, triColorMap, surface, bricks, resolution
                 );
-            brickColorCodes = dominantStrategy.applyWithVoxelColors(brickVoxelColors, palette);
+            brickColorCodes = dominantStrategy.applyWithVoxelColors(brickVoxelColors, palette, skipShadow);
             coloredCount = brickVoxelColors.size();
         } else if (strategy instanceof RegionColorStrategy regionStrategy) {
             Map<Brick, List<ColorRgb>> brickVoxelColors =
                 ColorSampler.sampleBrickVoxelColors(
                     mesh, normalized, triColorMap, surface, bricks, resolution
                 );
-            brickColorCodes = regionStrategy.applyWithVoxelColors(brickVoxelColors, palette);
+            brickColorCodes = regionStrategy.applyWithVoxelColors(brickVoxelColors, palette, skipShadow);
             coloredCount = brickVoxelColors.size();
+        } else if (strategy instanceof UVLabPaletteProjection uvlab) {
+            Map<Brick, ColorRgb> brickRgbColors = ColorSampler.sampleBrickColors(
+                mesh, normalized, triColorMap, surface, bricks, resolution
+            );
+            brickColorCodes = uvlab.apply(brickRgbColors, palette, skipShadow);
+            coloredCount = brickRgbColors.size();
         } else {
             Map<Brick, ColorRgb> brickRgbColors = ColorSampler.sampleBrickColors(
                 mesh, normalized, triColorMap, surface, bricks, resolution

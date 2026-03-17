@@ -82,6 +82,20 @@ public final class DominantVoteStrategy implements ColorStrategy {
      */
     public Map<Brick, Integer> applyWithVoxelColors(
             Map<Brick, List<ColorRgb>> brickVoxelColors, LegoPaletteMapper palette) {
+        return applyWithVoxelColors(brickVoxelColors, palette, false);
+    }
+
+    /**
+     * Full dominant-vote pathway with optional shadow removal bypass.
+     *
+     * @param brickVoxelColors   map from brick to its per-voxel sampled colors
+     * @param palette            the loaded LEGO palette
+     * @param skipShadowRemoval  true for KHR_materials_unlit models (albedo already clean)
+     * @return map from brick to LDraw color code
+     */
+    public Map<Brick, Integer> applyWithVoxelColors(
+            Map<Brick, List<ColorRgb>> brickVoxelColors, LegoPaletteMapper palette,
+            boolean skipShadowRemoval) {
         List<PaletteEntry> entries = palette.opaqueEntries();
         Map<Brick, Integer> result = new HashMap<>(brickVoxelColors.size());
 
@@ -100,22 +114,24 @@ public final class DominantVoteStrategy implements ColorStrategy {
         }
 
         // Compute global lightness stats and apply shadow lifting + chrominance normalization
-        LightnessStats stats = ShadowRemover.computeLightnessStats(allL);
-        List<double[]> allLabs = new java.util.ArrayList<>();
-        for (List<double[]> labs : brickVoxelLab.values()) {
-            allLabs.addAll(labs);
-        }
-        ShadowRemover.ChrominanceStats chromStats =
-                ShadowRemover.computeChrominanceStats(allLabs);
+        if (!skipShadowRemoval) {
+            LightnessStats stats = ShadowRemover.computeLightnessStats(allL);
+            List<double[]> allLabs = new java.util.ArrayList<>();
+            for (List<double[]> labs : brickVoxelLab.values()) {
+                allLabs.addAll(labs);
+            }
+            ShadowRemover.ChrominanceStats chromStats =
+                    ShadowRemover.computeChrominanceStats(allLabs);
 
-        for (List<double[]> labs : brickVoxelLab.values()) {
-            for (double[] lab : labs) {
-                double originalL = lab[0];
-                if (stats != null) {
-                    lab[0] = ShadowRemover.normalizeLightness(lab[0], stats);
+            for (List<double[]> labs : brickVoxelLab.values()) {
+                for (double[] lab : labs) {
+                    double originalL = lab[0];
+                    if (stats != null) {
+                        lab[0] = ShadowRemover.normalizeLightness(lab[0], stats);
+                    }
+                    ShadowRemover.normalizeChrominance(lab, originalL, stats, chromStats);
+                    ShadowRemover.stabilizeChroma(lab);
                 }
-                ShadowRemover.normalizeChrominance(lab, originalL, stats, chromStats);
-                ShadowRemover.stabilizeChroma(lab);
             }
         }
 

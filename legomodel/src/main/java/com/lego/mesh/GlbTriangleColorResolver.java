@@ -38,6 +38,12 @@ final class GlbTriangleColorResolver {
             float r = (colors.get(i0, 0) + colors.get(i1, 0) + colors.get(i2, 0)) / 3f;
             float g = (colors.get(i0, 1) + colors.get(i1, 1) + colors.get(i2, 1)) / 3f;
             float b = (colors.get(i0, 2) + colors.get(i1, 2) + colors.get(i2, 2)) / 3f;
+            // Per glTF 2.0 spec: vertex colors are multiplied by baseColorFactor
+            if (materialColor != null) {
+                r *= materialColor.r();
+                g *= materialColor.g();
+                b *= materialColor.b();
+            }
             return new ColorRgb(ColorMath.clamp01(r), ColorMath.clamp01(g), ColorMath.clamp01(b));
         }
 

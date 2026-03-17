@@ -71,6 +71,19 @@ public final class RegionColorStrategy implements ColorStrategy {
     static final double ORIGINAL_CHROMA_THRESHOLD = 35.0;
 
     /**
+     * Minimum ratio of a neighbor's original lightness to the seed's original
+     * lightness for them to merge. Prevents dark features (eyes, nostrils,
+     * paw pads) in the L*=20–35 range from being absorbed into lighter
+     * regions after shadow lifting makes their normalized Lab values similar.
+     *
+     * A ratio of 0.5 means a brick at L*=25 will not merge into a region
+     * seeded at L*=60 (25/60 = 0.42 < 0.5). Body shadows rarely drop below
+     * 50% of highlight lightness, while genuinely dark features typically
+     * sit at 30-40% of the surrounding region's lightness.
+     */
+    static final double LIGHTNESS_RATIO_FLOOR = 0.5;
+
+    /**
      * Regions with fewer bricks than this are treated as fine detail and
      * assigned per-brick colors instead of a single uniform color.
      */
@@ -158,6 +171,20 @@ public final class RegionColorStrategy implements ColorStrategy {
      */
     public Map<Brick, Integer> applyWithVoxelColors(
             Map<Brick, List<ColorRgb>> brickVoxelColors, LegoPaletteMapper palette) {
+        return applyWithVoxelColors(brickVoxelColors, palette, false);
+    }
+
+    /**
+     * Full per-voxel pathway with optional shadow removal bypass.
+     *
+     * @param brickVoxelColors   map from brick to its per-voxel sampled colors
+     * @param palette            the loaded LEGO palette
+     * @param skipShadowRemoval  true for KHR_materials_unlit models (albedo already clean)
+     * @return map from brick to LDraw color code
+     */
+    public Map<Brick, Integer> applyWithVoxelColors(
+            Map<Brick, List<ColorRgb>> brickVoxelColors, LegoPaletteMapper palette,
+            boolean skipShadowRemoval) {
         if (brickVoxelColors.isEmpty()) {
             return new HashMap<>();
         }
@@ -196,23 +223,25 @@ public final class RegionColorStrategy implements ColorStrategy {
         }
 
         // Step 2: Shadow lifting + hue-aware chrominance normalization + chroma stabilization
-        ShadowRemover.LightnessStats stats =
-                ShadowRemover.computeLightnessStats(allL);
-        List<double[]> allLabs = new ArrayList<>();
-        for (List<double[]> labs : brickVoxelLab.values()) {
-            allLabs.addAll(labs);
-        }
-        ShadowRemover.ChrominanceStats chromStats =
-                ShadowRemover.computeChrominanceStats(allLabs);
+        if (!skipShadowRemoval) {
+            ShadowRemover.LightnessStats stats =
+                    ShadowRemover.computeLightnessStats(allL);
+            List<double[]> allLabs = new ArrayList<>();
+            for (List<double[]> labs : brickVoxelLab.values()) {
+                allLabs.addAll(labs);
+            }
+            ShadowRemover.ChrominanceStats chromStats =
+                    ShadowRemover.computeChrominanceStats(allLabs);
 
-        for (List<double[]> labs : brickVoxelLab.values()) {
-            for (double[] lab : labs) {
-                double originalL = lab[0];
-                if (stats != null) {
-                    lab[0] = ShadowRemover.normalizeLightnessForRegion(lab[0], stats);
+            for (List<double[]> labs : brickVoxelLab.values()) {
+                for (double[] lab : labs) {
+                    double originalL = lab[0];
+                    if (stats != null) {
+                        lab[0] = ShadowRemover.normalizeLightnessForRegion(lab[0], stats);
+                    }
+                    ShadowRemover.normalizeChrominance(lab, originalL, stats, chromStats);
+                    ShadowRemover.stabilizeChroma(lab);
                 }
-                ShadowRemover.normalizeChrominance(lab, originalL, stats, chromStats);
-                ShadowRemover.stabilizeChroma(lab);
             }
         }
 
@@ -361,12 +390,13 @@ public final class RegionColorStrategy implements ColorStrategy {
      * The seed acts as a fixed anchor — unlike a running average, it cannot
      * drift with the expanding frontier.
      *
-     * A dual-gate merge criterion is used: bricks must be similar in both
-     * the normalized Lab (after shadow removal) AND the original Lab (before
-     * normalization). This prevents dark features (eyes, nostrils) from being
-     * absorbed into large body regions — shadow normalization can make very
-     * different original colors appear similar, but the original-Lab gate
-     * catches the genuine difference.
+     * A triple-gate merge criterion is used: bricks must be similar in the
+     * normalized Lab (after shadow removal), similar in chrominance in the
+     * original Lab (before normalization), AND have a sufficiently close
+     * original lightness ratio. This prevents dark features (eyes, nostrils)
+     * from being absorbed into large body regions — shadow normalization can
+     * make very different original colors appear similar, but the original-Lab
+     * gates catch the genuine difference.
      *
      * @param bricks          all bricks to segment
      * @param adjacency       spatial adjacency graph
@@ -403,16 +433,28 @@ public final class RegionColorStrategy implements ColorStrategy {
                     double[] neighborLab = brickLab.get(neighbor);
                     double[] neighborOrig = originalBrickLab.get(neighbor);
 
-                    // Dual gate: close in normalized Lab AND similar
-                    // chrominance in original Lab (ignoring L* which
-                    // is always shadow/lighting noise)
+                    // Triple gate: close in normalized Lab AND similar
+                    // chrominance in original Lab AND similar lightness
+                    // ratio in original Lab.
                     double oa = seedOrig[1] - neighborOrig[1];
                     double ob = seedOrig[2] - neighborOrig[2];
                     double chromaDist = Math.sqrt(oa * oa + ob * ob);
 
+                    // Lightness-ratio gate: prevents dark features (eyes,
+                    // nostrils) from merging into much lighter regions.
+                    // Shadow lifting can make L*=25 eyes look like L*=42
+                    // (passing the normalized merge check), but the original
+                    // lightness ratio exposes the genuine difference.
+                    boolean lightnessRatioOk = true;
+                    if (seedOrig[0] > 1.0) {
+                        double ratio = neighborOrig[0] / seedOrig[0];
+                        lightnessRatioOk = ratio >= LIGHTNESS_RATIO_FLOOR;
+                    }
+
                     if (shouldMerge(currentLab, neighborLab)
                             && shouldMerge(seedLab, neighborLab)
-                            && chromaDist < ORIGINAL_CHROMA_THRESHOLD) {
+                            && chromaDist < ORIGINAL_CHROMA_THRESHOLD
+                            && lightnessRatioOk) {
                         visited.put(neighbor, true);
                         queue.add(neighbor);
                     }

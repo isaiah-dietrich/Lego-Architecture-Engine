@@ -209,8 +209,9 @@ class ColorAccuracyTest {
     @ValueSource(strings = { "direct", "region", "dominant" })
     void highContrastBoundary(String algo) throws IOException {
         var expected = switch (algo) {
-            case "direct"            -> Map.of(320, 0.36, 71, 0.39, 15, 0.25);
-            case "region", "dominant" -> Map.of(4, 0.42, 15, 0.59);
+            case "direct"    -> Map.of(320, 0.36, 71, 0.39, 15, 0.25);
+            case "region"    -> Map.of(4, 0.42, 15, 0.59);
+            case "dominant"  -> Map.of(320, 0.42, 15, 0.59);
             default -> throw new IllegalArgumentException(algo);
         };
         assertColorDistribution(

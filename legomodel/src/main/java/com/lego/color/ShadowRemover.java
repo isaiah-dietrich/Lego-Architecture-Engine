@@ -64,10 +64,14 @@ public final class ShadowRemover {
 
     /**
      * L* floor below which shadow lifting is progressively reduced.
-     * Values below this are likely intentionally dark features (eyes, nose)
-     * rather than shadow-affected colored surfaces.
+     * Values below this are likely intentionally dark features (eyes, nose,
+     * paw pads) rather than shadow-affected colored surfaces.
+     *
+     * Raised from 20 to 35 because dark brown features common in animal
+     * models (L*=20–35) were receiving full aggressive lifting, making them
+     * indistinguishable from surrounding body regions after normalization.
      */
-    static final double DARK_FEATURE_FLOOR = 20.0;
+    static final double DARK_FEATURE_FLOOR = 35.0;
 
     /**
      * How aggressively to compress a/b warm shifts in shadow regions.

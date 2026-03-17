@@ -21,7 +21,8 @@ import com.lego.model.Triangle;
 public record LoadedModel(
     Mesh mesh,
     Optional<Map<Triangle, ColorRgb>> colorMap,
-    Optional<List<TexturedTriangle>> texturedTriangles
+    Optional<List<TexturedTriangle>> texturedTriangles,
+    boolean unlit
 ) {
     /** Validates that the mesh is non-null. */
     public LoadedModel {
@@ -32,13 +33,13 @@ public record LoadedModel(
 
     /** Convenience factory: geometry only, no color. */
     public static LoadedModel geometryOnly(Mesh mesh) {
-        return new LoadedModel(mesh, Optional.empty(), Optional.empty());
+        return new LoadedModel(mesh, Optional.empty(), Optional.empty(), false);
     }
 
     /** Convenience factory: geometry with per-triangle color (legacy pipeline). */
     public static LoadedModel withColor(Mesh mesh, Map<Triangle, ColorRgb> colorMap) {
         java.util.Objects.requireNonNull(colorMap, "colorMap");
-        return new LoadedModel(mesh, Optional.of(colorMap), Optional.empty());
+        return new LoadedModel(mesh, Optional.of(colorMap), Optional.empty(), false);
     }
 
     /** Convenience factory: geometry with both per-triangle color and raw texture data. */
@@ -48,6 +49,17 @@ public record LoadedModel(
             List<TexturedTriangle> texturedTriangles) {
         java.util.Objects.requireNonNull(colorMap, "colorMap");
         java.util.Objects.requireNonNull(texturedTriangles, "texturedTriangles");
-        return new LoadedModel(mesh, Optional.of(colorMap), Optional.of(texturedTriangles));
+        return new LoadedModel(mesh, Optional.of(colorMap), Optional.of(texturedTriangles), false);
+    }
+
+    /** Convenience factory: geometry with color, texture, and unlit flag. */
+    public static LoadedModel withColorAndTexture(
+            Mesh mesh,
+            Map<Triangle, ColorRgb> colorMap,
+            List<TexturedTriangle> texturedTriangles,
+            boolean unlit) {
+        java.util.Objects.requireNonNull(colorMap, "colorMap");
+        java.util.Objects.requireNonNull(texturedTriangles, "texturedTriangles");
+        return new LoadedModel(mesh, Optional.of(colorMap), Optional.of(texturedTriangles), unlit);
     }
 }

@@ -13,4 +13,7 @@
 
  ## Brick placing algorithm
   - Change from greedy piece minimizing algorithm to voxel space accuracy maximizing
+
+## Known limitations
+ - Color will need to be manualy adjusted. There is no solution to the current problems
  
