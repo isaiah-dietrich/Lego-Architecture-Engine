@@ -216,6 +216,22 @@ public final class CuratedCatalogLoader {
         String material = record.get("material");
         boolean active = parseActiveField(record.get("active"), record.getRecordNumber());
 
+        // Slope columns are optional for backward compatibility
+        Double slopeAngle = null;
+        String slopeDir = null;
+        if (record.isMapped("slope_angle")) {
+            String slopeAngleStr = record.get("slope_angle").trim();
+            if (!slopeAngleStr.isEmpty()) {
+                slopeAngle = Double.parseDouble(slopeAngleStr);
+            }
+        }
+        if (record.isMapped("slope_dir")) {
+            String slopeDirStr = record.get("slope_dir").trim();
+            if (!slopeDirStr.isEmpty()) {
+                slopeDir = slopeDirStr;
+            }
+        }
+
         return CatalogPart.of(
             partId,
             name,
@@ -225,7 +241,9 @@ public final class CuratedCatalogLoader {
             studY,
             heightUnitsRaw,
             material,
-            active
+            active,
+            slopeAngle,
+            slopeDir
         );
     }
 }

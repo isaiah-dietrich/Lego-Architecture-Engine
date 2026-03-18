@@ -6,6 +6,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
 import com.lego.data.CatalogPartRepository;
 import com.lego.data.CuratedCatalogLoader;
 import com.lego.model.CatalogPart;
@@ -34,9 +35,10 @@ public final class AllowedBrickDimensions {
         private final String category;
         private final String partId;
         private final String name;
+        private final Double slopeAngle;
 
-        /** Validates and constructs a brick specification. */
-        public BrickSpec(int studX, int studY, int heightUnits, String category, String partId, String name) {
+        /** Validates and constructs a brick specification with slope metadata. */
+        public BrickSpec(int studX, int studY, int heightUnits, String category, String partId, String name, Double slopeAngle) {
             if (studX <= 0 || studY <= 0) {
                 throw new IllegalArgumentException("Dimensions must be positive: " + studX + "x" + studY);
             }
@@ -55,11 +57,17 @@ public final class AllowedBrickDimensions {
             this.category = category;
             this.partId = partId;
             this.name = name != null ? name : partId;
+            this.slopeAngle = slopeAngle;
         }
 
-        /** Convenience constructor without name (defaults to partId). */
+        /** Backward-compatible constructor without slope angle. */
+        public BrickSpec(int studX, int studY, int heightUnits, String category, String partId, String name) {
+            this(studX, studY, heightUnits, category, partId, name, null);
+        }
+
+        /** Convenience constructor without name or slope (defaults to partId). */
         public BrickSpec(int studX, int studY, int heightUnits, String category, String partId) {
-            this(studX, studY, heightUnits, category, partId, partId);
+            this(studX, studY, heightUnits, category, partId, partId, null);
         }
 
         /** Returns the stud count in the X direction. */
@@ -90,6 +98,16 @@ public final class AllowedBrickDimensions {
         /** Returns the human-readable part name. */
         public String name() {
             return name;
+        }
+
+        /** Returns the slope angle in degrees, or null for standard rectangular parts. */
+        public Double slopeAngle() {
+            return slopeAngle;
+        }
+
+        /** Returns true if this spec represents a slope/angled part. */
+        public boolean isSlope() {
+            return slopeAngle != null;
         }
 
         /** Returns the stud area (studX × studY). */
@@ -203,20 +221,22 @@ public final class AllowedBrickDimensions {
             int studX = part.studX();
             int studY = part.studY();
             int heightUnits = parseHeightUnits(part.heightUnitsRaw().trim());
+            Double slopeAngle = part.slopeAngle();
 
             // Special handling for 1x2 brick (part 3004):
             // Only add 2x1 horizontal orientation, NOT 1x2 vertical
-            if (studX == 1 && studY == 2) {
+            if (studX == 1 && studY == 2 && slopeAngle == null) {
                 String key = "2x1x" + heightUnits;
                 uniqueSpecs.putIfAbsent(key,
-                    new BrickSpec(2, 1, heightUnits, category, part.partId(), part.name()));
+                    new BrickSpec(2, 1, heightUnits, category, part.partId(), part.name(), null));
                 continue;
             }
 
             // For all other parts, add the spec as-is
-            String key = studX + "x" + studY + "x" + heightUnits;
+            String slopeTag = slopeAngle != null ? "/s" + slopeAngle : "";
+            String key = studX + "x" + studY + "x" + heightUnits + slopeTag;
             uniqueSpecs.putIfAbsent(key,
-                new BrickSpec(studX, studY, heightUnits, category, part.partId(), part.name()));
+                new BrickSpec(studX, studY, heightUnits, category, part.partId(), part.name(), slopeAngle));
         }
 
         if (uniqueSpecs.isEmpty()) {

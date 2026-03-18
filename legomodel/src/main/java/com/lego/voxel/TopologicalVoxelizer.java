@@ -67,11 +67,27 @@ public final class TopologicalVoxelizer {
 
         TopologicalVoxelGrid sparseGrid = new TopologicalVoxelGrid(resolution, yResolution, resolution);
 
+        // Parallel normal accumulation array (unnormalized; will be normalized at end)
+        Vector3[][][] normalAccum = new Vector3[resolution][yResolution][resolution];
+
         double hx = config.voxelSizeX() * 0.5;
         double hy = config.voxelSizeY() * 0.5;
         double hz = config.voxelSizeZ() * 0.5;
 
         for (Triangle triangle : mesh.triangles()) {
+            // Area-weighted normal: cross product (unnormalized) proportional to triangle area
+            Vector3 edge1 = new Vector3(
+                triangle.v2().x() - triangle.v1().x(),
+                triangle.v2().y() - triangle.v1().y(),
+                triangle.v2().z() - triangle.v1().z()
+            );
+            Vector3 edge2 = new Vector3(
+                triangle.v3().x() - triangle.v1().x(),
+                triangle.v3().y() - triangle.v1().y(),
+                triangle.v3().z() - triangle.v1().z()
+            );
+            Vector3 areaWeightedNormal = edge1.cross(edge2);
+
             int[] range = triangleToCandidateRange(triangle, alignedBounds, config, resolution, yResolution);
             int iMin = range[0], iMax = range[1];
             int jMin = range[2], jMax = range[3];
@@ -86,6 +102,11 @@ public final class TopologicalVoxelizer {
 
                         if (TriangleAabbTest.overlaps(triangle, cx, cy, cz, hx, hy, hz)) {
                             sparseGrid.setSurfaceFilled(i, j, k);
+                            // Accumulate area-weighted normal
+                            Vector3 existing = normalAccum[i][j][k];
+                            normalAccum[i][j][k] = existing == null
+                                ? areaWeightedNormal
+                                : existing.add(areaWeightedNormal);
                         }
                     }
                 }
@@ -93,6 +114,19 @@ public final class TopologicalVoxelizer {
         }
 
         VoxelGrid result = sparseGrid.toVoxelGrid();
+
+        // Transfer accumulated normals to the VoxelGrid and normalize
+        for (int x = 0; x < resolution; x++) {
+            for (int y = 0; y < yResolution; y++) {
+                for (int z = 0; z < resolution; z++) {
+                    if (normalAccum[x][y][z] != null) {
+                        result.accumulateNormal(x, y, z, normalAccum[x][y][z]);
+                    }
+                }
+            }
+        }
+        result.normalizeNormals();
+
         return fillAxisAlignedGaps(result, 2);
     }
 
@@ -126,6 +160,21 @@ public final class TopologicalVoxelizer {
                         ) {
                             next.setFilled(x, y, z, true);
                             anyFilled = true;
+                        }
+                    }
+                }
+            }
+            // Propagate normals from the previous grid to the new one
+            if (current.hasNormals()) {
+                for (int x = 0; x < w; x++) {
+                    for (int y = 0; y < h; y++) {
+                        for (int z = 0; z < d; z++) {
+                            if (next.isFilled(x, y, z)) {
+                                Vector3 n = current.getNormal(x, y, z);
+                                if (n.length() > 1e-6) {
+                                    next.accumulateNormal(x, y, z, n);
+                                }
+                            }
                         }
                     }
                 }

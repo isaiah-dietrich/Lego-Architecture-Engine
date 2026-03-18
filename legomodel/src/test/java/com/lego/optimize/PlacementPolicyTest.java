@@ -14,6 +14,8 @@ import org.junit.jupiter.api.Test;
 import com.lego.color.ColorFeatureGridFactory;
 import com.lego.model.Brick;
 import com.lego.model.ColorRgb;
+import com.lego.model.Facing;
+import com.lego.model.Vector3;
 import com.lego.optimize.AllowedBrickDimensions.BrickSpec;
 import com.lego.voxel.VoxelGrid;
 
@@ -569,6 +571,99 @@ class PlacementPolicyTest {
 
         // Without color data, should behave normally (large bricks preferred)
         assertEquals(1, bricks.size(), "Null colors should not trigger variance early-exit");
+    }
+
+    // ========== Slope footprint per facing direction ==========
+
+    /**
+     * Slope specs with facing NORTH/SOUTH should have voxel footprint
+     * studX=spec.studY, studY=spec.studX (dimensions follow LDraw identity mapping).
+     */
+    @Test
+    void testScoring_SlopeNorth_FootprintMatchesIdentityMapping() {
+        // Fill a 4×2 surface region (X=4 studs, Z=2 studs)
+        VoxelGrid surface = new VoxelGrid(5, 1, 3);
+        for (int x = 0; x < 4; x++) {
+            for (int z = 0; z < 2; z++) {
+                surface.setFilled(x, 0, z, true);
+                // Normal pointing NORTH (-Z) with ~45° inclination
+                surface.accumulateNormal(x, 0, z, new Vector3(0f, 0.707f, -0.707f));
+            }
+        }
+        surface.normalizeNormals();
+
+        // Provide only the 2×4 slope spec + 1×1 fallback
+        List<BrickSpec> specs = Arrays.asList(
+            new BrickSpec(2, 4, 3, "Bricks Sloped", "3037", "Slope 45° 2x4", 45.0),
+            new BrickSpec(1, 1, 1, "Bricks", "3005")
+        );
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, specs, new ScoringPlacementPolicy());
+
+        // The 3037 slope facing NORTH should have studX=4 (spec.studY), studY=2 (spec.studX)
+        Brick slope = bricks.stream().filter(b -> b.facing() == Facing.NORTH).findFirst().orElse(null);
+        assertTrue(slope != null, "Should place at least one NORTH-facing slope");
+        assertEquals(4, slope.studX(), "NORTH slope studX should be spec.studY()=4");
+        assertEquals(2, slope.studY(), "NORTH slope studY should be spec.studX()=2");
+        assertEquals(Facing.NORTH, slope.facing());
+    }
+
+    /**
+     * Slope specs with facing EAST/WEST should have voxel footprint
+     * studX=spec.studX, studY=spec.studY (dimensions swapped by rotation).
+     */
+    @Test
+    void testScoring_SlopeEast_FootprintMatchesRotatedMapping() {
+        // Fill a 2×4 surface region (X=2 studs, Z=4 studs)
+        VoxelGrid surface = new VoxelGrid(3, 1, 5);
+        for (int x = 0; x < 2; x++) {
+            for (int z = 0; z < 4; z++) {
+                surface.setFilled(x, 0, z, true);
+                // Normal pointing EAST (+X) with ~45° inclination
+                surface.accumulateNormal(x, 0, z, new Vector3(0.707f, 0.707f, 0f));
+            }
+        }
+        surface.normalizeNormals();
+
+        List<BrickSpec> specs = Arrays.asList(
+            new BrickSpec(2, 4, 3, "Bricks Sloped", "3037", "Slope 45° 2x4", 45.0),
+            new BrickSpec(1, 1, 1, "Bricks", "3005")
+        );
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, specs, new ScoringPlacementPolicy());
+
+        Brick slope = bricks.stream().filter(b -> b.facing() == Facing.EAST).findFirst().orElse(null);
+        assertTrue(slope != null, "Should place at least one EAST-facing slope");
+        assertEquals(2, slope.studX(), "EAST slope studX should be spec.studX()=2");
+        assertEquals(4, slope.studY(), "EAST slope studY should be spec.studY()=4");
+        assertEquals(Facing.EAST, slope.facing());
+    }
+
+    /**
+     * Slopes should have heightUnits from the catalog (for LDraw Y position)
+     * but only mark 1 Y-layer as covered (for collision avoidance).
+     */
+    @Test
+    void testScoring_SlopeBrickHasCatalogHeightUnits() {
+        VoxelGrid surface = new VoxelGrid(3, 1, 3);
+        for (int x = 0; x < 2; x++) {
+            for (int z = 0; z < 2; z++) {
+                surface.setFilled(x, 0, z, true);
+                surface.accumulateNormal(x, 0, z, new Vector3(0f, 0.707f, -0.707f));
+            }
+        }
+        surface.normalizeNormals();
+
+        List<BrickSpec> specs = Arrays.asList(
+            new BrickSpec(2, 2, 3, "Bricks Sloped", "3039", "Slope 45° 2x2", 45.0),
+            new BrickSpec(1, 1, 1, "Bricks", "3005")
+        );
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, specs, new ScoringPlacementPolicy());
+
+        Brick slope = bricks.stream().filter(b -> b.facing() != Facing.NONE).findFirst().orElse(null);
+        assertTrue(slope != null, "Should place a slope brick");
+        assertEquals(3, slope.heightUnits(), "Slope should have catalog heightUnits=3 for LDraw Y position");
     }
 
     // ========== Helpers ==========

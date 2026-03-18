@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
 import com.lego.model.Brick;
+import com.lego.model.Facing;
 import com.lego.optimize.AllowedBrickDimensions.BrickSpec;
 import com.lego.voxel.VoxelGrid;
 
@@ -700,6 +701,65 @@ class BrickPlacerTest {
             assertEquals(b1.z(), b2.z());
             assertEquals(b1.studX(), b2.studX());
             assertEquals(b1.studY(), b2.studY());
+        }
+    }
+
+    // ========== markCovered slope tests ==========
+
+    @Test
+    void markCovered_standardBrick_coversFullHeight() {
+        boolean[][][] covered = new boolean[5][5][5];
+        Brick brick = new Brick(1, 0, 1, 2, 2, 3, "3003");
+        BrickPlacer.markCovered(covered, brick);
+
+        // All 3 Y-layers should be covered
+        for (int y = 0; y < 3; y++) {
+            assertTrue(covered[1][y][1], "Standard brick should cover y=" + y);
+            assertTrue(covered[2][y][2], "Standard brick should cover y=" + y);
+        }
+        // Layer above should not be covered
+        assertFalse(covered[1][3][1], "Standard brick should not cover y=3");
+    }
+
+    @Test
+    void markCovered_slopeBrick_coversFullHeight() {
+        boolean[][][] covered = new boolean[5][5][5];
+        Brick slope = new Brick(1, 0, 1, 2, 2, 3, "3039", Facing.NORTH);
+        BrickPlacer.markCovered(covered, slope);
+
+        // All 3 Y-layers should be covered (slopes are solid 3D parts in LDraw)
+        for (int y = 0; y < 3; y++) {
+            assertTrue(covered[1][y][1], "Slope should cover y=" + y);
+            assertTrue(covered[2][y][2], "Slope should cover y=" + y);
+        }
+
+        // Layer above heightUnits should not be covered
+        assertFalse(covered[1][3][1], "Slope should not cover y=3");
+        assertFalse(covered[2][3][2], "Slope should not cover y=3");
+    }
+
+    @Test
+    void markCovered_slopeBrick_coversFullXZFootprintAndHeight() {
+        boolean[][][] covered = new boolean[6][5][5];
+        // 4×2 slope facing EAST
+        Brick slope = new Brick(0, 0, 0, 4, 2, 3, "3037", Facing.EAST);
+        BrickPlacer.markCovered(covered, slope);
+
+        // All XZ cells across all 3 Y-layers should be covered
+        for (int y = 0; y < 3; y++) {
+            for (int x = 0; x < 4; x++) {
+                for (int z = 0; z < 2; z++) {
+                    assertTrue(covered[x][y][z],
+                        "Slope at (" + x + "," + y + "," + z + ") should be covered");
+                }
+            }
+        }
+        // y=3 should not be covered
+        for (int x = 0; x < 4; x++) {
+            for (int z = 0; z < 2; z++) {
+                assertFalse(covered[x][3][z],
+                    "y=3 at (" + x + ",3," + z + ") should not be covered");
+            }
         }
     }
 }

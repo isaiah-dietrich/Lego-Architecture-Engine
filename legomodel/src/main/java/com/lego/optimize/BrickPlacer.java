@@ -117,10 +117,15 @@ public final class BrickPlacer {
 
     /**
      * Marks all voxels occupied by a brick as covered.
+     *
+     * Both standard and directional bricks (slopes, curves) mark their full
+     * heightUnits volume — slope parts are solid 3D shapes in LDraw and
+     * must block placement of other bricks within their bounding box.
      */
     static void markCovered(boolean[][][] covered, Brick brick) {
+        int maxY = Math.min(brick.maxY(), covered[0].length);
         for (int x = brick.x(); x < brick.maxX(); x++) {
-            for (int y = brick.y(); y < brick.maxY(); y++) {
+            for (int y = brick.y(); y < maxY; y++) {
                 for (int z = brick.z(); z < brick.maxZ(); z++) {
                     covered[x][y][z] = true;
                 }

@@ -1,5 +1,7 @@
 package com.lego.voxel;
 
+import com.lego.model.Vector3;
+
 /**
  * 3D voxel grid container.
  */
@@ -12,6 +14,9 @@ public final class VoxelGrid {
     private final int width;
     private final int height;
     private final int depth;
+
+    /** Per-voxel surface normal (area-weighted, normalized). Lazily allocated. */
+    private Vector3[][][] normals;
 
     /**
      * Creates a voxel grid with the given dimensions.
@@ -123,5 +128,52 @@ public final class VoxelGrid {
         return x >= 0 && x < width &&
                y >= 0 && y < height &&
                z >= 0 && z < depth;
+    }
+
+    /** Returns whether this grid has per-voxel normal data. */
+    public boolean hasNormals() {
+        return normals != null;
+    }
+
+    /**
+     * Returns the surface normal at (x, y, z), or Vector3.ZERO if no normals
+     * are stored or the coordinate is out of bounds.
+     */
+    public Vector3 getNormal(int x, int y, int z) {
+        if (normals == null || !inBounds(x, y, z)) {
+            return Vector3.ZERO;
+        }
+        Vector3 n = normals[x][y][z];
+        return n != null ? n : Vector3.ZERO;
+    }
+
+    /**
+     * Accumulates a weighted normal contribution at (x, y, z).
+     * Multiple calls are additive; call {@link #normalizeNormals()} after all accumulation.
+     */
+    public void accumulateNormal(int x, int y, int z, Vector3 normal) {
+        if (!inBounds(x, y, z)) return;
+        if (normals == null) {
+            normals = new Vector3[width][height][depth];
+        }
+        Vector3 existing = normals[x][y][z];
+        normals[x][y][z] = existing == null ? normal : existing.add(normal);
+    }
+
+    /**
+     * Normalizes all accumulated normals to unit length.
+     * Call once after all triangle contributions have been accumulated.
+     */
+    public void normalizeNormals() {
+        if (normals == null) return;
+        for (int x = 0; x < width; x++) {
+            for (int y = 0; y < height; y++) {
+                for (int z = 0; z < depth; z++) {
+                    if (normals[x][y][z] != null) {
+                        normals[x][y][z] = normals[x][y][z].normalize();
+                    }
+                }
+            }
+        }
     }
 }

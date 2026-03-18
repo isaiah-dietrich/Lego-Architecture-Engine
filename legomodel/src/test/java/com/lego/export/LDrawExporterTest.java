@@ -1,7 +1,5 @@
 package com.lego.export;
 
-import static org.junit.jupiter.api.Assertions.*;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -9,11 +7,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import com.lego.data.CatalogConfig;
 import com.lego.model.Brick;
+import com.lego.model.Facing;
 
 class LDrawExporterTest {
 
@@ -180,5 +181,90 @@ class LDrawExporterTest {
         assertEquals(24.0, spacing12, 0.001,
             "Layer 1→2 spacing should be 24 LDU (one brick height). Y values: "
             + yPositions[1] + ", " + yPositions[2]);
+    }
+
+    // ========== Slope rotation tests ==========
+
+    /**
+     * Creates a catalog that includes slope parts for rotation testing.
+     */
+    private void createSlopeCatalog(Path baseDir) throws IOException {
+        Path catalogDir = baseDir.resolve("data/catalog");
+        Files.createDirectories(catalogDir);
+        String content = "part_id,name,category,category_name,stud_x,stud_y,height_units,material,active,slope_angle,slope_direction\n" +
+            "3005,Brick 1x1,11,Bricks,1,1,1/3,Plastic,true,,\n" +
+            "3039,Slope 45° 2x2,3,Bricks Sloped,2,2,1,Plastic,true,45.0,-y\n" +
+            "3037,Slope 45° 2x4,3,Bricks Sloped,2,4,1,Plastic,true,45.0,-y\n";
+        Files.writeString(catalogDir.resolve(CatalogConfig.CURATED_CATALOG_FILE), content);
+    }
+
+    /**
+     * Extracts the 3×3 rotation matrix from an LDraw part line.
+     * Returns "a b c d e f g h i" as a single string for comparison.
+     */
+    private String extractRotationMatrix(String partLine) {
+        String[] fields = partLine.split("\\s+");
+        // Format: 1 color x y z a b c d e f g h i partfile.dat
+        // Indices: 0 1     2 3 4 5 6 7 8 9 10 11 12 13 14
+        return String.join(" ", fields[5], fields[6], fields[7],
+                                fields[8], fields[9], fields[10],
+                                fields[11], fields[12], fields[13]);
+    }
+
+    @Test
+    void slopeNorth_usesIdentityRotation() throws IOException {
+        createSlopeCatalog(tempDir);
+        Path ldr = tempDir.resolve("slope_north.ldr");
+
+        // NORTH (-Z): identity rotation — LDraw default slope face points -Z
+        Brick slope = new Brick(0, 0, 0, 2, 2, 3, "3039", Facing.NORTH);
+        LDrawExporter.export(List.of(slope), ldr, tempDir, null);
+
+        String content = Files.readString(ldr);
+        String partLine = content.lines().filter(l -> l.startsWith("1 ")).findFirst().orElseThrow();
+        assertEquals("1 0 0 0 1 0 0 0 1", extractRotationMatrix(partLine),
+            "NORTH should use identity rotation");
+    }
+
+    @Test
+    void slopeSouth_usesY180Rotation() throws IOException {
+        createSlopeCatalog(tempDir);
+        Path ldr = tempDir.resolve("slope_south.ldr");
+
+        Brick slope = new Brick(0, 0, 0, 2, 2, 3, "3039", Facing.SOUTH);
+        LDrawExporter.export(List.of(slope), ldr, tempDir, null);
+
+        String content = Files.readString(ldr);
+        String partLine = content.lines().filter(l -> l.startsWith("1 ")).findFirst().orElseThrow();
+        assertEquals("-1 0 0 0 1 0 0 0 -1", extractRotationMatrix(partLine),
+            "SOUTH should use Y180 rotation");
+    }
+
+    @Test
+    void slopeEast_usesY270Rotation() throws IOException {
+        createSlopeCatalog(tempDir);
+        Path ldr = tempDir.resolve("slope_east.ldr");
+
+        Brick slope = new Brick(0, 0, 0, 2, 2, 3, "3039", Facing.EAST);
+        LDrawExporter.export(List.of(slope), ldr, tempDir, null);
+
+        String content = Files.readString(ldr);
+        String partLine = content.lines().filter(l -> l.startsWith("1 ")).findFirst().orElseThrow();
+        assertEquals("0 0 -1 0 1 0 1 0 0", extractRotationMatrix(partLine),
+            "EAST should use Y270 rotation (maps -Z to +X)");
+    }
+
+    @Test
+    void slopeWest_usesY90Rotation() throws IOException {
+        createSlopeCatalog(tempDir);
+        Path ldr = tempDir.resolve("slope_west.ldr");
+
+        Brick slope = new Brick(0, 0, 0, 2, 2, 3, "3039", Facing.WEST);
+        LDrawExporter.export(List.of(slope), ldr, tempDir, null);
+
+        String content = Files.readString(ldr);
+        String partLine = content.lines().filter(l -> l.startsWith("1 ")).findFirst().orElseThrow();
+        assertEquals("0 0 1 0 1 0 -1 0 0", extractRotationMatrix(partLine),
+            "WEST should use Y90 rotation (maps -Z to -X)");
     }
 }

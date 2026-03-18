@@ -2,6 +2,8 @@ package com.lego.voxel;
 
 import java.util.Objects;
 
+import com.lego.model.Vector3;
+
 /**
  * Extracts the surface (shell) voxels from a solid voxel grid.
  */
@@ -37,6 +39,22 @@ public final class SurfaceExtractor {
 
                     if (hasEmptyNeighbor(solidGrid, x, y, z)) {
                         surface.setFilled(x, y, z, true);
+                    }
+                }
+            }
+        }
+
+        // Propagate normals from source grid to surface grid
+        if (solidGrid.hasNormals()) {
+            for (int x = 0; x < width; x++) {
+                for (int y = 0; y < height; y++) {
+                    for (int z = 0; z < depth; z++) {
+                        if (surface.isFilled(x, y, z)) {
+                            Vector3 n = solidGrid.getNormal(x, y, z);
+                            if (n.length() > 1e-6) {
+                                surface.accumulateNormal(x, y, z, n);
+                            }
+                        }
                     }
                 }
             }

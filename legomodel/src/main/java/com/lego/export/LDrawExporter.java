@@ -15,6 +15,7 @@ import com.lego.data.CatalogPartRepository;
 import com.lego.data.CsvCatalogPartRepository;
 import com.lego.model.Brick;
 import com.lego.model.CatalogPart;
+import com.lego.model.Facing;
 
 /**
  * Exports a placed brick list to an LDraw .ldr file for rendering in tools like BrickLink Studio.
@@ -203,14 +204,32 @@ public final class LDrawExporter {
     /**
      * Resolves the part file and rotation for a brick.
      *
-     * When the brick has a known partId, uses it directly and determines rotation
-     * by comparing placed orientation with catalog canonical dimensions.
+     * For directional parts (facing != NONE), uses the Facing-based rotation table.
+     * For standard parts, uses orientation comparison with catalog dimensions.
      *
      * Falls back to StudKey lookup for bricks with "unknown" partId.
      */
     private static PartPlacement resolvePlacement(Brick brick,
                                                    Map<String, CatalogPart> partById,
                                                    Map<StudKey, String> studKeyIndex) {
+        // Directional parts (slopes, curves, wedges) use Facing-based rotation.
+        // LDraw slope parts have their slope face pointing toward -Z in default orientation.
+        // Rotations map -Z to the target Facing direction:
+        //   NORTH (-Z): identity     — already facing -Z
+        //   SOUTH (+Z): Y180         — flips -Z to +Z
+        //   EAST  (+X): Y270         — maps -Z to +X
+        //   WEST  (-X): Y90          — maps -Z to -X
+        if (brick.facing() != Facing.NONE) {
+            String partFile = brick.partId() + ".dat";
+            return switch (brick.facing()) {
+                case NORTH -> PartPlacement.identity(partFile);
+                case EAST  -> PartPlacement.rotateY270(partFile);
+                case SOUTH -> PartPlacement.rotateY180(partFile);
+                case WEST  -> PartPlacement.rotateY90(partFile);
+                default    -> PartPlacement.identity(partFile);
+            };
+        }
+
         String partId = brick.partId();
 
         // Direct lookup for bricks with known partId
@@ -288,6 +307,18 @@ public final class LDrawExporter {
         /** Creates a 90-degree Y-axis rotation placement for the given part file. */
         static PartPlacement rotateY90(String partFile) {
             return new PartPlacement(0, 0, 1, 0, 1, 0, -1, 0, 0, partFile);
+        }
+
+        // +180 degrees about Y: X -> -X, Z -> -Z
+        /** Creates a 180-degree Y-axis rotation placement for the given part file. */
+        static PartPlacement rotateY180(String partFile) {
+            return new PartPlacement(-1, 0, 0, 0, 1, 0, 0, 0, -1, partFile);
+        }
+
+        // +270 degrees about Y: X -> -Z, Z -> X
+        /** Creates a 270-degree Y-axis rotation placement for the given part file. */
+        static PartPlacement rotateY270(String partFile) {
+            return new PartPlacement(0, 0, -1, 0, 1, 0, 1, 0, 0, partFile);
         }
     }
 }

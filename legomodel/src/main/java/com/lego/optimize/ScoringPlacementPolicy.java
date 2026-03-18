@@ -3,6 +3,8 @@ package com.lego.optimize;
 import java.util.List;
 
 import com.lego.model.Brick;
+import com.lego.model.Facing;
+import com.lego.model.Vector3;
 import com.lego.optimize.AllowedBrickDimensions.BrickSpec;
 import com.lego.voxel.VoxelGrid;
 
@@ -85,34 +87,79 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
                              smallest.heightUnits(), smallest.partId());
         }
 
+        // Read surface normal for slope/curve matching
+        Vector3 normal = surface.getNormal(x, y, z);
+
         int bestStudX = 0;
         int bestStudY = 0;
         int bestHeightUnits = 0;
         String bestPartId = null;
+        Facing bestFacing = Facing.NONE;
         double bestScore = Double.NEGATIVE_INFINITY;
 
         for (BrickSpec spec : allowedSpecs) {
-            // Try catalog orientation
-            double score = scorePlacement(surface, covered, featureGrid, x, y, z,
-                                          spec.studX(), spec.studY(), spec.heightUnits());
-            if (score > bestScore) {
-                bestScore = score;
-                bestStudX = spec.studX();
-                bestStudY = spec.studY();
-                bestHeightUnits = spec.heightUnits();
-                bestPartId = spec.partId();
-            }
+            // Check surface match eligibility
+            SurfaceMatcher.MatchResult matchResult = SurfaceMatcher.match(normal, spec);
+            if (!matchResult.eligible()) continue;
 
-            // Try rotated orientation (skip square bricks — identical)
-            if (spec.studX() != spec.studY()) {
-                score = scorePlacement(surface, covered, featureGrid, x, y, z,
-                                       spec.studY(), spec.studX(), spec.heightUnits());
+            // Slopes occupy a rectangular base but extend upward as a wedge;
+            // only the base layer needs filled voxels for placement validation.
+            int scoreHeight = spec.isSlope() ? 1 : spec.heightUnits();
+
+            if (spec.isSlope()) {
+                // For slopes, the voxel footprint is determined by the facing direction
+                // to match the post-rotation LDraw part dimensions.
+                // LDraw default: catalog stud_y studs along X, stud_x studs along Z.
+                // NORTH/SOUTH (identity/Y180): dimensions unchanged from LDraw default.
+                // EAST/WEST (Y270/Y90): dimensions swap (X↔Z).
+                Facing facing = matchResult.facing();
+                int sStudX, sStudY;
+                if (facing == Facing.NORTH || facing == Facing.SOUTH) {
+                    sStudX = spec.studY();
+                    sStudY = spec.studX();
+                } else {
+                    sStudX = spec.studX();
+                    sStudY = spec.studY();
+                }
+
+                double score = scorePlacement(surface, covered, featureGrid, x, y, z,
+                                              sStudX, sStudY, scoreHeight);
+                score += 10_000;
+
                 if (score > bestScore) {
                     bestScore = score;
-                    bestStudX = spec.studY();
-                    bestStudY = spec.studX();
+                    bestStudX = sStudX;
+                    bestStudY = sStudY;
                     bestHeightUnits = spec.heightUnits();
                     bestPartId = spec.partId();
+                    bestFacing = facing;
+                }
+            } else {
+                // Standard bricks: try both orientations
+                double score = scorePlacement(surface, covered, featureGrid, x, y, z,
+                                              spec.studX(), spec.studY(), scoreHeight);
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestStudX = spec.studX();
+                    bestStudY = spec.studY();
+                    bestHeightUnits = spec.heightUnits();
+                    bestPartId = spec.partId();
+                    bestFacing = matchResult.facing();
+                }
+
+                // Try rotated orientation (skip square bricks — identical)
+                if (spec.studX() != spec.studY()) {
+                    score = scorePlacement(surface, covered, featureGrid, x, y, z,
+                                           spec.studY(), spec.studX(), scoreHeight);
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestStudX = spec.studY();
+                        bestStudY = spec.studX();
+                        bestHeightUnits = spec.heightUnits();
+                        bestPartId = spec.partId();
+                        bestFacing = matchResult.facing();
+                    }
                 }
             }
         }
@@ -124,7 +171,7 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
             );
         }
 
-        return new Brick(x, y, z, bestStudX, bestStudY, bestHeightUnits, bestPartId);
+        return new Brick(x, y, z, bestStudX, bestStudY, bestHeightUnits, bestPartId, bestFacing);
     }
 
     /**

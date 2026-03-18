@@ -3,6 +3,9 @@ package com.lego.model;
 /**
  * Represents a curated LEGO part from the catalog.
  * Immutable record with validation.
+ *
+ * @param slopeAngle slope angle in degrees (null for standard rectangular parts)
+ * @param slopeDir   slope direction string ("+x", "-x", "+y", "-y"), null for non-slope parts
  */
 public record CatalogPart(
     String partId,
@@ -13,7 +16,9 @@ public record CatalogPart(
     int studY,
     String heightUnitsRaw,
     String material,
-    boolean active
+    boolean active,
+    Double slopeAngle,
+    String slopeDir
 ) {
     /**
      * Constructs a validated CatalogPart.
@@ -45,19 +50,26 @@ public record CatalogPart(
     }
 
     /**
+     * Backward-compatible constructor without slope fields (defaults to null).
+     */
+    public CatalogPart(
+        String partId,
+        String name,
+        int categoryId,
+        String categoryName,
+        int studX,
+        int studY,
+        String heightUnitsRaw,
+        String material,
+        boolean active
+    ) {
+        this(partId, name, categoryId, categoryName, studX, studY,
+             heightUnitsRaw, material, active, null, null);
+    }
+
+    /**
      * Creates a CatalogPart from CSV row data with field-level validation.
-     *
-     * @param partId part identifier
-     * @param name part name
-     * @param categoryId category numeric ID
-     * @param categoryName category human-readable name
-     * @param studX stud count in X dimension
-     * @param studY stud count in Y dimension
-     * @param heightUnitsRaw height as string (e.g., "1", "1/3", "2/3")
-     * @param material material type
-     * @param active whether part is active in catalog
-     * @return validated CatalogPart instance
-     * @throws IllegalArgumentException if any validation fails
+     * Backward-compatible factory without slope fields.
      */
     public static CatalogPart of(
         String partId,
@@ -71,15 +83,30 @@ public record CatalogPart(
         boolean active
     ) {
         return new CatalogPart(
-            partId,
-            name,
-            categoryId,
-            categoryName,
-            studX,
-            studY,
-            heightUnitsRaw,
-            material,
-            active
+            partId, name, categoryId, categoryName, studX, studY,
+            heightUnitsRaw, material, active, null, null
+        );
+    }
+
+    /**
+     * Creates a CatalogPart with slope metadata.
+     */
+    public static CatalogPart of(
+        String partId,
+        String name,
+        int categoryId,
+        String categoryName,
+        int studX,
+        int studY,
+        String heightUnitsRaw,
+        String material,
+        boolean active,
+        Double slopeAngle,
+        String slopeDir
+    ) {
+        return new CatalogPart(
+            partId, name, categoryId, categoryName, studX, studY,
+            heightUnitsRaw, material, active, slopeAngle, slopeDir
         );
     }
 }

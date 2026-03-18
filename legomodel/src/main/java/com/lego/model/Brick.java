@@ -15,8 +15,9 @@ package com.lego.model;
  * @param studY       depth in studs (> 0)
  * @param heightUnits height in LDraw-relative units (> 0; bricks=3, plates=1)
  * @param partId      catalog part identifier (e.g. "3001"), or "unknown" for test/legacy bricks
+ * @param facing      cardinal direction for directional parts (slopes, curves); NONE for standard parts
  */
-public record Brick(int x, int y, int z, int studX, int studY, int heightUnits, String partId) {
+public record Brick(int x, int y, int z, int studX, int studY, int heightUnits, String partId, Facing facing) {
 
     /** Default part ID for bricks created without catalog context. */
     public static final String UNKNOWN_PART_ID = "unknown";
@@ -25,7 +26,14 @@ public record Brick(int x, int y, int z, int studX, int studY, int heightUnits, 
      * Convenience constructor without partId (uses "unknown").
      */
     public Brick(int x, int y, int z, int studX, int studY, int heightUnits) {
-        this(x, y, z, studX, studY, heightUnits, UNKNOWN_PART_ID);
+        this(x, y, z, studX, studY, heightUnits, UNKNOWN_PART_ID, Facing.NONE);
+    }
+
+    /**
+     * Backward-compatible constructor without facing (defaults to NONE).
+     */
+    public Brick(int x, int y, int z, int studX, int studY, int heightUnits, String partId) {
+        this(x, y, z, studX, studY, heightUnits, partId, Facing.NONE);
     }
 
     /**
@@ -52,6 +60,9 @@ public record Brick(int x, int y, int z, int studX, int studY, int heightUnits, 
         }
         if (partId == null || partId.isBlank()) {
             throw new IllegalArgumentException("partId must not be blank");
+        }
+        if (facing == null) {
+            throw new IllegalArgumentException("facing must not be null");
         }
     }
 
