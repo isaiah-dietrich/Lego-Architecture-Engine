@@ -1,5 +1,6 @@
 package com.lego.optimize;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -477,5 +478,252 @@ class BrickCollisionTest {
         List<Brick> bricks = BrickPlacer.placeBricks(surface, SLOPE_AND_FLAT_SPECS, new ScoringPlacementPolicy());
         assertEquals(1, bricks.size());
         assertNoCollisions(bricks);
+    }
+
+    // ========== Slope shadow zone tests ==========
+
+    @Test
+    void markCovered_slopeShadowNorth_coversInFrontAtUpperLayers() {
+        // NORTH-facing slope at z=3: shadow extends with d <= k+1
+        boolean[][][] covered = new boolean[5][6][8];
+        Brick slope = new Brick(1, 0, 3, 2, 2, 3, "3039", Facing.NORTH);
+        BrickPlacer.markCovered(covered, slope);
+
+        // Base footprint: x=1..2, y=0..2, z=3..4
+        assertTrue(covered[1][0][3], "base footprint should be covered");
+        assertTrue(covered[1][2][4], "base footprint top should be covered");
+
+        // Shadow k=1: d=1,2 → z=2, z=1 at y=1
+        assertTrue(covered[1][1][2], "shadow at y=1, z=2 should be covered");
+        assertTrue(covered[1][1][1], "shadow at y=1, z=1 should be covered");
+
+        // Shadow k=2: d=1,2,3 → z=2, z=1, z=0 at y=2
+        assertTrue(covered[1][2][2], "shadow at y=2, z=2 should be covered");
+        assertTrue(covered[1][2][1], "shadow at y=2, z=1 should be covered");
+        assertTrue(covered[1][2][0], "shadow at y=2, z=0 should be covered");
+
+        // Shadow now starts at k=0: y=0 at z=2 (d=1) SHOULD be covered
+        assertTrue(covered[1][0][2], "y=0 at z=2 should be in base-layer shadow");
+    }
+
+    @Test
+    void markCovered_slopeShadowSouth_coversBehindsAtUpperLayers() {
+        // SOUTH-facing slope at z=0 with studY=2: shadow with d <= k+1
+        boolean[][][] covered = new boolean[5][6][7];
+        Brick slope = new Brick(1, 0, 0, 2, 2, 3, "3039", Facing.SOUTH);
+        BrickPlacer.markCovered(covered, slope);
+
+        // Base: x=1..2, y=0..2, z=0..1
+        assertTrue(covered[1][0][0]);
+        assertTrue(covered[2][2][1]);
+
+        // Shadow k=1: d=1,2 → z=2, z=3 at y=1
+        assertTrue(covered[1][1][2], "shadow SOUTH at y=1, z=2");
+        assertTrue(covered[1][1][3], "shadow SOUTH at y=1, z=3");
+        // Shadow k=2: d=1,2,3 → z=2, z=3, z=4 at y=2
+        assertTrue(covered[1][2][2], "shadow SOUTH at y=2, z=2");
+        assertTrue(covered[1][2][3], "shadow SOUTH at y=2, z=3");
+        assertTrue(covered[1][2][4], "shadow SOUTH at y=2, z=4");
+    }
+
+    @Test
+    void markCovered_slopeShadowEast_coversRightAtUpperLayers() {
+        boolean[][][] covered = new boolean[10][6][5];
+        Brick slope = new Brick(2, 0, 0, 2, 2, 3, "3039", Facing.EAST);
+        BrickPlacer.markCovered(covered, slope);
+
+        // Shadow EAST k=1: d=1,2 → x=4, x=5 at y=1
+        assertTrue(covered[4][1][0], "shadow EAST at y=1, x=4");
+        assertTrue(covered[5][1][0], "shadow EAST at y=1, x=5");
+        // Shadow k=2: d=1,2,3 → x=4, x=5, x=6 at y=2
+        assertTrue(covered[4][2][0], "shadow EAST at y=2, x=4");
+        assertTrue(covered[5][2][0], "shadow EAST at y=2, x=5");
+        assertTrue(covered[6][2][0], "shadow EAST at y=2, x=6");
+    }
+
+    @Test
+    void markCovered_slopeShadowWest_coversLeftAtUpperLayers() {
+        boolean[][][] covered = new boolean[8][6][5];
+        Brick slope = new Brick(3, 0, 0, 2, 2, 3, "3039", Facing.WEST);
+        BrickPlacer.markCovered(covered, slope);
+
+        // Shadow WEST k=1: d=1,2 → x=2, x=1 at y=1
+        assertTrue(covered[2][1][0], "shadow WEST at y=1, x=2");
+        assertTrue(covered[1][1][0], "shadow WEST at y=1, x=1");
+        // Shadow k=2: d=1,2,3 → x=2, x=1, x=0 at y=2
+        assertTrue(covered[2][2][0], "shadow WEST at y=2, x=2");
+        assertTrue(covered[1][2][0], "shadow WEST at y=2, x=1");
+        assertTrue(covered[0][2][0], "shadow WEST at y=2, x=0");
+    }
+
+    @Test
+    void slopeShadow_suppressesStaircaseArtifact() {
+        // Staircase: slope voxels at y=0 z=2, flat voxels at y=1 z=1.
+        // Without shadow, a flat brick at (x, 1, 1) would be placed and appear
+        // visible through the slope's angled face. With shadow, it's suppressed.
+        VoxelGrid surface = new VoxelGrid(6, 5, 6);
+        Vector3 northNormal = new Vector3(0f, 0.707f, -0.707f);
+
+        // Slope surface at y=0, z=2..3
+        for (int x = 0; x < 4; x++) {
+            surface.setFilled(x, 0, 2, true);
+            surface.accumulateNormal(x, 0, 2, northNormal);
+            surface.setFilled(x, 0, 3, true);
+            surface.accumulateNormal(x, 0, 3, northNormal);
+        }
+        // Staircase step: flat at y=1, z=1 (in front of slope)
+        for (int x = 0; x < 4; x++) {
+            surface.setFilled(x, 1, 1, true);
+        }
+        surface.normalizeNormals();
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, SLOPE_AND_FLAT_SPECS, new ScoringPlacementPolicy());
+        assertNoCollisions(bricks);
+
+        // Verify: no flat bricks at y=1, z=1 (they should be suppressed by shadow)
+        long bricksAtY1Z1 = bricks.stream()
+            .filter(b -> b.y() == 1 && b.z() == 1 && b.facing() == Facing.NONE)
+            .count();
+        assertEquals(0, bricksAtY1Z1,
+            "Flat bricks at staircase step (y=1, z=1) should be suppressed by slope shadow");
+    }
+
+    @Test
+    void slopeShadow_doesNotAffectNonSlopeDirection() {
+        // Shadow only extends in the slope-facing direction.
+        // Bricks on the opposite side should not be affected.
+        VoxelGrid surface = new VoxelGrid(6, 5, 6);
+        Vector3 northNormal = new Vector3(0f, 0.707f, -0.707f);
+
+        // Slope surface at y=0, z=2
+        for (int x = 0; x < 2; x++) {
+            surface.setFilled(x, 0, 2, true);
+            surface.accumulateNormal(x, 0, 2, northNormal);
+        }
+        // Flat voxels BEHIND slope (z=3, y=1) — opposite direction, not shadowed
+        for (int x = 0; x < 2; x++) {
+            surface.setFilled(x, 1, 3, true);
+        }
+        surface.normalizeNormals();
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, SLOPE_AND_FLAT_SPECS, new ScoringPlacementPolicy());
+
+        // Flat bricks behind the slope (z=3, y=1) SHOULD still be placed
+        long bricksAtZ3Y1 = bricks.stream()
+            .filter(b -> b.z() == 3 && b.y() == 1 && b.facing() == Facing.NONE)
+            .count();
+        assertTrue(bricksAtZ3Y1 > 0,
+            "Flat bricks behind slope (opposite of face direction) should still be placed");
+    }
+
+    // ========== Post-processing: tall brick below slope ==========
+
+    @Test
+    void tallBrickBelowSlope_resolvedToPlate() {
+        // A 3-height flat brick placed at y=0 with a slope at y=1 (adjacent in
+        // the slope-facing direction). The flat brick's upper layers (y=1, y=2)
+        // overlap with the slope's Y range, creating a visual conflict.
+        // Post-processing should shorten the flat brick to h=1.
+        List<Brick> input = new ArrayList<>();
+        // Tall flat brick at x=4, y=0, z=5 (h=3, extends to y=0..2)
+        input.add(new Brick(4, 0, 5, 1, 1, 3, "3005"));
+        // Slope facing WEST at x=5, y=1, z=5 (h=3, extends to y=1..3)
+        // Facing WEST means the flat at x=4 is in the slope-facing direction
+        input.add(new Brick(5, 1, 5, 2, 1, 3, "3040b", Facing.WEST));
+
+        List<Brick> result = BrickPlacer.resolveSlopeAdjacentConflicts(input, SLOPE_AND_FLAT_SPECS);
+
+        // The tall brick should have been shortened to h=1 (plate)
+        Brick resolved = result.get(0);
+        assertEquals(1, resolved.heightUnits(),
+            "Conflicting tall brick should be shortened to plate height");
+        // Part ID comes from the plate lookup in the test spec list — the test
+        // spec list uses "3005" for the 1x1 h=1 fallback. In production, the
+        // catalog maps to the proper plate ID (e.g. 3024).
+        assertEquals("3005", resolved.partId(),
+            "Part ID should come from plate-height spec in catalog");
+        // Position unchanged
+        assertEquals(4, resolved.x());
+        assertEquals(0, resolved.y());
+        assertEquals(5, resolved.z());
+    }
+
+    @Test
+    void tallBrickNotAdjacentToSlope_unchanged() {
+        // A tall brick that is NOT in the slope-facing direction should be unaffected.
+        List<Brick> input = new ArrayList<>();
+        // Tall brick at x=4, y=0, z=5
+        input.add(new Brick(4, 0, 5, 1, 1, 3, "3005"));
+        // Slope facing EAST at x=5, y=1, z=5 — flat at x=4 is WEST, not EAST
+        input.add(new Brick(5, 1, 5, 2, 1, 3, "3040b", Facing.EAST));
+
+        List<Brick> result = BrickPlacer.resolveSlopeAdjacentConflicts(input, SLOPE_AND_FLAT_SPECS);
+
+        // The brick should be unchanged (not in the slope's facing direction)
+        Brick resolved = result.get(0);
+        assertEquals(3, resolved.heightUnits(),
+            "Brick not in slope-facing direction should keep original height");
+    }
+
+    @Test
+    void staircaseSurfaceWithTallBricksBelow_noVisualConflicts() {
+        // Multi-layer staircase with slope normals — ensures the placement
+        // pipeline handles tall-brick-below-slope conflicts end-to-end.
+        VoxelGrid surface = new VoxelGrid(12, 15, 12);
+        Vector3 northNormal = new Vector3(0f, 0.707f, -0.707f);
+
+        // Staircase: each z row is one voxel higher
+        for (int z = 0; z < 8; z++) {
+            int y = z;
+            for (int x = 0; x < 8; x++) {
+                surface.setFilled(x, y, z, true);
+                surface.accumulateNormal(x, y, z, northNormal);
+            }
+        }
+        // Also fill some flat layers below to allow tall brick placement
+        for (int x = 0; x < 8; x++) {
+            for (int z = 0; z < 8; z++) {
+                if (z > 0) {
+                    surface.setFilled(x, z - 1, z, true);
+                }
+            }
+        }
+        surface.normalizeNormals();
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, SLOPE_AND_FLAT_SPECS, new ScoringPlacementPolicy());
+
+        // Verify no AABB collisions in voxel space
+        assertNoCollisions(bricks);
+
+        // Verify no tall flat bricks adjacent to slopes in the facing direction
+        List<Brick> slopeList = bricks.stream()
+            .filter(b -> b.facing() != Facing.NONE)
+            .toList();
+        for (Brick slope : slopeList) {
+            for (Brick flat : bricks) {
+                if (flat.facing() != Facing.NONE) continue;
+                if (flat.heightUnits() <= 1) continue;
+                // Check: flat's upper layers overlap slope's Y range
+                if (flat.maxY() <= slope.y() || flat.y() >= slope.maxY()) continue;
+                // Check: flat is adjacent in facing direction
+                boolean adjacent = switch (slope.facing()) {
+                    case NORTH -> flat.maxZ() == slope.z()
+                        && flat.x() < slope.maxX() && flat.maxX() > slope.x();
+                    case SOUTH -> flat.z() == slope.maxZ()
+                        && flat.x() < slope.maxX() && flat.maxX() > slope.x();
+                    case EAST -> flat.x() == slope.maxX()
+                        && flat.z() < slope.maxZ() && flat.maxZ() > slope.z();
+                    case WEST -> flat.maxX() == slope.x()
+                        && flat.z() < slope.maxZ() && flat.maxZ() > slope.z();
+                    default -> false;
+                };
+                assertFalse(adjacent,
+                    "No tall flat brick should be adjacent to slope in facing direction: "
+                    + "flat at (" + flat.x() + "," + flat.y() + "," + flat.z()
+                    + " h=" + flat.heightUnits() + ") vs slope at ("
+                    + slope.x() + "," + slope.y() + "," + slope.z()
+                    + " facing=" + slope.facing() + ")");
+            }
+        }
     }
 }

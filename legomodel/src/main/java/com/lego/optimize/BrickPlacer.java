@@ -1,9 +1,14 @@
 package com.lego.optimize;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import com.lego.model.Brick;
+import com.lego.model.Facing;
 import com.lego.optimize.AllowedBrickDimensions.BrickSpec;
 import com.lego.voxel.VoxelGrid;
 
@@ -95,11 +100,21 @@ public final class BrickPlacer {
 
     /**
      * Core placement loop. Scans layer-by-layer, delegating brick selection to the policy.
+     *
+     * Before placement begins, pre-marks voxels adjacent to slope-eligible
+     * positions in the slope-facing direction. This prevents wide flat bricks
+     * from spanning into the slope's visual zone when they are scanned before
+     * the slope in z/x order.
+     *
+     * After the main scan, resolves visual conflicts where tall bricks placed at
+     * lower Y layers extend into the height range of slopes placed at higher layers.
      */
     private static List<Brick> placeBricksInternal(VoxelGrid surface, List<BrickSpec> allowedSpecs,
                                                     PlacementPolicy policy) {
         List<Brick> bricks = new ArrayList<>();
         boolean[][][] covered = new boolean[surface.width()][surface.height()][surface.depth()];
+
+        preMarkSlopeAdjacentZones(surface, covered);
 
         for (int y = 0; y < surface.height(); y++) {
             for (int z = 0; z < surface.depth(); z++) {
@@ -112,7 +127,66 @@ public final class BrickPlacer {
                 }
             }
         }
-        return bricks;
+        return resolveSlopeAdjacentConflicts(bricks, allowedSpecs);
+    }
+
+    /**
+     * Pre-marks voxels adjacent to slope-eligible surface positions as covered.
+     *
+     * For each filled voxel with a surface normal indicating a slope (inclination
+     * greater than 20 degrees from vertical), marks the immediately adjacent voxel
+     * in the slope-facing direction as covered. This prevents wide flat bricks from
+     * starting at a lower z/x position and spanning into the slope's visual zone
+     * before the slope is placed during the main scan.
+     *
+     * Only marks the adjacent voxel if it is NOT itself a slope-eligible position
+     * (to avoid suppressing slope-to-slope stacking).
+     */
+    private static void preMarkSlopeAdjacentZones(VoxelGrid surface, boolean[][][] covered) {
+        final double MIN_SLOPE_ANGLE = 20.0;
+
+        int width = surface.width();
+        int height = surface.height();
+        int depth = surface.depth();
+
+        for (int y = 0; y < height; y++) {
+            for (int z = 0; z < depth; z++) {
+                for (int x = 0; x < width; x++) {
+                    if (!surface.isFilled(x, y, z)) continue;
+
+                    com.lego.model.Vector3 normal = surface.getNormal(x, y, z);
+                    if (normal == null || normal.length() < 1e-6) continue;
+
+                    double cosAngle = Math.abs(normal.y());
+                    double inclination = Math.toDegrees(Math.acos(Math.min(1.0, cosAngle)));
+                    if (inclination < MIN_SLOPE_ANGLE) continue;
+
+                    Facing facing = SurfaceMatcher.resolveCardinalFacing(normal);
+
+                    int ax = x, az = z;
+                    switch (facing) {
+                        case NORTH -> az = z - 1;
+                        case SOUTH -> az = z + 1;
+                        case EAST  -> ax = x + 1;
+                        case WEST  -> ax = x - 1;
+                        default -> { continue; }
+                    }
+
+                    if (ax < 0 || ax >= width || az < 0 || az >= depth) continue;
+                    if (!surface.isFilled(ax, y, az)) continue;
+
+                    // Don't suppress if the adjacent voxel is also slope-eligible
+                    com.lego.model.Vector3 adjNormal = surface.getNormal(ax, y, az);
+                    if (adjNormal != null && adjNormal.length() > 1e-6) {
+                        double adjInc = Math.toDegrees(Math.acos(
+                            Math.min(1.0, Math.abs(adjNormal.y()))));
+                        if (adjInc >= MIN_SLOPE_ANGLE) continue;
+                    }
+
+                    covered[ax][y][az] = true;
+                }
+            }
+        }
     }
 
     /**
@@ -121,15 +195,238 @@ public final class BrickPlacer {
      * Both standard and directional bricks (slopes, curves) mark their full
      * heightUnits volume — slope parts are solid 3D shapes in LDraw and
      * must block placement of other bricks within their bounding box.
+     *
+     * For slope bricks, also marks a triangular "shadow zone" in the
+     * slope-facing direction. This suppresses flat bricks on adjacent
+     * staircase steps that would be visible through the slope's angled face,
+     * eliminating the visual artifact of bricks appearing inside slopes.
      */
     static void markCovered(boolean[][][] covered, Brick brick) {
+        int maxX = Math.min(brick.maxX(), covered.length);
         int maxY = Math.min(brick.maxY(), covered[0].length);
-        for (int x = brick.x(); x < brick.maxX(); x++) {
+        int maxZ = Math.min(brick.maxZ(), covered[0][0].length);
+        for (int x = brick.x(); x < maxX; x++) {
             for (int y = brick.y(); y < maxY; y++) {
-                for (int z = brick.z(); z < brick.maxZ(); z++) {
+                for (int z = brick.z(); z < maxZ; z++) {
                     covered[x][y][z] = true;
                 }
             }
         }
+
+        if (brick.facing() != Facing.NONE) {
+            markSlopeShadow(covered, brick);
+        }
+    }
+
+    /**
+     * Marks a triangular shadow zone in the slope-facing direction.
+     *
+     * On a voxelized staircase surface, a slope replaces the angular step
+     * pattern. Without the shadow zone, flat bricks placed on adjacent
+     * staircase steps (in front of the slope face) share the slope's
+     * LDraw height range and appear to be inside the slope geometry.
+     *
+     * Starting from the base layer (k = 0), marks (k + 1) additional
+     * voxels in the slope-facing direction across the full width of the
+     * brick. The k = 0 layer marks 1 voxel in the facing direction at
+     * the base height, preventing flat bricks from being placed
+     * immediately in front of the slope face where their geometry would
+     * visually conflict with the slope's angled surface.
+     *
+     * The +1 offset per layer accounts for the stud-to-plate aspect
+     * ratio: each plate height (8 LDU) spans less than one stud (20 LDU),
+     * so the visible shadow extends roughly one stud beyond the geometric
+     * retraction at each layer.
+     */
+    private static void markSlopeShadow(boolean[][][] covered, Brick brick) {
+        int width = covered.length;
+        int height = covered[0].length;
+        int depth = covered[0][0].length;
+
+        for (int k = 0; k < brick.heightUnits(); k++) {
+            int shadowY = brick.y() + k;
+            if (shadowY >= height) break;
+
+            for (int d = 1; d <= k + 1; d++) {
+                switch (brick.facing()) {
+                    case NORTH -> {
+                        int sz = brick.z() - d;
+                        if (sz < 0) continue;
+                        for (int x = brick.x(); x < Math.min(brick.maxX(), width); x++) {
+                            covered[x][shadowY][sz] = true;
+                        }
+                    }
+                    case SOUTH -> {
+                        int sz = brick.maxZ() - 1 + d;
+                        if (sz >= depth) continue;
+                        for (int x = brick.x(); x < Math.min(brick.maxX(), width); x++) {
+                            covered[x][shadowY][sz] = true;
+                        }
+                    }
+                    case EAST -> {
+                        int sx = brick.maxX() - 1 + d;
+                        if (sx >= width) continue;
+                        for (int z = brick.z(); z < Math.min(brick.maxZ(), depth); z++) {
+                            covered[sx][shadowY][z] = true;
+                        }
+                    }
+                    case WEST -> {
+                        int sx = brick.x() - d;
+                        if (sx < 0) continue;
+                        for (int z = brick.z(); z < Math.min(brick.maxZ(), depth); z++) {
+                            covered[sx][shadowY][z] = true;
+                        }
+                    }
+                    default -> { /* NONE — handled by caller guard */ }
+                }
+            }
+        }
+    }
+
+    /**
+     * Resolves visual conflicts where tall non-slope bricks placed at lower Y
+     * layers extend up into the height range of slopes at adjacent positions.
+     *
+     * Because placement scans Y-ascending, a 3-height brick at y=N is placed
+     * before any slope at y=N+1. The slope's shadow zone cannot retroactively
+     * suppress the already-placed brick. This post-processing step detects
+     * these conflicts and replaces the tall brick with a single-plate-height
+     * version using the corresponding plate part ID from the catalog.
+     *
+     * A conflict exists when a non-slope brick:
+     *   - Is adjacent to a slope in the slope's facing direction (sharing a face)
+     *   - Has its Y range overlapping with the slope's Y range
+     *   - Has heightUnits greater than 1
+     */
+    static List<Brick> resolveSlopeAdjacentConflicts(List<Brick> bricks,
+                                                      List<BrickSpec> allowedSpecs) {
+        // Build plate lookup: (studX, studY) → platePartId for h=1 specs
+        Map<String, String> plateLookup = new HashMap<>();
+        for (BrickSpec spec : allowedSpecs) {
+            if (spec.heightUnits() == 1 && !spec.isSlope()) {
+                String key = spec.studX() + "x" + spec.studY();
+                plateLookup.putIfAbsent(key, spec.partId());
+                // Also map the rotated key
+                if (spec.studX() != spec.studY()) {
+                    String rotKey = spec.studY() + "x" + spec.studX();
+                    plateLookup.putIfAbsent(rotKey, spec.partId());
+                }
+            }
+        }
+
+        // Collect slopes
+        List<Brick> slopes = new ArrayList<>();
+        for (Brick b : bricks) {
+            if (b.facing() != Facing.NONE) {
+                slopes.add(b);
+            }
+        }
+        if (slopes.isEmpty()) {
+            return bricks;
+        }
+
+        // Index slopes by their facing-direction edge positions for fast lookup
+        // Key: "x,y,z" of voxel positions adjacent to the slope in the facing direction
+        Set<String> slopeInfluence = new HashSet<>();
+        for (Brick slope : slopes) {
+            addSlopeInfluenceZone(slopeInfluence, slope);
+        }
+
+        // Find conflicting non-slope bricks
+        Set<Integer> toShorten = new HashSet<>();
+        for (int i = 0; i < bricks.size(); i++) {
+            Brick b = bricks.get(i);
+            if (b.facing() != Facing.NONE) continue;
+            if (b.heightUnits() <= 1) continue;
+
+            // Check if any voxel in this brick's upper layers (y+1 .. y+h-1)
+            // is in a slope's influence zone
+            if (isInSlopeInfluence(slopeInfluence, b)) {
+                toShorten.add(i);
+            }
+        }
+
+        if (toShorten.isEmpty()) {
+            return bricks;
+        }
+
+        // Replace conflicting bricks with plate-height versions
+        List<Brick> result = new ArrayList<>(bricks.size());
+        for (int i = 0; i < bricks.size(); i++) {
+            Brick b = bricks.get(i);
+            if (toShorten.contains(i)) {
+                String plateId = plateLookup.get(b.studX() + "x" + b.studY());
+                if (plateId != null) {
+                    result.add(new Brick(b.x(), b.y(), b.z(),
+                                         b.studX(), b.studY(), 1, plateId));
+                } else {
+                    // No plate equivalent found — keep the original brick
+                    result.add(b);
+                }
+            } else {
+                result.add(b);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Adds the influence zone positions for a slope: all voxel positions
+     * adjacent to the slope in its facing direction, across the slope's
+     * full height range.
+     */
+    private static void addSlopeInfluenceZone(Set<String> zone, Brick slope) {
+        for (int y = slope.y(); y < slope.maxY(); y++) {
+            switch (slope.facing()) {
+                case NORTH -> {
+                    int z = slope.z() - 1;
+                    if (z >= 0) {
+                        for (int x = slope.x(); x < slope.maxX(); x++) {
+                            zone.add(x + "," + y + "," + z);
+                        }
+                    }
+                }
+                case SOUTH -> {
+                    int z = slope.maxZ();
+                    for (int x = slope.x(); x < slope.maxX(); x++) {
+                        zone.add(x + "," + y + "," + z);
+                    }
+                }
+                case EAST -> {
+                    int x = slope.maxX();
+                    for (int z = slope.z(); z < slope.maxZ(); z++) {
+                        zone.add(x + "," + y + "," + z);
+                    }
+                }
+                case WEST -> {
+                    int x = slope.x() - 1;
+                    if (x >= 0) {
+                        for (int z = slope.z(); z < slope.maxZ(); z++) {
+                            zone.add(x + "," + y + "," + z);
+                        }
+                    }
+                }
+                default -> { }
+            }
+        }
+    }
+
+    /**
+     * Returns true if any voxel in the brick's UPPER layers (y+1 and above)
+     * falls within a slope's influence zone — meaning the brick's geometry
+     * at those layers visually conflicts with an adjacent slope.
+     */
+    private static boolean isInSlopeInfluence(Set<String> slopeInfluence, Brick brick) {
+        for (int dy = 1; dy < brick.heightUnits(); dy++) {
+            int y = brick.y() + dy;
+            for (int dx = 0; dx < brick.studX(); dx++) {
+                for (int dz = 0; dz < brick.studY(); dz++) {
+                    if (slopeInfluence.contains((brick.x() + dx) + "," + y + "," + (brick.z() + dz))) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 }
