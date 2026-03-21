@@ -267,6 +267,24 @@ class AllowedBrickDimensionsTest {
         assertEquals(3, specs.size());
     }
 
+    @Test
+    void testLoadFromCatalog_FiltersUnsupportedSlopeParts() throws IOException {
+        createCatalogFile(
+            "part_id,name,category,category_name,stud_x,stud_y,height_units,material,active,slope_angle,slope_dir\n" +
+            "3005,Brick 1x1,11,Bricks,1,1,1,Plastic,true,,\n" +
+            "85984,Slope 30° 1 x 2 x 2/3,3,Bricks Sloped,1,2,2/3,Plastic,true,30.0,-y\n" +
+            "3039,Slope 45° 2 x 2,3,Bricks Sloped,2,2,1,Plastic,true,45.0,-y\n"
+        );
+
+        List<BrickSpec> specs = AllowedBrickDimensions.loadFromCatalog(tempDir);
+
+        assertTrue(specs.stream().anyMatch(s -> "3005".equals(s.partId())));
+        assertTrue(specs.stream().anyMatch(s -> "3039".equals(s.partId())),
+            "Supported slope part should be included");
+        assertFalse(specs.stream().anyMatch(s -> "85984".equals(s.partId())),
+            "Unsupported slope part should be filtered out");
+    }
+
     private void createCatalogFile(String content) throws IOException {
         Path catalogDir = tempDir.resolve("data/catalog");
         Files.createDirectories(catalogDir);

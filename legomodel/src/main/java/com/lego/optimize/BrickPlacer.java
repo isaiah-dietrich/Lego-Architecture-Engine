@@ -114,7 +114,9 @@ public final class BrickPlacer {
         List<Brick> bricks = new ArrayList<>();
         boolean[][][] covered = new boolean[surface.width()][surface.height()][surface.depth()];
 
-        preMarkSlopeAdjacentZones(surface, covered);
+        if (containsSlopeSpecs(allowedSpecs)) {
+            preMarkSlopeAdjacentZones(surface, covered);
+        }
 
         for (int y = 0; y < surface.height(); y++) {
             for (int z = 0; z < surface.depth(); z++) {
@@ -128,6 +130,15 @@ public final class BrickPlacer {
             }
         }
         return resolveSlopeAdjacentConflicts(bricks, allowedSpecs);
+    }
+
+    private static boolean containsSlopeSpecs(List<BrickSpec> allowedSpecs) {
+        for (BrickSpec spec : allowedSpecs) {
+            if (spec.isSlope()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

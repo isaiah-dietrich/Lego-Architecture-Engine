@@ -6,6 +6,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import com.lego.data.CatalogPartRepository;
 import com.lego.data.CuratedCatalogLoader;
@@ -24,6 +25,21 @@ import com.lego.model.CatalogPart;
  * - Excludes forbidden orientations (1x2 vertical not allowed)
  */
 public final class AllowedBrickDimensions {
+
+    /**
+     * Slope parts currently supported by placement/export orientation logic.
+     *
+     * Other sloped/curved parts in the catalog can have different geometric
+     * envelopes and local orientation conventions, which can produce visual
+     * intersections in downstream LDraw viewers when treated as generic wedges.
+     */
+    private static final Set<String> SUPPORTED_SLOPE_PART_IDS = Set.of(
+        "3037",  // Slope 45 2x4
+        "3039",  // Slope 45 2x2
+        "3040b", // Slope 45 2x1
+        "3298",  // Slope 33 3x2
+        "4286"   // Slope 33 3x1
+    );
 
     /**
      * Represents a brick specification with dimensions, height, category, and part ID.
@@ -222,6 +238,11 @@ public final class AllowedBrickDimensions {
             int studY = part.studY();
             int heightUnits = parseHeightUnits(part.heightUnitsRaw().trim());
             Double slopeAngle = part.slopeAngle();
+
+            // Restrict slope specs to the supported directional subset.
+            if (slopeAngle != null && !SUPPORTED_SLOPE_PART_IDS.contains(part.partId())) {
+                continue;
+            }
 
             // Special handling for 1x2 brick (part 3004):
             // Only add 2x1 horizontal orientation, NOT 1x2 vertical
