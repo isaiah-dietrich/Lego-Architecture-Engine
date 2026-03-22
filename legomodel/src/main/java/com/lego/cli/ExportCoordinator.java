@@ -64,6 +64,16 @@ final class ExportCoordinator {
                 VoxelObjExporter.export(slopeSurface, outputPath);
                 out.println("Visual OBJ exported (voxel-slope-surface): " + outputPath.toAbsolutePath());
             }
+            case "voxel-surface-combined" -> {
+                VoxelGrid slopeSurface = SlopeSurfaceMask.extract(surface, result.allowedSpecs());
+                VoxelObjExporter.exportCombined(surface, slopeSurface, outputPath);
+                out.println("Visual OBJ exported (voxel-surface-combined): " + outputPath.toAbsolutePath());
+            }
+            case "voxel-slope-placed" -> {
+                VoxelGrid placedSlopeSurface = SlopeSurfaceMask.extractPlaced(surface, result.bricks());
+                VoxelObjExporter.export(placedSlopeSurface, outputPath);
+                out.println("Visual OBJ exported (voxel-slope-placed): " + outputPath.toAbsolutePath());
+            }
             case "ldraw" -> {
                 LDrawExporter.export(result.bricks(), outputPath, catalogRepository, result.brickColorCodes());
                 out.println("LDraw exported: " + outputPath.toAbsolutePath());

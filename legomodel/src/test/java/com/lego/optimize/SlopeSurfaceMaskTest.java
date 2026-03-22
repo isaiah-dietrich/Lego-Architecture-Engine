@@ -8,6 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
+import com.lego.model.Brick;
+import com.lego.model.Facing;
 import com.lego.model.Vector3;
 import com.lego.optimize.AllowedBrickDimensions.BrickSpec;
 import com.lego.voxel.VoxelGrid;
@@ -55,5 +57,33 @@ class SlopeSurfaceMaskTest {
         VoxelGrid slopeMask = SlopeSurfaceMask.extract(surface, nonSlopeOnly);
 
         assertEquals(0, slopeMask.countFilledVoxels());
+    }
+
+    @Test
+    void extractPlaced_keepsOnlySurfaceVoxelsCoveredByPlacedSlopeBricks() {
+        VoxelGrid surface = new VoxelGrid(4, 2, 4);
+        // Surface voxels at y=0
+        for (int x = 0; x < 3; x++) {
+            for (int z = 0; z < 3; z++) {
+                surface.setFilled(x, 0, z, true);
+            }
+        }
+        // Surface voxel above, should not be marked by base-layer extraction
+        surface.setFilled(1, 1, 1, true);
+
+        List<Brick> bricks = Arrays.asList(
+            new Brick(0, 0, 0, 2, 2, 3, "3039", Facing.NORTH), // slope
+            new Brick(2, 0, 0, 1, 1, 1, "3005")                // non-slope
+        );
+
+        VoxelGrid placed = SlopeSurfaceMask.extractPlaced(surface, bricks);
+        assertEquals(4, placed.countFilledVoxels());
+        assertTrue(placed.isFilled(0, 0, 0));
+        assertTrue(placed.isFilled(1, 0, 0));
+        assertTrue(placed.isFilled(0, 0, 1));
+        assertTrue(placed.isFilled(1, 0, 1));
+
+        assertFalse(placed.isFilled(2, 0, 0), "Non-slope brick footprint should not be included");
+        assertFalse(placed.isFilled(1, 1, 1), "Only slope base-layer surface voxels should be included");
     }
 }
