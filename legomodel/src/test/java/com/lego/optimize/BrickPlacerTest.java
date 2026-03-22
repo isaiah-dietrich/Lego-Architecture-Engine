@@ -739,6 +739,64 @@ class BrickPlacerTest {
         assertEquals("3005", merged.partId());
     }
 
+    @Test
+    void testConsolidatesAdjacent1x1BricksInto1x3And1x2() {
+        // Five adjacent 1x1x3 columns in X -> one 1x3 + one 1x2.
+        List<BrickSpec> specs = Arrays.asList(
+            new BrickSpec(1, 3, 3, "Bricks", "3622"),
+            new BrickSpec(1, 2, 3, "Bricks", "3004"),
+            new BrickSpec(1, 1, 3, "Bricks", "3005")
+        );
+
+        List<Brick> input = Arrays.asList(
+            new Brick(0, 0, 0, 1, 1, 3, "3005"),
+            new Brick(1, 0, 0, 1, 1, 3, "3005"),
+            new Brick(2, 0, 0, 1, 1, 3, "3005"),
+            new Brick(3, 0, 0, 1, 1, 3, "3005"),
+            new Brick(4, 0, 0, 1, 1, 3, "3005")
+        );
+
+        List<Brick> bricks = BrickPlacer.consolidateAdjacentBricks(input, specs);
+
+        assertEquals(2, bricks.size(), "Expected consolidation to 1x3 + 1x2");
+
+        int totalArea = 0;
+        boolean foundLen3 = false;
+        boolean foundLen2 = false;
+        for (Brick b : bricks) {
+            assertEquals(3, b.heightUnits());
+            assertEquals(1, b.studY(), "Depth is 1, so merged bricks should extend only in X");
+            totalArea += b.studX() * b.studY();
+            if (b.studX() == 3) foundLen3 = true;
+            if (b.studX() == 2) foundLen2 = true;
+        }
+
+        assertEquals(5, totalArea);
+        assertTrue(foundLen3, "Should contain a 1x3-equivalent merge");
+        assertTrue(foundLen2, "Should contain a 1x2-equivalent merge");
+    }
+
+    @Test
+    void testConsolidatesAnyAdjacentBricksNotOnly1x1() {
+        // Two adjacent 2x1x3 bricks -> one 4x1x3 if supported.
+        List<BrickSpec> specs = Arrays.asList(
+            new BrickSpec(1, 4, 3, "Bricks", "3010"), // allows rotated 4x1
+            new BrickSpec(1, 2, 3, "Bricks", "3004")
+        );
+
+        List<Brick> input = Arrays.asList(
+            new Brick(0, 0, 0, 2, 1, 3, "3004"),
+            new Brick(2, 0, 0, 2, 1, 3, "3004")
+        );
+        List<Brick> bricks = BrickPlacer.consolidateAdjacentBricks(input, specs);
+
+        assertEquals(1, bricks.size(), "Two 2x1 bricks should consolidate to one 4x1");
+        Brick merged = bricks.get(0);
+        assertEquals(4, merged.studX());
+        assertEquals(1, merged.studY());
+        assertEquals(3, merged.heightUnits());
+    }
+
     // ========== markCovered slope tests ==========
 
     @Test

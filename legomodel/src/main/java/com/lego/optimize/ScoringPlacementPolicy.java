@@ -68,6 +68,16 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
         this.featureGrid = featureGrid;
     }
 
+    /**
+     * Returns whether adjacency consolidation should run after placement.
+     *
+     * In color-aware mode, post-merge can undo intentional fine-grained detail
+     * decisions, so it is disabled.
+     */
+    boolean allowAdjacentConsolidation() {
+        return featureGrid == null;
+    }
+
     @Override
     /** Returns the policy name ("scoring"). */
     public String name() {

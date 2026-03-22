@@ -78,7 +78,8 @@ public final class PipelineRunner {
                     && loaded.colorMap().isPresent()) {
                 ColorRgb[][][] voxelColors = ColorSampler.sampleVoxelColorGridDominant(
                     mesh, normalized, loaded.colorMap().get(), surface, request.resolution());
-                PlacementFeatureGrid featureGrid = ColorFeatureGridFactory.create(voxelColors);
+                LegoPaletteMapper paletteForVariance = paletteRepository.loadPalette();
+                PlacementFeatureGrid featureGrid = ColorFeatureGridFactory.create(voxelColors, paletteForVariance);
                 placementPolicy = new ScoringPlacementPolicy(featureGrid);
             }
 

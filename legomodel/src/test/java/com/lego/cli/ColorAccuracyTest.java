@@ -137,7 +137,7 @@ class ColorAccuracyTest {
     void twoColorRedBlue(String algo) throws IOException {
         var expected = switch (algo) {
             case "direct"   -> Map.of(4, 0.36, 1, 0.61, 320, 0.03);
-            case "region", "dominant" -> Map.of(4, 0.42, 1, 0.59);
+            case "region", "dominant" -> Map.of(4, 0.38, 1, 0.62);
             default -> throw new IllegalArgumentException(algo);
         };
         assertColorDistribution(
@@ -151,9 +151,9 @@ class ColorAccuracyTest {
         // direct: boundary voxels produce LBGray artifact
         // region/dominant: both colors correctly preserved
         var expected = switch (algo) {
-            case "direct"   -> Map.of(0, 0.36, 71, 0.39, 15, 0.24);
-            case "region"   -> Map.of(0, 0.42, 15, 0.59);
-            case "dominant" -> Map.of(0, 0.42, 15, 0.59);
+            case "direct"   -> Map.of(0, 0.36, 71, 0.28, 15, 0.34);
+            case "region"   -> Map.of(0, 0.38, 15, 0.62);
+            case "dominant" -> Map.of(0, 0.39, 15, 0.61);
             default -> throw new IllegalArgumentException(algo);
         };
         assertColorDistribution(
@@ -186,12 +186,12 @@ class ColorAccuracyTest {
     void threeColorStripes(String algo) throws IOException {
         var expected = switch (algo) {
             case "direct" -> Map.of(
-                    4, 0.11, 14, 0.28,
-                    71, 0.22, 1, 0.11, 25, 0.22, 19, 0.05);
+                    4, 0.14, 14, 0.22,
+                    71, 0.19, 1, 0.19, 25, 0.22, 19, 0.04);
             case "region" -> Map.of(
-                    4, 0.35, 14, 0.33, 1, 0.32);
+                    4, 0.34, 14, 0.24, 1, 0.42);
             case "dominant" -> Map.of(
-                    4, 0.35, 14, 0.33, 1, 0.32);
+                    4, 0.34, 14, 0.24, 1, 0.42);
             default -> throw new IllegalArgumentException(algo);
         };
         assertColorDistribution(
@@ -209,9 +209,9 @@ class ColorAccuracyTest {
     @ValueSource(strings = { "direct", "region", "dominant" })
     void highContrastBoundary(String algo) throws IOException {
         var expected = switch (algo) {
-            case "direct"    -> Map.of(320, 0.36, 71, 0.39, 15, 0.25);
-            case "region"    -> Map.of(4, 0.42, 15, 0.59);
-            case "dominant"  -> Map.of(320, 0.42, 15, 0.59);
+            case "direct"    -> Map.of(320, 0.36, 71, 0.29, 15, 0.34);
+            case "region"    -> Map.of(4, 0.39, 15, 0.61);
+            case "dominant"  -> Map.of(320, 0.39, 15, 0.61);
             default -> throw new IllegalArgumentException(algo);
         };
         assertColorDistribution(
@@ -232,7 +232,7 @@ class ColorAccuracyTest {
         var expected = switch (algo) {
             case "direct"   -> Map.of(4, 0.37, 25, 0.63);
             case "region"   -> Map.of(25, 1.0);
-            case "dominant" -> Map.of(4, 0.42, 25, 0.59);
+            case "dominant" -> Map.of(4, 0.39, 25, 0.61);
             default -> throw new IllegalArgumentException(algo);
         };
         assertColorDistribution(
@@ -262,10 +262,10 @@ class ColorAccuracyTest {
     void fourColorQuadrants(String algo) throws IOException {
         var expected = switch (algo) {
             case "direct" -> Map.of(
-                    4, 0.08, 1, 0.27,
-                    25, 0.18, 14, 0.24, 72, 0.10, 2, 0.10);
+                    4, 0.11, 1, 0.31,
+                    25, 0.14, 14, 0.23, 72, 0.07, 2, 0.14);
             case "region", "dominant" -> Map.of(
-                    4, 0.27, 1, 0.34, 14, 0.27, 2, 0.13);
+                    4, 0.25, 1, 0.37, 14, 0.24, 2, 0.15);
             default -> throw new IllegalArgumentException(algo);
         };
         assertColorDistribution(

@@ -72,4 +72,63 @@ class ColorFeatureGridFactoryTest {
         assertEquals(5, grid.height());
         assertEquals(6, grid.depth());
     }
+
+    @Test
+    void paletteAwareVarianceIgnoresShadingThatQuantizesToSameLegoColor() throws Exception {
+        LegoPaletteMapper palette = LegoPaletteMapper.loadDefault();
+        ColorRgb[] pair = findSamePaletteHighDeltaPair(palette);
+        assertNotNull(pair, "Expected to find two shades that quantize to the same LEGO color");
+
+        ColorRgb[][][] colors = new ColorRgb[2][1][1];
+        colors[0][0][0] = pair[0];
+        colors[1][0][0] = pair[1];
+
+        PlacementFeatureGrid raw = ColorFeatureGridFactory.create(colors);
+        PlacementFeatureGrid paletteAware = ColorFeatureGridFactory.create(colors, palette);
+
+        assertTrue(raw.isHighVariance(0, 0, 0) || raw.isHighVariance(1, 0, 0),
+            "Raw-Lab variance should detect this high-contrast shade change");
+        assertFalse(paletteAware.isHighVariance(0, 0, 0),
+            "Palette-aware variance should not split shades that map to the same LEGO color");
+        assertFalse(paletteAware.isHighVariance(1, 0, 0),
+            "Palette-aware variance should not split shades that map to the same LEGO color");
+    }
+
+    private static ColorRgb[] findSamePaletteHighDeltaPair(LegoPaletteMapper palette) {
+        for (double r = 0.15; r <= 0.95; r += 0.20) {
+            for (double g = 0.15; g <= 0.95; g += 0.20) {
+                for (double b = 0.15; b <= 0.95; b += 0.20) {
+                    for (double s1 = 0.45; s1 <= 1.0; s1 += 0.05) {
+                        for (double s2 = s1 + 0.10; s2 <= 1.0; s2 += 0.05) {
+                            ColorRgb c1 = scaled(r, g, b, s1);
+                            ColorRgb c2 = scaled(r, g, b, s2);
+                            if (palette.nearestLDrawColor(c1) != palette.nearestLDrawColor(c2)) {
+                                continue;
+                            }
+                            if (deltaE76(c1, c2) <= 12.0) {
+                                continue;
+                            }
+                            return new ColorRgb[] { c1, c2 };
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private static ColorRgb scaled(double r, double g, double b, double scale) {
+        return new ColorRgb((float) Math.min(1.0, r * scale),
+                            (float) Math.min(1.0, g * scale),
+                            (float) Math.min(1.0, b * scale));
+    }
+
+    private static double deltaE76(ColorRgb a, ColorRgb b) {
+        double[] labA = LegoPaletteMapper.linearRgbToLab(a.r(), a.g(), a.b());
+        double[] labB = LegoPaletteMapper.linearRgbToLab(b.r(), b.g(), b.b());
+        double dl = labA[0] - labB[0];
+        double da = labA[1] - labB[1];
+        double db = labA[2] - labB[2];
+        return Math.sqrt(dl * dl + da * da + db * db);
+    }
 }

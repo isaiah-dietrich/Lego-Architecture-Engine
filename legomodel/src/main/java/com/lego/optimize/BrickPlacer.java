@@ -130,8 +130,20 @@ public final class BrickPlacer {
                 }
             }
         }
+
+        boolean enableAdjacentConsolidation =
+            (policy instanceof ScoringPlacementPolicy scoringPolicy)
+                && scoringPolicy.allowAdjacentConsolidation();
+
         List<Brick> consolidated = consolidatePlateStacks(bricks, allowedSpecs);
-        return resolveSlopeAdjacentConflicts(consolidated, allowedSpecs);
+        if (enableAdjacentConsolidation) {
+            consolidated = consolidateAdjacentBricks(consolidated, allowedSpecs);
+        }
+        consolidated = resolveSlopeAdjacentConflicts(consolidated, allowedSpecs);
+        if (enableAdjacentConsolidation) {
+            consolidated = consolidateAdjacentBricks(consolidated, allowedSpecs);
+        }
+        return consolidated;
     }
 
     private static boolean containsSlopeSpecs(List<BrickSpec> allowedSpecs) {
@@ -481,6 +493,119 @@ public final class BrickPlacer {
             }
         }
         return result;
+    }
+
+    /**
+     * Iteratively merges adjacent standard bricks into larger catalog-supported
+     * bricks with the same y/height, maximizing consolidation by footprint area.
+     *
+     * This enables upgrades like:
+     * - 1x1 + 1x1 -> 1x2
+     * - 1x2 + 1x1 -> 1x3
+     * - 2x2 + 2x2 -> 2x4
+     */
+    static List<Brick> consolidateAdjacentBricks(List<Brick> bricks, List<BrickSpec> allowedSpecs) {
+        Map<String, String> partLookup = new HashMap<>();
+        for (BrickSpec spec : allowedSpecs) {
+            if (spec.isSlope()) continue;
+            String key = mergeKey(spec.studX(), spec.studY(), spec.heightUnits());
+            partLookup.putIfAbsent(key, spec.partId());
+            if (spec.studX() != spec.studY()) {
+                String rotKey = mergeKey(spec.studY(), spec.studX(), spec.heightUnits());
+                partLookup.putIfAbsent(rotKey, spec.partId());
+            }
+        }
+        if (partLookup.isEmpty() || bricks.size() < 2) {
+            return bricks;
+        }
+
+        List<Brick> working = new ArrayList<>(bricks);
+        boolean changed;
+        do {
+            changed = false;
+
+            for (int i = 0; i < working.size(); i++) {
+                Brick a = working.get(i);
+                if (a.facing() != Facing.NONE) continue;
+
+                int bestJ = -1;
+                Brick bestMerged = null;
+                int bestArea = -1;
+
+                for (int j = i + 1; j < working.size(); j++) {
+                    Brick b = working.get(j);
+                    Brick merged = tryMerge(a, b, partLookup);
+                    if (merged == null) continue;
+
+                    int area = merged.studX() * merged.studY();
+                    if (area > bestArea || (area == bestArea && isEarlier(merged, bestMerged))) {
+                        bestArea = area;
+                        bestJ = j;
+                        bestMerged = merged;
+                    }
+                }
+
+                if (bestJ >= 0) {
+                    working.set(i, bestMerged);
+                    working.remove(bestJ);
+                    changed = true;
+                    i--; // Reconsider merged brick for further growth.
+                }
+            }
+        } while (changed);
+
+        working.sort((a, b) -> {
+            if (a.y() != b.y()) return Integer.compare(a.y(), b.y());
+            if (a.z() != b.z()) return Integer.compare(a.z(), b.z());
+            return Integer.compare(a.x(), b.x());
+        });
+        return working;
+    }
+
+    private static Brick tryMerge(Brick a, Brick b, Map<String, String> partLookup) {
+        if (a.facing() != Facing.NONE || b.facing() != Facing.NONE) return null;
+        if (a.y() != b.y() || a.heightUnits() != b.heightUnits()) return null;
+
+        boolean adjacentAlongX = a.z() == b.z()
+            && a.studY() == b.studY()
+            && (a.maxX() == b.x() || b.maxX() == a.x());
+        boolean adjacentAlongZ = a.x() == b.x()
+            && a.studX() == b.studX()
+            && (a.maxZ() == b.z() || b.maxZ() == a.z());
+
+        if (!adjacentAlongX && !adjacentAlongZ) {
+            return null;
+        }
+
+        int x = Math.min(a.x(), b.x());
+        int z = Math.min(a.z(), b.z());
+        int studX = Math.max(a.maxX(), b.maxX()) - x;
+        int studY = Math.max(a.maxZ(), b.maxZ()) - z;
+        int h = a.heightUnits();
+
+        // Must represent exactly the area of the two source bricks.
+        int unionArea = studX * studY;
+        int sourceArea = a.studX() * a.studY() + b.studX() * b.studY();
+        if (unionArea != sourceArea) {
+            return null;
+        }
+
+        String partId = partLookup.get(mergeKey(studX, studY, h));
+        if (partId == null) {
+            return null;
+        }
+        return new Brick(x, a.y(), z, studX, studY, h, partId);
+    }
+
+    private static boolean isEarlier(Brick a, Brick b) {
+        if (b == null) return true;
+        if (a.y() != b.y()) return a.y() < b.y();
+        if (a.z() != b.z()) return a.z() < b.z();
+        return a.x() < b.x();
+    }
+
+    private static String mergeKey(int studX, int studY, int h) {
+        return studX + "x" + studY + "x" + h;
     }
 
     private static String stackKey(int x, int y, int z, int studX, int studY) {
