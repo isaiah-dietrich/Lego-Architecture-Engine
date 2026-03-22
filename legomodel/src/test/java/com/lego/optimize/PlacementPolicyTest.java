@@ -507,6 +507,59 @@ class PlacementPolicyTest {
     }
 
     @Test
+    void testScoring_HighVarianceFallbackPrefersTallestSmallFootprint() {
+        // Single 1x1 column of height 3.
+        // High variance should force smallest footprint, but prefer 1x1x3 over 1x1x1.
+        VoxelGrid surface = new VoxelGrid(1, 3, 1);
+        surface.setFilled(0, 0, 0, true);
+        surface.setFilled(0, 1, 0, true);
+        surface.setFilled(0, 2, 0, true);
+
+        boolean[][][] highVariance = new boolean[1][3][1];
+        highVariance[0][0][0] = true;
+        highVariance[0][1][0] = true;
+        highVariance[0][2][0] = true;
+
+        PlacementFeatureGrid featureGrid = new PlacementFeatureGrid(null, highVariance, 12.0);
+        List<BrickSpec> specs = Arrays.asList(
+            new BrickSpec(2, 1, 3, "Bricks", "3004"), // does not fit
+            new BrickSpec(1, 1, 3, "Bricks", "3005"),
+            new BrickSpec(1, 1, 1, "Plates", "3024")
+        );
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, specs, new ScoringPlacementPolicy(featureGrid));
+
+        assertEquals(1, bricks.size(), "Should use one full-height brick, not three plates");
+        assertEquals(1, bricks.get(0).studX());
+        assertEquals(1, bricks.get(0).studY());
+        assertEquals(3, bricks.get(0).heightUnits());
+        assertEquals("3005", bricks.get(0).partId());
+    }
+
+    @Test
+    void testScoring_NeighborVarianceDoesNotForceSmallestAtAnchor() {
+        // Only one non-anchor voxel is marked high-variance.
+        // The anchor should still be allowed to place a larger brick.
+        VoxelGrid surface = new VoxelGrid(2, 1, 2);
+        for (int x = 0; x < 2; x++) {
+            for (int z = 0; z < 2; z++) {
+                surface.setFilled(x, 0, z, true);
+            }
+        }
+
+        boolean[][][] highVariance = new boolean[2][1][2];
+        highVariance[1][0][1] = true;
+        PlacementFeatureGrid featureGrid = new PlacementFeatureGrid(null, highVariance, 12.0);
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, STANDARD_DIMS,
+            new ScoringPlacementPolicy(featureGrid));
+
+        assertEquals(1, bricks.size(), "Anchor-local variance check should allow 2x2 placement");
+        assertEquals(2, bricks.get(0).studX());
+        assertEquals(2, bricks.get(0).studY());
+    }
+
+    @Test
     void testScoring_LowVarianceStillPrefersLargeBrick() {
         // 4×2 region with uniform color — no high variance, so large bricks win
         VoxelGrid surface = new VoxelGrid(4, 1, 2);

@@ -704,6 +704,41 @@ class BrickPlacerTest {
         }
     }
 
+    @Test
+    void testConsolidatesThreeStackedPlatesIntoFullHeightBrick() {
+        VoxelGrid surface = new VoxelGrid(1, 3, 1);
+        surface.setFilled(0, 0, 0, true);
+        surface.setFilled(0, 1, 0, true);
+        surface.setFilled(0, 2, 0, true);
+
+        List<BrickSpec> specs = Arrays.asList(
+            new BrickSpec(1, 1, 3, "Bricks", "3005"),
+            new BrickSpec(1, 1, 1, "Plates", "3024")
+        );
+
+        PlacementPolicy plateOnlyPolicy = new PlacementPolicy() {
+            @Override
+            public Brick selectBrick(VoxelGrid s, boolean[][][] covered,
+                                     int x, int y, int z, List<BrickSpec> allowedSpecs) {
+                return new Brick(x, y, z, 1, 1, 1, "3024");
+            }
+
+            @Override
+            public String name() {
+                return "plate-only";
+            }
+        };
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, specs, plateOnlyPolicy);
+
+        assertEquals(1, bricks.size(), "Three stacked plates should consolidate into one brick");
+        Brick merged = bricks.get(0);
+        assertEquals(1, merged.studX());
+        assertEquals(1, merged.studY());
+        assertEquals(3, merged.heightUnits());
+        assertEquals("3005", merged.partId());
+    }
+
     // ========== markCovered slope tests ==========
 
     @Test

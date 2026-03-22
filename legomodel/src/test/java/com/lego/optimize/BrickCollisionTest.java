@@ -447,6 +447,46 @@ class BrickCollisionTest {
         assertNoCollisions(bricks);
     }
 
+    @Test
+    void preMark_adjacentSteepButUnmatchableNormal_isSuppressed() {
+        // Regression case: voxel in front of a 45° slope has a steep normal (~25°)
+        // that does NOT match any supported slope angle. It should be suppressed
+        // during pre-mark so a flat stud is not placed into the slope's visual zone.
+        VoxelGrid surface = new VoxelGrid(4, 3, 5);
+
+        // 45° NORTH-facing slope candidate footprint at z=1..2
+        Vector3 north45 = new Vector3(0f, 0.707f, -0.707f);
+        surface.setFilled(1, 0, 1, true);
+        surface.accumulateNormal(1, 0, 1, north45);
+        surface.setFilled(1, 0, 2, true);
+        surface.accumulateNormal(1, 0, 2, north45);
+
+        // Front-adjacent voxel at z=0 with steep but non-matching ~25° normal
+        // (no 25° slope in allowed specs below).
+        Vector3 north25 = new Vector3(0f, 0.906f, -0.423f);
+        surface.setFilled(1, 0, 0, true);
+        surface.accumulateNormal(1, 0, 0, north25);
+        surface.normalizeNormals();
+
+        List<BrickSpec> specs = Arrays.asList(
+            new BrickSpec(2, 1, 3, "Bricks Sloped", "3040b", "Slope 45° 2x1", 45.0),
+            new BrickSpec(1, 1, 1, "Bricks", "3005")
+        );
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, specs, new ScoringPlacementPolicy());
+
+        assertTrue(bricks.stream().anyMatch(b -> b.facing() == Facing.NORTH),
+            "A NORTH-facing slope should still be placed");
+
+        boolean flatAtFrontVoxel = bricks.stream()
+            .filter(b -> b.facing() == Facing.NONE)
+            .anyMatch(b -> b.x() <= 1 && 1 < b.maxX()
+                        && b.y() <= 0 && 0 < b.maxY()
+                        && b.z() <= 0 && 0 < b.maxZ());
+        assertFalse(flatAtFrontVoxel,
+            "Front-adjacent voxel with non-matching steep normal should be pre-suppressed");
+    }
+
     // ========== Edge cases ==========
 
     @Test

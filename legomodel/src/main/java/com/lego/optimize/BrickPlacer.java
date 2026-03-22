@@ -9,6 +9,7 @@ import java.util.Set;
 
 import com.lego.model.Brick;
 import com.lego.model.Facing;
+import com.lego.model.Vector3;
 import com.lego.optimize.AllowedBrickDimensions.BrickSpec;
 import com.lego.voxel.VoxelGrid;
 
@@ -115,7 +116,7 @@ public final class BrickPlacer {
         boolean[][][] covered = new boolean[surface.width()][surface.height()][surface.depth()];
 
         if (containsSlopeSpecs(allowedSpecs)) {
-            preMarkSlopeAdjacentZones(surface, covered);
+            preMarkSlopeAdjacentZones(surface, covered, allowedSpecs);
         }
 
         for (int y = 0; y < surface.height(); y++) {
@@ -129,12 +130,45 @@ public final class BrickPlacer {
                 }
             }
         }
-        return resolveSlopeAdjacentConflicts(bricks, allowedSpecs);
+        List<Brick> consolidated = consolidatePlateStacks(bricks, allowedSpecs);
+        return resolveSlopeAdjacentConflicts(consolidated, allowedSpecs);
     }
 
     private static boolean containsSlopeSpecs(List<BrickSpec> allowedSpecs) {
         for (BrickSpec spec : allowedSpecs) {
             if (spec.isSlope()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasMatchingSlopeSpec(Vector3 normal, List<BrickSpec> allowedSpecs) {
+        if (normal == null || normal.length() < 1e-6) {
+            return false;
+        }
+        for (BrickSpec spec : allowedSpecs) {
+            if (!spec.isSlope()) {
+                continue;
+            }
+            if (SurfaceMatcher.match(normal, spec).eligible()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasMatchingSlopeSpecWithFacing(Vector3 normal, List<BrickSpec> allowedSpecs,
+                                                           Facing facing) {
+        if (normal == null || normal.length() < 1e-6) {
+            return false;
+        }
+        for (BrickSpec spec : allowedSpecs) {
+            if (!spec.isSlope()) {
+                continue;
+            }
+            SurfaceMatcher.MatchResult match = SurfaceMatcher.match(normal, spec);
+            if (match.eligible() && match.facing() == facing) {
                 return true;
             }
         }
@@ -153,7 +187,8 @@ public final class BrickPlacer {
      * Only marks the adjacent voxel if it is NOT itself a slope-eligible position
      * (to avoid suppressing slope-to-slope stacking).
      */
-    private static void preMarkSlopeAdjacentZones(VoxelGrid surface, boolean[][][] covered) {
+    private static void preMarkSlopeAdjacentZones(VoxelGrid surface, boolean[][][] covered,
+                                                   List<BrickSpec> allowedSpecs) {
         final double MIN_SLOPE_ANGLE = 20.0;
 
         int width = surface.width();
@@ -165,12 +200,13 @@ public final class BrickPlacer {
                 for (int x = 0; x < width; x++) {
                     if (!surface.isFilled(x, y, z)) continue;
 
-                    com.lego.model.Vector3 normal = surface.getNormal(x, y, z);
+                    Vector3 normal = surface.getNormal(x, y, z);
                     if (normal == null || normal.length() < 1e-6) continue;
 
                     double cosAngle = Math.abs(normal.y());
                     double inclination = Math.toDegrees(Math.acos(Math.min(1.0, cosAngle)));
                     if (inclination < MIN_SLOPE_ANGLE) continue;
+                    if (!hasMatchingSlopeSpec(normal, allowedSpecs)) continue;
 
                     Facing facing = SurfaceMatcher.resolveCardinalFacing(normal);
 
@@ -186,13 +222,9 @@ public final class BrickPlacer {
                     if (ax < 0 || ax >= width || az < 0 || az >= depth) continue;
                     if (!surface.isFilled(ax, y, az)) continue;
 
-                    // Don't suppress if the adjacent voxel is also slope-eligible
-                    com.lego.model.Vector3 adjNormal = surface.getNormal(ax, y, az);
-                    if (adjNormal != null && adjNormal.length() > 1e-6) {
-                        double adjInc = Math.toDegrees(Math.acos(
-                            Math.min(1.0, Math.abs(adjNormal.y()))));
-                        if (adjInc >= MIN_SLOPE_ANGLE) continue;
-                    }
+                    // Don't suppress if the adjacent voxel can host a slope with the same facing.
+                    Vector3 adjNormal = surface.getNormal(ax, y, az);
+                    if (hasMatchingSlopeSpecWithFacing(adjNormal, allowedSpecs, facing)) continue;
 
                     covered[ax][y][az] = true;
                 }
@@ -379,6 +411,80 @@ public final class BrickPlacer {
             }
         }
         return result;
+    }
+
+    /**
+     * Merges three aligned plate-height bricks into a single full-height brick
+     * when a matching (studX, studY, height=3) catalog spec exists.
+     *
+     * This reduces visible "triple plate stack" artifacts while preserving
+     * footprint and deterministic scan ordering.
+     */
+    static List<Brick> consolidatePlateStacks(List<Brick> bricks, List<BrickSpec> allowedSpecs) {
+        Map<String, String> fullBrickLookup = new HashMap<>();
+        for (BrickSpec spec : allowedSpecs) {
+            if (spec.heightUnits() == 3 && !spec.isSlope()) {
+                String key = spec.studX() + "x" + spec.studY();
+                fullBrickLookup.putIfAbsent(key, spec.partId());
+                if (spec.studX() != spec.studY()) {
+                    String rotKey = spec.studY() + "x" + spec.studX();
+                    fullBrickLookup.putIfAbsent(rotKey, spec.partId());
+                }
+            }
+        }
+
+        if (fullBrickLookup.isEmpty()) {
+            return bricks;
+        }
+
+        Map<String, Integer> plateIndexByPos = new HashMap<>();
+        for (int i = 0; i < bricks.size(); i++) {
+            Brick b = bricks.get(i);
+            if (b.facing() == Facing.NONE && b.heightUnits() == 1) {
+                plateIndexByPos.put(stackKey(b.x(), b.y(), b.z(), b.studX(), b.studY()), i);
+            }
+        }
+
+        boolean[] consumed = new boolean[bricks.size()];
+        List<Brick> result = new ArrayList<>(bricks.size());
+
+        for (int i = 0; i < bricks.size(); i++) {
+            if (consumed[i]) {
+                continue;
+            }
+
+            Brick b = bricks.get(i);
+            if (b.facing() != Facing.NONE || b.heightUnits() != 1) {
+                consumed[i] = true;
+                result.add(b);
+                continue;
+            }
+
+            String fullBrickPartId = fullBrickLookup.get(b.studX() + "x" + b.studY());
+            if (fullBrickPartId == null) {
+                consumed[i] = true;
+                result.add(b);
+                continue;
+            }
+
+            Integer midIdx = plateIndexByPos.get(stackKey(b.x(), b.y() + 1, b.z(), b.studX(), b.studY()));
+            Integer topIdx = plateIndexByPos.get(stackKey(b.x(), b.y() + 2, b.z(), b.studX(), b.studY()));
+
+            if (midIdx != null && topIdx != null && !consumed[midIdx] && !consumed[topIdx]) {
+                consumed[i] = true;
+                consumed[midIdx] = true;
+                consumed[topIdx] = true;
+                result.add(new Brick(b.x(), b.y(), b.z(), b.studX(), b.studY(), 3, fullBrickPartId));
+            } else {
+                consumed[i] = true;
+                result.add(b);
+            }
+        }
+        return result;
+    }
+
+    private static String stackKey(int x, int y, int z, int studX, int studY) {
+        return x + "," + y + "," + z + "," + studX + "," + studY;
     }
 
     /**

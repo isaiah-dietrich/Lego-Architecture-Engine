@@ -78,17 +78,19 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
     /** Selects the highest-scoring brick at the given position, trying both orientations. */
     public Brick selectBrick(VoxelGrid surface, boolean[][][] covered,
                               int x, int y, int z, List<BrickSpec> allowedSpecs) {
-        // In high color-variance regions, force the smallest available brick.
-        // Check the anchor voxel and the footprint of the smallest brick —
-        // if ANY voxel in the footprint is high-variance, force 1×1.
-        if (featureGrid != null && hasAnyHighVariance(featureGrid, x, y, z, allowedSpecs)) {
-            BrickSpec smallest = allowedSpecs.get(allowedSpecs.size() - 1);
-            return new Brick(x, y, z, smallest.studX(), smallest.studY(),
-                             smallest.heightUnits(), smallest.partId());
-        }
-
         // Read surface normal for slope/curve matching
         Vector3 normal = surface.getNormal(x, y, z);
+
+        // In high color-variance regions, force the smallest footprint that fits.
+        // Prefer taller pieces for that footprint (e.g. 1x1x3 over 1x1x1)
+        // so we avoid unnecessary stacks of three plates.
+        if (featureGrid != null && isHighVarianceAnchor(featureGrid, x, y, z)) {
+            Brick fallback = selectSmallestFootprintTallestThatFits(
+                surface, covered, normal, x, y, z, allowedSpecs);
+            if (fallback != null) {
+                return fallback;
+            }
+        }
 
         int bestStudX = 0;
         int bestStudY = 0;
@@ -200,22 +202,8 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
                                           int studX, int studY, int heightUnits) {
         int area = studX * studY;
 
-        // Check every voxel in the candidate footprint across all height layers
-        for (int dy = 0; dy < heightUnits; dy++) {
-            int cy = y + dy;
-            if (cy >= surface.height()) return Double.NEGATIVE_INFINITY;
-            for (int dx = 0; dx < studX; dx++) {
-                for (int dz = 0; dz < studY; dz++) {
-                    int cx = x + dx;
-                    int cz = z + dz;
-                    if (cx >= surface.width() || cz >= surface.depth()) {
-                        return Double.NEGATIVE_INFINITY;
-                    }
-                    if (!surface.isFilled(cx, cy, cz) || covered[cx][cy][cz]) {
-                        return Double.NEGATIVE_INFINITY;
-                    }
-                }
-            }
+        if (!canPlace(surface, covered, x, y, z, studX, studY, heightUnits)) {
+            return Double.NEGATIVE_INFINITY;
         }
 
         // Color uniformity across entire volume (XZ footprint × all Y layers)
@@ -230,6 +218,29 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
         // for a 1×1, the high-variance map handles detail forcing.
         return 1_000_000_000 + colorUniformity * colorUniformity * area * 1_000
              + heightUnits * 150 + neighborCoverage * 100;
+    }
+
+    /** Returns true when the candidate volume is fully in-bounds, filled, and uncovered. */
+    private static boolean canPlace(VoxelGrid surface, boolean[][][] covered,
+                                     int x, int y, int z,
+                                     int studX, int studY, int heightUnits) {
+        for (int dy = 0; dy < heightUnits; dy++) {
+            int cy = y + dy;
+            if (cy >= surface.height()) return false;
+            for (int dx = 0; dx < studX; dx++) {
+                for (int dz = 0; dz < studY; dz++) {
+                    int cx = x + dx;
+                    int cz = z + dz;
+                    if (cx >= surface.width() || cz >= surface.depth()) {
+                        return false;
+                    }
+                    if (!surface.isFilled(cx, cy, cz) || covered[cx][cy][cz]) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
     }
 
     /**
@@ -304,29 +315,67 @@ public final class ScoringPlacementPolicy implements PlacementPolicy {
     }
 
     /**
-     * Checks whether ANY voxel that the largest candidate brick would cover
-     * is marked high-variance. This prevents large bricks from extending
-     * from a uniform region into a detail region.
+     * High-variance gate for detail preservation.
+     *
+     * Uses only the anchor voxel, avoiding over-aggressive forcing caused by
+     * scanning large surrounding regions.
      */
-    private static boolean hasAnyHighVariance(PlacementFeatureGrid featureGrid,
-                                               int x, int y, int z,
-                                               List<BrickSpec> allowedSpecs) {
-        // Use the largest brick spec to define the scan region —
-        // if any voxel in that area is high-variance, fall back to 1×1.
-        BrickSpec largest = allowedSpecs.get(0);
-        int maxStudX = Math.max(largest.studX(), largest.studY());
-        int maxStudY = Math.max(largest.studX(), largest.studY());
-        int maxH = largest.heightUnits();
+    private static boolean isHighVarianceAnchor(PlacementFeatureGrid featureGrid,
+                                                 int x, int y, int z) {
+        return featureGrid.isHighVariance(x, y, z);
+    }
 
-        for (int dy = 0; dy < maxH; dy++) {
-            for (int dx = 0; dx < maxStudX; dx++) {
-                for (int dz = 0; dz < maxStudY; dz++) {
-                    if (featureGrid.isHighVariance(x + dx, y + dy, z + dz)) {
-                        return true;
-                    }
+    /**
+     * Selects the smallest footprint that fits at the anchor, preferring taller
+     * pieces within that footprint. Used as the detail-preserving fallback in
+     * high-variance regions.
+     */
+    private static Brick selectSmallestFootprintTallestThatFits(VoxelGrid surface,
+                                                                  boolean[][][] covered,
+                                                                  Vector3 normal,
+                                                                  int x, int y, int z,
+                                                                  List<BrickSpec> allowedSpecs) {
+        int bestArea = Integer.MAX_VALUE;
+        int bestHeight = -1;
+        int bestStudX = 0;
+        int bestStudY = 0;
+        String bestPartId = null;
+
+        for (BrickSpec spec : allowedSpecs) {
+            if (spec.isSlope()) {
+                continue;
+            }
+            if (!SurfaceMatcher.match(normal, spec).eligible()) {
+                continue;
+            }
+
+            if (canPlace(surface, covered, x, y, z, spec.studX(), spec.studY(), spec.heightUnits())) {
+                int area = spec.studX() * spec.studY();
+                if (area < bestArea || (area == bestArea && spec.heightUnits() > bestHeight)) {
+                    bestArea = area;
+                    bestHeight = spec.heightUnits();
+                    bestStudX = spec.studX();
+                    bestStudY = spec.studY();
+                    bestPartId = spec.partId();
+                }
+            }
+
+            if (spec.studX() != spec.studY()
+                    && canPlace(surface, covered, x, y, z, spec.studY(), spec.studX(), spec.heightUnits())) {
+                int area = spec.studX() * spec.studY();
+                if (area < bestArea || (area == bestArea && spec.heightUnits() > bestHeight)) {
+                    bestArea = area;
+                    bestHeight = spec.heightUnits();
+                    bestStudX = spec.studY();
+                    bestStudY = spec.studX();
+                    bestPartId = spec.partId();
                 }
             }
         }
-        return false;
+
+        if (bestPartId == null) {
+            return null;
+        }
+        return new Brick(x, y, z, bestStudX, bestStudY, bestHeight, bestPartId);
     }
 }
