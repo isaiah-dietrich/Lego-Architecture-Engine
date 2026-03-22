@@ -256,6 +256,32 @@ class MainTest {
     }
 
     @Test
+    void testExportModeVoxelSlopeSurfaceWritesObj() throws IOException {
+        Path objPath = tempDir.resolve("triangle.obj");
+        Path outObj = tempDir.resolve("voxels_slope_surface.obj");
+        Files.writeString(objPath, """
+            v 0 0 0
+            v 1 0 0
+            v 0 1 0
+            f 1 2 3
+            """);
+
+        ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
+        ByteArrayOutputStream errBuffer = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(outBuffer);
+        PrintStream err = new PrintStream(errBuffer);
+
+        int exitCode = Main.run(new String[] { objPath.toString(), "4", outObj.toString(), "voxel-slope-surface" }, out, err);
+
+        assertEquals(0, exitCode);
+        assertTrue(Files.exists(outObj));
+        String output = outBuffer.toString();
+        assertTrue(output.contains("Visual OBJ exported (voxel-slope-surface):"));
+        String content = Files.readString(outObj);
+        assertTrue(content.contains("# LEGO Architecture Engine voxel export"));
+    }
+
+    @Test
     void testExportModeBrickWritesObjWithCorrectMessage() throws IOException {
         Path objPath = tempDir.resolve("triangle.obj");
         Path outObj = tempDir.resolve("bricks_explicit.obj");
@@ -301,7 +327,7 @@ class MainTest {
 
         assertEquals(1, exitCode);
         String error = errBuffer.toString();
-        assertTrue(error.contains("export mode must be 'brick', 'voxel-surface', 'voxel-solid', or 'ldraw'"));
+        assertTrue(error.contains("export mode must be 'brick', 'voxel-surface', 'voxel-solid', 'voxel-slope-surface', or 'ldraw'"));
         assertTrue(error.contains("Usage:"));
     }
 

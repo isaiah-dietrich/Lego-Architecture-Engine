@@ -11,6 +11,7 @@ import com.lego.export.BrickObjExporter;
 import com.lego.export.LDrawExporter;
 import com.lego.export.VoxelObjExporter;
 import com.lego.model.Brick;
+import com.lego.optimize.SlopeSurfaceMask;
 import com.lego.voxel.VoxelGrid;
 
 /**
@@ -57,6 +58,11 @@ final class ExportCoordinator {
             case "voxel-solid" -> {
                 VoxelObjExporter.export(solid, outputPath);
                 out.println("Visual OBJ exported (voxel-solid): " + outputPath.toAbsolutePath());
+            }
+            case "voxel-slope-surface" -> {
+                VoxelGrid slopeSurface = SlopeSurfaceMask.extract(surface, result.allowedSpecs());
+                VoxelObjExporter.export(slopeSurface, outputPath);
+                out.println("Visual OBJ exported (voxel-slope-surface): " + outputPath.toAbsolutePath());
             }
             case "ldraw" -> {
                 LDrawExporter.export(result.bricks(), outputPath, catalogRepository, result.brickColorCodes());

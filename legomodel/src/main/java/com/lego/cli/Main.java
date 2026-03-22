@@ -143,8 +143,9 @@ public final class Main {
         if (!exportMode.equals("brick")
             && !exportMode.equals("voxel-surface")
             && !exportMode.equals("voxel-solid")
+            && !exportMode.equals("voxel-slope-surface")
             && !exportMode.equals("ldraw")) {
-            err.println("Error: export mode must be 'brick', 'voxel-surface', 'voxel-solid', or 'ldraw'.");
+            err.println("Error: export mode must be 'brick', 'voxel-surface', 'voxel-solid', 'voxel-slope-surface', or 'ldraw'.");
             OutputReporter.printUsage(err);
             return null;
         }

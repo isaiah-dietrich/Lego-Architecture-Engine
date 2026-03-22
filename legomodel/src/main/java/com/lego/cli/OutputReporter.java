@@ -100,7 +100,7 @@ final class OutputReporter {
         stream.println("  modelPath: path to a .obj or .glb model file");
         stream.println("  resolution: voxel grid resolution (integer >= 2)");
         stream.println("  outputObjPath: path for the exported output file");
-        stream.println("  exportMode: 'brick' (default), 'voxel-surface', 'voxel-solid', or 'ldraw'");
+        stream.println("  exportMode: 'brick' (default), 'voxel-surface', 'voxel-solid', 'voxel-slope-surface', or 'ldraw'");
         stream.println("  voxelizerMode: 'topological' (default) or 'legacy'");
         stream.println("  options:");
         stream.println("    -h, --help                     Show this help message and exit");
