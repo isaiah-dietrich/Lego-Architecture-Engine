@@ -25,6 +25,8 @@ final class CliOptionsParser {
         boolean colorList = false;
         String colorAlgorithm = "direct";
         String placementPolicy = "scoring";
+        boolean benchmarkAb = false;
+        Path benchmarkDir = null;
 
         for (int i = 0; i < args.length; i++) {
             String arg = args[i];
@@ -60,13 +62,23 @@ final class CliOptionsParser {
                 case "--color-list" -> colorList = true;
                 case "--color-algorithm" -> colorAlgorithm = val;
                 case "--placement-policy" -> placementPolicy = val;
+                case "--benchmark-ab" -> benchmarkAb = true;
+                case "--benchmark-dir" -> {
+                    if (val != null) {
+                        benchmarkDir = Path.of(val);
+                    } else if (i + 1 >= args.length) {
+                        throw new IllegalArgumentException("--benchmark-dir requires a value");
+                    } else {
+                        benchmarkDir = Path.of(args[++i]);
+                    }
+                }
                 default -> positional.add(arg);
             }
         }
 
         return new ParsedOptions(positional, analyzeStepping, analysisDir, jumpThreshold,
             sweepResolutions, colorMode, colorFallback, colorList, colorAlgorithm,
-            placementPolicy);
+            placementPolicy, benchmarkAb, benchmarkDir);
     }
 
     /** Parses a string as a non-negative integer, throwing on invalid input. */

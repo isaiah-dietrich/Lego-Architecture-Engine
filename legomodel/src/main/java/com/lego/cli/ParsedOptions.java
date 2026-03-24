@@ -18,5 +18,7 @@ record ParsedOptions(
     int colorFallback,
     boolean colorList,
     String colorAlgorithm,
-    String placementPolicy
+    String placementPolicy,
+    boolean benchmarkAb,
+    Path benchmarkDir
 ) {}

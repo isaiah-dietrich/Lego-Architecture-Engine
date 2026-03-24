@@ -23,5 +23,7 @@ public record PipelineRequest(
     boolean analyzeStepping,
     Path analysisDir,
     int largeJumpThreshold,
-    List<Integer> sweepResolutions
+    List<Integer> sweepResolutions,
+    boolean benchmarkAb,
+    Path benchmarkDir
 ) {}

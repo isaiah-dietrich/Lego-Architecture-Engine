@@ -74,7 +74,7 @@ public final class SurfaceMatcher {
      * Projects the normal onto the XZ plane and resolves the nearest cardinal direction.
      * Convention: -Z is NORTH, +X is EAST, +Z is SOUTH, -X is WEST.
      */
-    static Facing resolveCardinalFacing(Vector3 normal) {
+    public static Facing resolveCardinalFacing(Vector3 normal) {
         double nx = normal.x();
         double nz = normal.z();
 

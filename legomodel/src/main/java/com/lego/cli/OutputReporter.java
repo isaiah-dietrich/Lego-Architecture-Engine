@@ -112,6 +112,8 @@ final class OutputReporter {
         stream.println("    --color-fallback=<code>        LDraw color code for bricks without sampled color");
         stream.println("    --color-list                   Output list of unique color codes used in LDraw export");
         stream.println("    --color-algorithm=<name>       Color mapping algorithm (default: direct). Use 'list' to see all.");
-        stream.println("    --placement-policy=<name>      Brick placement policy: 'scoring' (default) or 'greedy-area'");
+        stream.println("    --placement-policy=<name>      Brick placement policy: 'scoring' (default), 'greedy-area', or 'cpsat-mask'");
+        stream.println("    --benchmark-ab                 Run A/B metrics for 'scoring' vs selected policy and write reports");
+        stream.println("    --benchmark-dir=<path>         Directory for benchmark artifacts (default: output/benchmarks/<run-id>)");
     }
 }

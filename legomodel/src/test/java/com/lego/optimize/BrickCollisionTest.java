@@ -766,4 +766,79 @@ class BrickCollisionTest {
             }
         }
     }
+
+    @Test
+    void staircaseSurfaceWithTallBricksBelow_cpsatMask_noVisualConflicts() {
+        VoxelGrid surface = new VoxelGrid(12, 15, 12);
+        Vector3 northNormal = new Vector3(0f, 0.707f, -0.707f);
+
+        for (int z = 0; z < 8; z++) {
+            int y = z;
+            for (int x = 0; x < 8; x++) {
+                surface.setFilled(x, y, z, true);
+                surface.accumulateNormal(x, y, z, northNormal);
+            }
+        }
+        for (int x = 0; x < 8; x++) {
+            for (int z = 0; z < 8; z++) {
+                if (z > 0) {
+                    surface.setFilled(x, z - 1, z, true);
+                }
+            }
+        }
+        surface.normalizeNormals();
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, SLOPE_AND_FLAT_SPECS, new CpsatMaskPlacementPolicy());
+
+        assertNoCollisions(bricks);
+        assertNoTallFlatInSlopeFacingDirection(bricks);
+    }
+
+    @Test
+    void slopesWithFilledLayerAbove_cpsatMask_noCollisions() {
+        VoxelGrid surface = new VoxelGrid(10, 5, 10);
+        Vector3 northNormal = new Vector3(0f, 0.707f, -0.707f);
+        for (int x = 0; x < 8; x++) {
+            for (int z = 0; z < 8; z++) {
+                surface.setFilled(x, 0, z, true);
+                surface.accumulateNormal(x, 0, z, northNormal);
+                surface.setFilled(x, 1, z, true);
+            }
+        }
+        surface.normalizeNormals();
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, SLOPE_AND_FLAT_SPECS, new CpsatMaskPlacementPolicy());
+        assertNoCollisions(bricks);
+        assertNoTallFlatInSlopeFacingDirection(bricks);
+    }
+
+    private static void assertNoTallFlatInSlopeFacingDirection(List<Brick> bricks) {
+        List<Brick> slopeList = bricks.stream()
+            .filter(b -> b.facing() != Facing.NONE)
+            .toList();
+        for (Brick slope : slopeList) {
+            for (Brick flat : bricks) {
+                if (flat.facing() != Facing.NONE) continue;
+                if (flat.heightUnits() <= 1) continue;
+                if (flat.maxY() <= slope.y() || flat.y() >= slope.maxY()) continue;
+                boolean adjacent = switch (slope.facing()) {
+                    case NORTH -> flat.maxZ() == slope.z()
+                        && flat.x() < slope.maxX() && flat.maxX() > slope.x();
+                    case SOUTH -> flat.z() == slope.maxZ()
+                        && flat.x() < slope.maxX() && flat.maxX() > slope.x();
+                    case EAST -> flat.x() == slope.maxX()
+                        && flat.z() < slope.maxZ() && flat.maxZ() > slope.z();
+                    case WEST -> flat.maxX() == slope.x()
+                        && flat.z() < slope.maxZ() && flat.maxZ() > slope.z();
+                    default -> false;
+                };
+                assertFalse(adjacent,
+                    "No tall flat brick should be adjacent to slope in facing direction: "
+                    + "flat at (" + flat.x() + "," + flat.y() + "," + flat.z()
+                    + " h=" + flat.heightUnits() + ") vs slope at ("
+                    + slope.x() + "," + slope.y() + "," + slope.z()
+                    + " facing=" + slope.facing() + ")");
+            }
+        }
+    }
 }

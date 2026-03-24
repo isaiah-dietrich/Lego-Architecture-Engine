@@ -118,4 +118,6 @@ public final class PlacementFeatureGrid {
     public int height() { return highVariance[0].length; }
     /** Dimensions of the grid (Z axis). */
     public int depth() { return highVariance[0][0].length; }
+    /** Returns the configured ΔE threshold used to normalize color uniformity. */
+    public double colorDiffThreshold() { return colorDiffThreshold; }
 }

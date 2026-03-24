@@ -112,6 +112,13 @@ public final class BrickPlacer {
      */
     private static List<Brick> placeBricksInternal(VoxelGrid surface, List<BrickSpec> allowedSpecs,
                                                     PlacementPolicy policy) {
+        if (policy instanceof BatchPlacementPolicy batchPolicy) {
+            List<Brick> placed = batchPolicy.placeAll(surface, allowedSpecs);
+            List<Brick> consolidated = consolidatePlateStacks(placed, allowedSpecs);
+            consolidated = resolveSlopeAdjacentConflicts(consolidated, allowedSpecs);
+            return consolidated;
+        }
+
         List<Brick> bricks = new ArrayList<>();
         boolean[][][] covered = new boolean[surface.width()][surface.height()][surface.depth()];
 

@@ -43,6 +43,27 @@ class PlacementPolicyTest {
         assertEquals("scoring", new ScoringPlacementPolicy().name());
     }
 
+    @Test
+    void testCpsatMaskPolicyName() {
+        assertEquals("cpsat-mask", new CpsatMaskPlacementPolicy().name());
+    }
+
+    @Test
+    void testCpsatMask_SingleVoxel() {
+        VoxelGrid surface = new VoxelGrid(3, 3, 3);
+        surface.setFilled(1, 1, 1, true);
+
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, STANDARD_DIMS, new CpsatMaskPlacementPolicy());
+
+        assertEquals(1, bricks.size());
+        Brick b = bricks.get(0);
+        assertEquals(1, b.studX());
+        assertEquals(1, b.studY());
+        assertEquals(1, b.x());
+        assertEquals(1, b.y());
+        assertEquals(1, b.z());
+    }
+
     // ========== GreedyAreaPolicy mirrors old behavior ==========
 
     @Test
