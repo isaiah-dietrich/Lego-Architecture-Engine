@@ -1,0 +1,3 @@
+policy,collisionCount,uncoveredRequiredCount,outsideTargetCoverageCount,shellLeakCount,slopePlacementCount,flatSlopeErrorCount,slopeFacingConsistency,pieceCount,runtimeMs,peakCandidateCount,meanDeltaE,p95DeltaE
+scoring,0,155,20,155,25,0,1.0,1428,22,0,3.6481291767655923,12.0
+cpsat-mask,0,54,0,54,6,0,1.0,682,2728,27,5.112197227287287,12.0

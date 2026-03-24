@@ -190,7 +190,9 @@ public final class Main {
             opts.analyzeStepping(),
             opts.analysisDir(),
             opts.largeJumpThreshold(),
-            opts.sweepResolutions()
+            opts.sweepResolutions(),
+            opts.benchmarkAb(),
+            opts.benchmarkDir()
         );
     }
 

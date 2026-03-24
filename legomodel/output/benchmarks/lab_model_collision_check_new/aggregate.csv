@@ -1,0 +1,3 @@
+policy,collisionCount,uncoveredRequiredCount,outsideTargetCoverageCount,shellLeakCount,slopePlacementCount,flatSlopeErrorCount,slopeFacingConsistency,overlapPlacementCount,outsideCoveragePlacementCount,slopeAngleMismatchPlacementCount,slopeFacingMismatchPlacementCount,slopeMissingNormalPlacementCount,slopeShadowIntrusionPlacementCount,slopeAdjacentTallFlatConflictPlacementCount,shellLeakResidualVoxelCount,pieceCount,runtimeMs,peakCandidateCount,meanDeltaE,p95DeltaE
+scoring,0,210,31,210,38,0,1.0,0,16,0,0,0,2,0,210,860,22,0,-1.0,-1.0
+cpsat-mask,0,58,0,58,7,0,1.0,14,0,0,0,0,0,0,58,662,2381,27,-1.0,-1.0

@@ -1,0 +1,23 @@
+{
+  "policy": "cpsat-mask",
+  "quality": {
+    "collisionCount": 0,
+    "uncoveredRequiredCount": 8,
+    "outsideTargetCoverageCount": 0,
+    "shellLeakCount": 8
+  },
+  "slopeBehavior": {
+    "slopePlacementCount": 3,
+    "flatSlopeErrorCount": 0,
+    "slopeFacingConsistency": 1.000000
+  },
+  "efficiency": {
+    "pieceCount": 685,
+    "runtimeMs": 3175,
+    "peakCandidateCount": 27
+  },
+  "color": {
+    "meanDeltaE": 4.985667,
+    "p95DeltaE": 12.000000
+  }
+}

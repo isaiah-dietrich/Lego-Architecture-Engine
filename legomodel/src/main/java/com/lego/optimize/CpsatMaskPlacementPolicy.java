@@ -1,0 +1,376 @@
+package com.lego.optimize;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import com.lego.model.Brick;
+import com.lego.model.Facing;
+import com.lego.model.Vector3;
+import com.lego.optimize.AllowedBrickDimensions.BrickSpec;
+import com.lego.optimize.PartMask.VoxelOffset;
+import com.lego.voxel.VoxelGrid;
+
+/**
+ * Mask-constrained global placement policy with deterministic lexicographic
+ * objective ordering:
+ * 1) Feasibility via hard constraints
+ * 2) Fewer pieces (max new coverage per placement)
+ * 3) Lower color error
+ *
+ * The v1 implementation is a deterministic global selector over feasible
+ * candidates and keeps the API seam for a later CP-SAT backend.
+ */
+public final class CpsatMaskPlacementPolicy implements BatchPlacementPolicy, PlacementStatsProvider {
+
+    private static final double MIN_SLOPE_INCLINATION_DEG = 20.0;
+
+    private final PlacementFeatureGrid featureGrid;
+    private final PartMaskProvider maskProvider;
+    private int peakCandidateCount;
+
+    public CpsatMaskPlacementPolicy() {
+        this(null, new ProceduralPartMaskProvider());
+    }
+
+    public CpsatMaskPlacementPolicy(PlacementFeatureGrid featureGrid) {
+        this(featureGrid, new ProceduralPartMaskProvider());
+    }
+
+    public CpsatMaskPlacementPolicy(PlacementFeatureGrid featureGrid, PartMaskProvider maskProvider) {
+        this.featureGrid = featureGrid;
+        this.maskProvider = maskProvider != null ? maskProvider : new ProceduralPartMaskProvider();
+    }
+
+    @Override
+    public String name() {
+        return "cpsat-mask";
+    }
+
+    @Override
+    public Brick selectBrick(VoxelGrid surface, boolean[][][] covered,
+                             int x, int y, int z, List<BrickSpec> allowedSpecs) {
+        throw new UnsupportedOperationException("cpsat-mask requires batch placement via placeAll()");
+    }
+
+    @Override
+    public List<Brick> placeAll(VoxelGrid surface, List<BrickSpec> allowedSpecs) {
+        if (surface == null) {
+            throw new IllegalArgumentException("surface must not be null");
+        }
+        if (allowedSpecs == null || allowedSpecs.isEmpty()) {
+            throw new IllegalArgumentException("allowedSpecs must not be null/empty");
+        }
+
+        this.peakCandidateCount = 0;
+        PlacementTargetGrid target = PlacementTargetGrid.fromSurface(surface, allowedSpecs, featureGrid);
+        boolean[][][] occupied = new boolean[target.width()][target.height()][target.depth()];
+        boolean[][][] blocked = new boolean[target.width()][target.height()][target.depth()];
+        boolean[][][] covered = new boolean[target.width()][target.height()][target.depth()];
+
+        int uncovered = target.requiredCount();
+        List<Brick> selected = new ArrayList<>();
+
+        while (uncovered > 0) {
+            Candidate best = null;
+
+            for (int y = 0; y < target.height(); y++) {
+                for (int z = 0; z < target.depth(); z++) {
+                    for (int x = 0; x < target.width(); x++) {
+                        if (!target.isRequired(x, y, z) || covered[x][y][z]) {
+                            continue;
+                        }
+                        List<Candidate> candidates = generateCandidatesAtAnchor(
+                            target, occupied, blocked, covered, x, y, z, allowedSpecs
+                        );
+                        if (candidates.size() > peakCandidateCount) {
+                            peakCandidateCount = candidates.size();
+                        }
+                        for (Candidate c : candidates) {
+                            if (best == null || better(c, best)) {
+                                best = c;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (best == null) {
+                throw new IllegalStateException(
+                    "cpsat-mask could not find a feasible candidate while uncovered voxels remain"
+                );
+            }
+
+            selected.add(best.brick());
+            for (Cell cell : best.solidCells()) {
+                occupied[cell.x()][cell.y()][cell.z()] = true;
+                blocked[cell.x()][cell.y()][cell.z()] = true;
+            }
+            for (Cell cell : best.blockedCells()) {
+                blocked[cell.x()][cell.y()][cell.z()] = true;
+            }
+            for (Cell cell : best.coverageCells()) {
+                if (!covered[cell.x()][cell.y()][cell.z()]) {
+                    covered[cell.x()][cell.y()][cell.z()] = true;
+                    uncovered--;
+                }
+            }
+        }
+
+        selected.sort((a, b) -> {
+            if (a.y() != b.y()) return Integer.compare(a.y(), b.y());
+            if (a.z() != b.z()) return Integer.compare(a.z(), b.z());
+            return Integer.compare(a.x(), b.x());
+        });
+        return selected;
+    }
+
+    @Override
+    public int peakCandidateCount() {
+        return peakCandidateCount;
+    }
+
+    private List<Candidate> generateCandidatesAtAnchor(PlacementTargetGrid target,
+                                                        boolean[][][] occupied,
+                                                        boolean[][][] blocked,
+                                                        boolean[][][] covered,
+                                                        int x, int y, int z,
+                                                        List<BrickSpec> specs) {
+        List<Candidate> out = new ArrayList<>();
+        Vector3 normal = target.normalAt(x, y, z);
+
+        for (BrickSpec spec : specs) {
+            if (spec.isSlope()) {
+                SurfaceMatcher.MatchResult match = SurfaceMatcher.match(normal, spec);
+                if (!match.eligible()) {
+                    continue;
+                }
+                if (!target.isSlopeEligible(x, y, z) || !passesSlopeInclination(normal)) {
+                    continue;
+                }
+                Facing facing = match.facing();
+                int[] dims = orientedSlopeDims(spec, facing);
+                Candidate candidate = buildCandidate(
+                    target, occupied, blocked, covered, x, y, z, dims[0], dims[1], spec, facing
+                );
+                if (candidate != null) {
+                    out.add(candidate);
+                }
+                continue;
+            }
+
+            Candidate identity = buildCandidate(
+                target, occupied, blocked, covered, x, y, z, spec.studX(), spec.studY(), spec, Facing.NONE
+            );
+            if (identity != null) {
+                out.add(identity);
+            }
+
+            if (spec.studX() != spec.studY()) {
+                Candidate rotated = buildCandidate(
+                    target, occupied, blocked, covered, x, y, z, spec.studY(), spec.studX(), spec, Facing.NONE
+                );
+                if (rotated != null) {
+                    out.add(rotated);
+                }
+            }
+        }
+        return out;
+    }
+
+    private Candidate buildCandidate(PlacementTargetGrid target,
+                                     boolean[][][] occupied,
+                                     boolean[][][] blocked,
+                                     boolean[][][] covered,
+                                     int x, int y, int z,
+                                     int studX, int studY,
+                                     BrickSpec spec,
+                                     Facing facing) {
+        PartMask mask = maskProvider.getMask(spec, facing, studX, studY);
+        List<Cell> solidCells = new ArrayList<>(mask.solidOccupancyMask().size());
+        List<Cell> coverageCells = new ArrayList<>(mask.topCoverageMask().size());
+        List<Cell> blockedCells = new ArrayList<>();
+
+        for (VoxelOffset offset : mask.solidOccupancyMask()) {
+            int cx = x + offset.dx();
+            int cy = y + offset.dy();
+            int cz = z + offset.dz();
+            if (!inBounds(target, cx, cy, cz)) return null;
+            if (occupied[cx][cy][cz]) return null;
+            if (blocked[cx][cy][cz]) return null;
+            // Hard constraint: no occupancy outside required target shell in v1.
+            if (!target.isRequired(cx, cy, cz)) return null;
+            solidCells.add(new Cell(cx, cy, cz));
+        }
+
+        int newCoverage = 0;
+        for (VoxelOffset offset : mask.topCoverageMask()) {
+            int cx = x + offset.dx();
+            int cy = y + offset.dy();
+            int cz = z + offset.dz();
+            if (!inBounds(target, cx, cy, cz)) return null;
+            if (!target.isRequired(cx, cy, cz)) return null; // no outside-target coverage
+            if (blocked[cx][cy][cz]) return null;
+            coverageCells.add(new Cell(cx, cy, cz));
+        }
+
+        if (facing != Facing.NONE) {
+            List<Cell> shadowCells = computeSlopeShadowCells(target, x, y, z, studX, studY, spec.heightUnits(), facing);
+            for (Cell shadow : shadowCells) {
+                if (blocked[shadow.x()][shadow.y()][shadow.z()]) {
+                    return null;
+                }
+                blockedCells.add(shadow);
+                // Treat slope shadow overlap with required surface as covered by the slope face.
+                if (target.isRequired(shadow.x(), shadow.y(), shadow.z())) {
+                    coverageCells.add(shadow);
+                }
+            }
+        }
+
+        coverageCells = dedupe(coverageCells);
+        blockedCells = dedupe(blockedCells);
+        for (Cell cell : coverageCells) {
+            if (!covered[cell.x()][cell.y()][cell.z()]) {
+                newCoverage++;
+            }
+        }
+
+        if (newCoverage <= 0) {
+            return null;
+        }
+
+        Brick brick = new Brick(x, y, z, studX, studY, spec.heightUnits(), spec.partId(), facing);
+        int colorHeight = spec.isSlope() ? 1 : spec.heightUnits();
+        double colorError = target.colorErrorForRegion(x, y, z, studX, studY, colorHeight);
+        return new Candidate(brick, solidCells, blockedCells, coverageCells, newCoverage, colorError);
+    }
+
+    private static boolean better(Candidate a, Candidate b) {
+        // Lexicographic proxy:
+        // 1) max new coverage (fewer pieces)
+        // 2) min color error
+        // 3) max solid voxels
+        // 4) deterministic tiebreakers
+        if (a.newCoverage() != b.newCoverage()) {
+            return a.newCoverage() > b.newCoverage();
+        }
+        int colorCmp = Double.compare(a.colorError(), b.colorError());
+        if (colorCmp != 0) {
+            return colorCmp < 0;
+        }
+        if (a.solidCells().size() != b.solidCells().size()) {
+            return a.solidCells().size() > b.solidCells().size();
+        }
+        Brick ab = a.brick();
+        Brick bb = b.brick();
+        if (ab.y() != bb.y()) return ab.y() < bb.y();
+        if (ab.z() != bb.z()) return ab.z() < bb.z();
+        if (ab.x() != bb.x()) return ab.x() < bb.x();
+        int idCmp = ab.partId().compareTo(bb.partId());
+        if (idCmp != 0) return idCmp < 0;
+        if (ab.studX() != bb.studX()) return ab.studX() > bb.studX();
+        return ab.studY() > bb.studY();
+    }
+
+    private static boolean inBounds(PlacementTargetGrid target, int x, int y, int z) {
+        return x >= 0 && x < target.width()
+            && y >= 0 && y < target.height()
+            && z >= 0 && z < target.depth();
+    }
+
+    private static boolean passesSlopeInclination(Vector3 normal) {
+        if (normal == null || normal.length() < 1e-6) {
+            return false;
+        }
+        double cosAngle = Math.abs(normal.y());
+        double inclination = Math.toDegrees(Math.acos(Math.min(1.0, cosAngle)));
+        return inclination >= MIN_SLOPE_INCLINATION_DEG;
+    }
+
+    private static int[] orientedSlopeDims(BrickSpec spec, Facing facing) {
+        if (facing == Facing.NORTH || facing == Facing.SOUTH) {
+            return new int[] { spec.studY(), spec.studX() };
+        }
+        return new int[] { spec.studX(), spec.studY() };
+    }
+
+    private static List<Cell> computeSlopeShadowCells(PlacementTargetGrid target,
+                                                      int x, int y, int z,
+                                                      int studX, int studY,
+                                                      int heightUnits,
+                                                      Facing facing) {
+        List<Cell> cells = new ArrayList<>();
+        for (int k = 0; k < heightUnits; k++) {
+            int shadowY = y + k;
+            if (shadowY >= target.height()) break;
+
+            for (int d = 1; d <= k + 1; d++) {
+                switch (facing) {
+                    case NORTH -> {
+                        int sz = z - d;
+                        if (sz < 0) continue;
+                        for (int cx = x; cx < x + studX; cx++) {
+                            if (cx >= 0 && cx < target.width()) {
+                                cells.add(new Cell(cx, shadowY, sz));
+                            }
+                        }
+                    }
+                    case SOUTH -> {
+                        int sz = z + studY - 1 + d;
+                        if (sz >= target.depth()) continue;
+                        for (int cx = x; cx < x + studX; cx++) {
+                            if (cx >= 0 && cx < target.width()) {
+                                cells.add(new Cell(cx, shadowY, sz));
+                            }
+                        }
+                    }
+                    case EAST -> {
+                        int sx = x + studX - 1 + d;
+                        if (sx >= target.width()) continue;
+                        for (int cz = z; cz < z + studY; cz++) {
+                            if (cz >= 0 && cz < target.depth()) {
+                                cells.add(new Cell(sx, shadowY, cz));
+                            }
+                        }
+                    }
+                    case WEST -> {
+                        int sx = x - d;
+                        if (sx < 0) continue;
+                        for (int cz = z; cz < z + studY; cz++) {
+                            if (cz >= 0 && cz < target.depth()) {
+                                cells.add(new Cell(sx, shadowY, cz));
+                            }
+                        }
+                    }
+                    default -> { }
+                }
+            }
+        }
+        return dedupe(cells);
+    }
+
+    private static List<Cell> dedupe(List<Cell> cells) {
+        List<Cell> out = new ArrayList<>(cells.size());
+        Set<String> seen = new HashSet<>();
+        for (Cell cell : cells) {
+            String key = cell.x() + "," + cell.y() + "," + cell.z();
+            if (seen.add(key)) {
+                out.add(cell);
+            }
+        }
+        return out;
+    }
+
+    private record Cell(int x, int y, int z) { }
+
+    private record Candidate(
+        Brick brick,
+        List<Cell> solidCells,
+        List<Cell> blockedCells,
+        List<Cell> coverageCells,
+        int newCoverage,
+        double colorError
+    ) { }
+}

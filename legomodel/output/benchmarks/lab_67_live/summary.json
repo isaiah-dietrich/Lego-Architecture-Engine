@@ -1,0 +1,23 @@
+{
+  "selectedPolicy": "cpsat-mask",
+  "baselinePolicy": "scoring",
+  "deltaVsBaseline": {
+    "collisionCount": 0,
+    "uncoveredRequiredCount": -512,
+    "outsideTargetCoverageCount": -78,
+    "shellLeakCount": -512,
+    "flatSlopeErrorCount": 0,
+    "pieceCount": -638,
+    "runtimeMs": 29751,
+    "meanDeltaE": 0.000000,
+    "p95DeltaE": 0.000000
+  },
+  "worksBetterCriteria": {
+    "hardGatesZero": true,
+    "flatSlopeErrorLowerThanScoring": false,
+    "shellLeakLowerThanScoring": true,
+    "pieceCountLEWhenHardGatesMet": true,
+    "meanDeltaELEWhenColorEnabled": true,
+    "runtimeWithin4xBudget": false
+  }
+}

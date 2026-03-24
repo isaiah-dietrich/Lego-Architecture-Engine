@@ -99,6 +99,7 @@ class MainTest {
         assertTrue(output.contains("--help"));
         assertTrue(output.contains("--color-mode"));
         assertTrue(output.contains("--placement-policy"));
+        assertTrue(output.contains("--benchmark-ab"));
         assertEquals("", errBuffer.toString(), "Help should not write to stderr");
     }
 
@@ -253,6 +254,61 @@ class MainTest {
         assertTrue(output.contains("Visual OBJ exported (voxel-solid):"));
         String content = Files.readString(outObj);
         assertTrue(content.contains("# LEGO Architecture Engine voxel export"));
+    }
+
+    @Test
+    void testBenchmarkAbWritesArtifacts() throws IOException {
+        Path objPath = tempDir.resolve("triangle.obj");
+        Files.writeString(objPath, """
+            v 0 0 0
+            v 1 0 0
+            v 0 1 0
+            f 1 2 3
+            """);
+        Path benchDir = tempDir.resolve("bench");
+
+        ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
+        ByteArrayOutputStream errBuffer = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(outBuffer);
+        PrintStream err = new PrintStream(errBuffer);
+
+        int exitCode = Main.run(new String[] {
+            objPath.toString(),
+            "4",
+            "--placement-policy=cpsat-mask",
+            "--benchmark-ab",
+            "--benchmark-dir=" + benchDir
+        }, out, err);
+
+        assertEquals(0, exitCode, "stderr=" + errBuffer);
+        assertTrue(Files.exists(benchDir.resolve("aggregate.csv")));
+        assertTrue(Files.exists(benchDir.resolve("summary.json")));
+        assertTrue(Files.exists(benchDir.resolve("scoring_metrics.json")));
+        assertTrue(Files.exists(benchDir.resolve("cpsat-mask_metrics.json")));
+
+        String scoringMetricsJson = Files.readString(benchDir.resolve("scoring_metrics.json"));
+        assertTrue(scoringMetricsJson.contains("\"typedCollisionCounts\""));
+        assertTrue(scoringMetricsJson.contains("\"typedCollisionUnits\""));
+        assertTrue(scoringMetricsJson.contains("\"overlapPlacementCount\""));
+        assertTrue(scoringMetricsJson.contains("\"shellLeakResidualVoxelCount\""));
+
+        String aggregateCsv = Files.readString(benchDir.resolve("aggregate.csv"));
+        assertTrue(aggregateCsv.contains("overlapPlacementCount"));
+        assertTrue(aggregateCsv.contains("outsideCoveragePlacementCount"));
+        assertTrue(aggregateCsv.contains("slopeAngleMismatchPlacementCount"));
+        assertTrue(aggregateCsv.contains("slopeFacingMismatchPlacementCount"));
+        assertTrue(aggregateCsv.contains("slopeMissingNormalPlacementCount"));
+        assertTrue(aggregateCsv.contains("slopeShadowIntrusionPlacementCount"));
+        assertTrue(aggregateCsv.contains("slopeAdjacentTallFlatConflictPlacementCount"));
+        assertTrue(aggregateCsv.contains("shellLeakResidualVoxelCount"));
+
+        String summaryJson = Files.readString(benchDir.resolve("summary.json"));
+        assertTrue(summaryJson.contains("\"typedCollisionDeltas\""));
+        assertTrue(summaryJson.contains("\"typedHardGatesZero\""));
+
+        String output = outBuffer.toString();
+        assertTrue(output.contains("Typed Collisions:"));
+        assertTrue(output.contains("Typed delta vs scoring:"));
     }
 
     @Test

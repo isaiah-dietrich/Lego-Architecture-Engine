@@ -21,9 +21,11 @@ import com.lego.model.ColorRgb;
 import com.lego.model.Mesh;
 import com.lego.optimize.AllowedBrickDimensions;
 import com.lego.optimize.BrickPlacer;
+import com.lego.optimize.CpsatMaskPlacementPolicy;
 import com.lego.optimize.GreedyAreaPolicy;
 import com.lego.optimize.PlacementFeatureGrid;
 import com.lego.optimize.PlacementPolicy;
+import com.lego.optimize.PlacementStatsProvider;
 import com.lego.optimize.ScoringPlacementPolicy;
 import com.lego.voxel.SurfaceExtractor;
 import com.lego.voxel.VoxelGrid;
@@ -70,21 +72,28 @@ public final class PipelineRunner {
                 ? solid
                 : SurfaceExtractor.extractSurface(solid);
 
-            PlacementPolicy placementPolicy = resolvePolicy(request.placementPolicy());
+            PlacementFeatureGrid featureGrid = null;
+            boolean needsFeatureGrid = "glb-color".equals(request.colorMode())
+                && loaded.colorMap().isPresent()
+                && (request.benchmarkAb()
+                    || "scoring".equalsIgnoreCase(request.placementPolicy())
+                    || "cpsat-mask".equalsIgnoreCase(request.placementPolicy()));
 
-            // Color-aware scoring: sample voxel colors before placement
-            if (placementPolicy instanceof ScoringPlacementPolicy
-                    && "glb-color".equals(request.colorMode())
-                    && loaded.colorMap().isPresent()) {
+            if (needsFeatureGrid) {
                 ColorRgb[][][] voxelColors = ColorSampler.sampleVoxelColorGridDominant(
                     mesh, normalized, loaded.colorMap().get(), surface, request.resolution());
                 LegoPaletteMapper paletteForVariance = paletteRepository.loadPalette();
-                PlacementFeatureGrid featureGrid = ColorFeatureGridFactory.create(voxelColors, paletteForVariance);
-                placementPolicy = new ScoringPlacementPolicy(featureGrid);
+                featureGrid = ColorFeatureGridFactory.create(voxelColors, paletteForVariance);
             }
 
+            PlacementPolicy placementPolicy = resolvePolicy(request.placementPolicy(), featureGrid);
             var allowedDims = AllowedBrickDimensions.loadFromRepository(catalogRepository);
+            long placementStartNanos = System.nanoTime();
             List<Brick> bricks = BrickPlacer.placeBricks(surface, allowedDims, placementPolicy);
+            long placementRuntimeMs = (System.nanoTime() - placementStartNanos) / 1_000_000L;
+            int peakCandidateCount = (placementPolicy instanceof PlacementStatsProvider statsProvider)
+                ? statsProvider.peakCandidateCount()
+                : 0;
 
             // Colorize bricks if in LDraw + glb-color mode
             Map<Brick, Integer> brickColorCodes = null;
@@ -144,6 +153,25 @@ public final class PipelineRunner {
                 }
             }
 
+            if (request.benchmarkAb()) {
+                try {
+                    PolicyBenchmarkRunner.runAndWrite(
+                        request,
+                        out,
+                        surface,
+                        allowedDims,
+                        featureGrid,
+                        request.placementPolicy(),
+                        bricks,
+                        placementRuntimeMs,
+                        peakCandidateCount
+                    );
+                } catch (IOException e) {
+                    err.println("Error: failed to write benchmark files: " + e.getMessage());
+                    return 1;
+                }
+            }
+
             return 0;
         } catch (IOException e) {
             err.println("Error: failed to read OBJ file: " + e.getMessage());
@@ -158,12 +186,13 @@ public final class PipelineRunner {
     }
 
     /** Resolves a PlacementPolicy by name. */
-    private static PlacementPolicy resolvePolicy(String name) {
+    private static PlacementPolicy resolvePolicy(String name, PlacementFeatureGrid featureGrid) {
         return switch (name.toLowerCase()) {
-            case "scoring" -> new ScoringPlacementPolicy();
+            case "scoring" -> new ScoringPlacementPolicy(featureGrid);
             case "greedy-area" -> new GreedyAreaPolicy();
+            case "cpsat-mask" -> new CpsatMaskPlacementPolicy(featureGrid);
             default -> throw new IllegalArgumentException(
-                "Unknown placement policy: '" + name + "'. Use 'scoring' or 'greedy-area'."
+                "Unknown placement policy: '" + name + "'. Use 'scoring', 'greedy-area', or 'cpsat-mask'."
             );
         };
     }

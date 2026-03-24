@@ -1,0 +1,23 @@
+{
+  "policy": "scoring",
+  "quality": {
+    "collisionCount": 0,
+    "uncoveredRequiredCount": 512,
+    "outsideTargetCoverageCount": 78,
+    "shellLeakCount": 512
+  },
+  "slopeBehavior": {
+    "slopePlacementCount": 83,
+    "flatSlopeErrorCount": 0,
+    "slopeFacingConsistency": 1.000000
+  },
+  "efficiency": {
+    "pieceCount": 2712,
+    "runtimeMs": 220,
+    "peakCandidateCount": 0
+  },
+  "color": {
+    "meanDeltaE": -1.000000,
+    "p95DeltaE": -1.000000
+  }
+}

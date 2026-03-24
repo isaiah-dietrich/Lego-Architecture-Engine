@@ -44,6 +44,19 @@ Arguments:
 - `exportMode` (optional) - `brick` (default), `voxel-surface`, `voxel-solid`
 - `voxelizerMode` (optional) - `legacy` (default), `topological` (placeholder scaffold)
 
+## Exact Geometry Collision Check (LDraw)
+
+For `.ldr` outputs, a mesh-based collision diagnostic script is available:
+
+```bash
+python3 scripts/exact_geometry_collision_check.py output/lab40v2_color.ldr --mode slope
+```
+
+Options:
+- `--parts-dir` path to local LDraw library (default: `/Applications/Studio 2.0/ldraw`)
+- `--step` LDU sampling step (smaller is stricter/slower; default `2.0`)
+- `--mode` `slope` (default, slope-involved pairs only) or `all`
+
 ## Requirements
 
 - Java 17+
