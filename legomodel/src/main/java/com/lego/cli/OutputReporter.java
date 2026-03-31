@@ -96,24 +96,59 @@ final class OutputReporter {
 
     /** Prints command-line usage instructions. */
     static void printUsage(PrintStream stream) {
+        boolean toolingAvailable = isToolingAvailable();
+        boolean legacyAvailable = isLegacyAvailable();
+
         stream.println("Usage: java -jar legomodel.jar <modelPath> <resolution> [outputObjPath] [exportMode] [voxelizerMode] [options]");
         stream.println("  modelPath: path to a .obj or .glb model file");
         stream.println("  resolution: voxel grid resolution (integer >= 2)");
         stream.println("  outputObjPath: path for the exported output file");
         stream.println("  exportMode: 'brick' (default), 'voxel-surface', 'voxel-solid', 'voxel-slope-surface', 'voxel-surface-combined', 'voxel-slope-placed', or 'ldraw'");
-        stream.println("  voxelizerMode: 'topological' (default) or 'legacy'");
+        if (legacyAvailable) {
+            stream.println("  voxelizerMode: 'topological' (default) or 'legacy'");
+        } else {
+            stream.println("  voxelizerMode: 'topological' (default)");
+        }
         stream.println("  options:");
         stream.println("    -h, --help                     Show this help message and exit");
-        stream.println("    --analyze-stepping             Write stepping analysis files");
-        stream.println("    --analysis-dir=<path>          Output directory for analysis artifacts");
-        stream.println("    --jump-threshold=<int>         Large jump threshold (default: 25)");
-        stream.println("    --sweep=<r1,r2,...>            Analyze multiple resolutions (e.g., 10,20,30)");
-        stream.println("    --color-mode=<mode>            Color mode: 'none' (default) or 'glb-color'");
+        stream.println("    --color-mode=<mode>            Color mode: 'glb-color' (default) or 'none'");
         stream.println("    --color-fallback=<code>        LDraw color code for bricks without sampled color");
         stream.println("    --color-list                   Output list of unique color codes used in LDraw export");
         stream.println("    --color-algorithm=<name>       Color mapping algorithm (default: direct). Use 'list' to see all.");
-        stream.println("    --placement-policy=<name>      Brick placement policy: 'scoring' (default), 'greedy-area', or 'cpsat-mask'");
-        stream.println("    --benchmark-ab                 Run A/B metrics for 'scoring' vs selected policy and write reports");
-        stream.println("    --benchmark-dir=<path>         Directory for benchmark artifacts (default: output/benchmarks/<run-id>)");
+        stream.println("    --ldraw-library-dir=<path>     Local LDraw library root for geometry-backed placement masks");
+        stream.println("    --geometry-mask-cache-dir=<path>  Cache directory for geometry-derived part masks");
+        if (toolingAvailable) {
+            stream.println("    --analyze-stepping             Write stepping analysis files");
+            stream.println("    --analysis-dir=<path>          Output directory for analysis artifacts");
+            stream.println("    --jump-threshold=<int>         Large jump threshold (default: 25)");
+            stream.println("    --sweep=<r1,r2,...>            Analyze multiple resolutions (e.g., 10,20,30)");
+            stream.println("    --benchmark-ab                 Run A/B metrics for 'scoring' vs selected policy and write reports");
+            stream.println("    --benchmark-dir=<path>         Directory for benchmark artifacts (default: output/benchmarks/<run-id>)");
+        }
+        if (!toolingAvailable) {
+            stream.println("    (tooling options available in builds compiled with -Ptooling or -Pfull)");
+        }
+        if (!legacyAvailable) {
+            stream.println("    (legacy options available in builds compiled with -Plegacy or -Pfull)");
+        }
+    }
+
+    private static boolean isToolingAvailable() {
+        try {
+            Class.forName("com.lego.cli.PolicyBenchmarkRunner");
+            Class.forName("com.lego.cli.AnalysisCoordinator");
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+    }
+
+    private static boolean isLegacyAvailable() {
+        try {
+            Class.forName("com.lego.voxel.LegacyVoxelizer");
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
     }
 }

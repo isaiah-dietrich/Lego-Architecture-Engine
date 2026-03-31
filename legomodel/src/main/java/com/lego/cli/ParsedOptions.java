@@ -15,10 +15,12 @@ record ParsedOptions(
     int largeJumpThreshold,
     List<Integer> sweepResolutions,
     String colorMode,
+    boolean colorModeExplicit,
     int colorFallback,
     boolean colorList,
     String colorAlgorithm,
-    String placementPolicy,
     boolean benchmarkAb,
-    Path benchmarkDir
+    Path benchmarkDir,
+    Path ldrawLibraryDir,
+    Path geometryMaskCacheDir
 ) {}

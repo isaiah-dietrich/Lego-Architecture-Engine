@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -98,7 +99,7 @@ class MainTest {
         assertTrue(output.contains("Usage:"));
         assertTrue(output.contains("--help"));
         assertTrue(output.contains("--color-mode"));
-        assertTrue(output.contains("--placement-policy"));
+        assertTrue(output.contains("--ldraw-library-dir"));
         assertTrue(output.contains("--benchmark-ab"));
         assertEquals("", errBuffer.toString(), "Help should not write to stderr");
     }
@@ -258,6 +259,7 @@ class MainTest {
 
     @Test
     void testBenchmarkAbWritesArtifacts() throws IOException {
+        Assumptions.assumeTrue(isLegacyAvailable(), "Legacy profile not enabled");
         Path objPath = tempDir.resolve("triangle.obj");
         Files.writeString(objPath, """
             v 0 0 0
@@ -275,7 +277,6 @@ class MainTest {
         int exitCode = Main.run(new String[] {
             objPath.toString(),
             "4",
-            "--placement-policy=cpsat-mask",
             "--benchmark-ab",
             "--benchmark-dir=" + benchDir
         }, out, err);
@@ -284,15 +285,17 @@ class MainTest {
         assertTrue(Files.exists(benchDir.resolve("aggregate.csv")));
         assertTrue(Files.exists(benchDir.resolve("summary.json")));
         assertTrue(Files.exists(benchDir.resolve("scoring_metrics.json")));
-        assertTrue(Files.exists(benchDir.resolve("cpsat-mask_metrics.json")));
+        assertTrue(Files.exists(benchDir.resolve("mask_metrics.json")));
 
         String scoringMetricsJson = Files.readString(benchDir.resolve("scoring_metrics.json"));
+        assertTrue(scoringMetricsJson.contains("\"maskSource\""));
         assertTrue(scoringMetricsJson.contains("\"typedCollisionCounts\""));
         assertTrue(scoringMetricsJson.contains("\"typedCollisionUnits\""));
         assertTrue(scoringMetricsJson.contains("\"overlapPlacementCount\""));
         assertTrue(scoringMetricsJson.contains("\"shellLeakResidualVoxelCount\""));
 
         String aggregateCsv = Files.readString(benchDir.resolve("aggregate.csv"));
+        assertTrue(aggregateCsv.contains("maskSource"));
         assertTrue(aggregateCsv.contains("overlapPlacementCount"));
         assertTrue(aggregateCsv.contains("outsideCoveragePlacementCount"));
         assertTrue(aggregateCsv.contains("slopeAngleMismatchPlacementCount"));
@@ -303,10 +306,12 @@ class MainTest {
         assertTrue(aggregateCsv.contains("shellLeakResidualVoxelCount"));
 
         String summaryJson = Files.readString(benchDir.resolve("summary.json"));
+        assertTrue(summaryJson.contains("\"maskSource\""));
         assertTrue(summaryJson.contains("\"typedCollisionDeltas\""));
         assertTrue(summaryJson.contains("\"typedHardGatesZero\""));
 
         String output = outBuffer.toString();
+        assertTrue(output.contains("Mask source:"));
         assertTrue(output.contains("Typed Collisions:"));
         assertTrue(output.contains("Typed delta vs scoring:"));
     }
@@ -545,6 +550,7 @@ class MainTest {
 
     @Test
     void testExplicitLegacyVoxelizerModeWorks() throws IOException {
+        Assumptions.assumeTrue(isLegacyAvailable(), "Legacy profile not enabled");
         Path objPath = tempDir.resolve("triangle.obj");
         Path outObj = tempDir.resolve("legacy_mode.obj");
         Files.writeString(objPath, """
@@ -804,6 +810,7 @@ class MainTest {
 
     @Test
     void testAnalyzeSteppingWritesMetricsFiles() throws IOException {
+        Assumptions.assumeTrue(isLegacyAvailable(), "Legacy profile not enabled");
         Path objPath = tempDir.resolve("triangle.obj");
         Path outObj = tempDir.resolve("triangle_out.obj");
         Path analysisDir = tempDir.resolve("analysis");
@@ -838,6 +845,7 @@ class MainTest {
 
     @Test
     void testAnalyzeSteppingSweepWritesComparativeFiles() throws IOException {
+        Assumptions.assumeTrue(isLegacyAvailable(), "Legacy profile not enabled");
         Path objPath = tempDir.resolve("triangle.obj");
         Path outObj = tempDir.resolve("triangle_sweep.obj");
         Path analysisDir = tempDir.resolve("analysis_sweep");
@@ -1102,6 +1110,15 @@ class MainTest {
             "15,White,FFFFFF,FALSE\n" +
             "16,Main Colour,000000,FALSE\n";
         Files.writeString(paletteDir.resolve("colors.csv"), csv);
+    }
+
+    private static boolean isLegacyAvailable() {
+        try {
+            Class.forName("com.lego.voxel.LegacyVoxelizer");
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
     }
 
 }

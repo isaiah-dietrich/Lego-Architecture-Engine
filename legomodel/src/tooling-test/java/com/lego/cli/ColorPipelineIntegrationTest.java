@@ -106,7 +106,7 @@ class ColorPipelineIntegrationTest {
     }
 
     @Test
-    void noColorModeProducesDefaultColor16() throws IOException {
+    void noColorModeDefaultsToGlbColor() throws IOException {
         Path glbPath = tempDir.resolve("colored_cube.glb");
         writeCubeGlb(glbPath, new float[] { 1f, 0f, 0f, 1f }); // red material
 
@@ -118,7 +118,7 @@ class ColorPipelineIntegrationTest {
         ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
         ByteArrayOutputStream errBuffer = new ByteArrayOutputStream();
 
-        // No --color-mode flag → defaults to "none"
+        // No --color-mode flag → defaults to "glb-color"
         int exitCode = Main.run(new String[] {
             glbPath.toString(), "8", ldrPath.toString(), "ldraw"
         }, new PrintStream(outBuffer), new PrintStream(errBuffer), tempDir);
@@ -132,11 +132,16 @@ class ColorPipelineIntegrationTest {
 
         assertFalse(partLines.isEmpty());
 
-        // Without --color-mode=glb-color, colors should NOT flow through — all default 16
+        // With default glb-color, colors should flow through (red => code 4)
+        boolean sawRed = false;
         for (String line : partLines) {
-            assertTrue(line.startsWith("1 16 "),
-                "Without color mode, all bricks should use default color 16. Got: " + line);
+            assertFalse(line.startsWith("1 16 "),
+                "With default glb-color, bricks should not use default color 16. Got: " + line);
+            if (line.startsWith("1 4 ")) {
+                sawRed = true;
+            }
         }
+        assertTrue(sawRed, "Expected at least one red brick (color code 4) from GLB color mapping.");
     }
 
     @Test

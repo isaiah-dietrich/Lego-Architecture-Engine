@@ -8,6 +8,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -143,6 +144,7 @@ class VoxelSteppingAnalyzerTest {
 
     @Test
     void testResolutionSweepProducesComparativeEntries() {
+        Assumptions.assumeTrue(isLegacyAvailable(), "Legacy profile not enabled");
         Mesh mesh = createSingleTriangleMesh();
 
         ResolutionSweepResult sweep = VoxelSteppingAnalyzer.runResolutionSweep(
@@ -175,6 +177,15 @@ class VoxelSteppingAnalyzerTest {
                 grid.setFilled(x, y, z, true);
                 filled++;
             }
+        }
+    }
+
+    private static boolean isLegacyAvailable() {
+        try {
+            Class.forName("com.lego.voxel.LegacyVoxelizer");
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
         }
     }
 }
