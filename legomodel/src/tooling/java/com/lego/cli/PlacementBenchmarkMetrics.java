@@ -5,6 +5,7 @@ package com.lego.cli;
  */
 record PlacementBenchmarkMetrics(
     String policyName,
+    String maskSource,
     int collisionCount,
     int uncoveredRequiredCount,
     int outsideTargetCoverageCount,
@@ -30,7 +31,7 @@ record PlacementBenchmarkMetrics(
     static final String UNIT_VOXELS = "voxels";
 
     static String csvHeader() {
-        return "policy,collisionCount,uncoveredRequiredCount,outsideTargetCoverageCount,shellLeakCount,"
+        return "policy,maskSource,collisionCount,uncoveredRequiredCount,outsideTargetCoverageCount,shellLeakCount,"
             + "slopePlacementCount,flatSlopeErrorCount,slopeFacingConsistency,"
             + "overlapPlacementCount,outsideCoveragePlacementCount,slopeAngleMismatchPlacementCount,"
             + "slopeFacingMismatchPlacementCount,slopeMissingNormalPlacementCount,"
@@ -41,6 +42,7 @@ record PlacementBenchmarkMetrics(
 
     String toCsvRow() {
         return policyName + ","
+            + maskSource + ","
             + collisionCount + ","
             + uncoveredRequiredCount + ","
             + outsideTargetCoverageCount + ","

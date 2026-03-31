@@ -2,6 +2,8 @@ package com.lego.cli;
 
 import java.io.IOException;
 import java.io.PrintStream;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
 
@@ -21,12 +23,11 @@ import com.lego.model.ColorRgb;
 import com.lego.model.Mesh;
 import com.lego.optimize.AllowedBrickDimensions;
 import com.lego.optimize.BrickPlacer;
-import com.lego.optimize.CpsatMaskPlacementPolicy;
-import com.lego.optimize.GreedyAreaPolicy;
+import com.lego.optimize.GeometryPartMaskProvider;
+import com.lego.optimize.MaskPlacementPolicy;
+import com.lego.optimize.PartMaskProvider;
 import com.lego.optimize.PlacementFeatureGrid;
-import com.lego.optimize.PlacementPolicy;
 import com.lego.optimize.PlacementStatsProvider;
-import com.lego.optimize.ScoringPlacementPolicy;
 import com.lego.voxel.SurfaceExtractor;
 import com.lego.voxel.VoxelGrid;
 import com.lego.voxel.VoxelizationStrategy;
@@ -73,27 +74,22 @@ public final class PipelineRunner {
                 : SurfaceExtractor.extractSurface(solid);
 
             PlacementFeatureGrid featureGrid = null;
-            boolean needsFeatureGrid = "glb-color".equals(request.colorMode())
-                && loaded.colorMap().isPresent()
-                && (request.benchmarkAb()
-                    || "scoring".equalsIgnoreCase(request.placementPolicy())
-                    || "cpsat-mask".equalsIgnoreCase(request.placementPolicy()));
-
-            if (needsFeatureGrid) {
+            if ("glb-color".equals(request.colorMode()) && loaded.colorMap().isPresent()) {
                 ColorRgb[][][] voxelColors = ColorSampler.sampleVoxelColorGridDominant(
                     mesh, normalized, loaded.colorMap().get(), surface, request.resolution());
                 LegoPaletteMapper paletteForVariance = paletteRepository.loadPalette();
                 featureGrid = ColorFeatureGridFactory.create(voxelColors, paletteForVariance);
             }
 
-            PlacementPolicy placementPolicy = resolvePolicy(request.placementPolicy(), featureGrid);
+            PartMaskProvider maskProvider = new GeometryPartMaskProvider(
+                request.ldrawLibraryDir(), request.geometryMaskCacheDir());
+
+            MaskPlacementPolicy placementPolicy = new MaskPlacementPolicy(featureGrid, maskProvider);
             var allowedDims = AllowedBrickDimensions.loadFromRepository(catalogRepository);
             long placementStartNanos = System.nanoTime();
             List<Brick> bricks = BrickPlacer.placeBricks(surface, allowedDims, placementPolicy);
             long placementRuntimeMs = (System.nanoTime() - placementStartNanos) / 1_000_000L;
-            int peakCandidateCount = (placementPolicy instanceof PlacementStatsProvider statsProvider)
-                ? statsProvider.peakCandidateCount()
-                : 0;
+            int peakCandidateCount = placementPolicy.peakCandidateCount();
 
             // Colorize bricks if in LDraw + glb-color mode
             Map<Brick, Integer> brickColorCodes = null;
@@ -146,7 +142,7 @@ public final class PipelineRunner {
 
             if (request.analyzeStepping()) {
                 try {
-                    AnalysisCoordinator.runAnalysis(request, mesh, solid, surface, out);
+                    runToolingAnalysis(request, mesh, solid, surface, out);
                 } catch (IOException e) {
                     err.println("Error: failed to write stepping analysis files: " + e.getMessage());
                     return 1;
@@ -155,16 +151,18 @@ public final class PipelineRunner {
 
             if (request.benchmarkAb()) {
                 try {
-                    PolicyBenchmarkRunner.runAndWrite(
+                    runToolingBenchmark(
                         request,
                         out,
                         surface,
                         allowedDims,
                         featureGrid,
-                        request.placementPolicy(),
+                        placementPolicy.name(),
                         bricks,
                         placementRuntimeMs,
-                        peakCandidateCount
+                        peakCandidateCount,
+                        maskProvider,
+                        MaskSource.GEOMETRY
                     );
                 } catch (IOException e) {
                     err.println("Error: failed to write benchmark files: " + e.getMessage());
@@ -185,15 +183,67 @@ public final class PipelineRunner {
         }
     }
 
-    /** Resolves a PlacementPolicy by name. */
-    private static PlacementPolicy resolvePolicy(String name, PlacementFeatureGrid featureGrid) {
-        return switch (name.toLowerCase()) {
-            case "scoring" -> new ScoringPlacementPolicy(featureGrid);
-            case "greedy-area" -> new GreedyAreaPolicy();
-            case "cpsat-mask" -> new CpsatMaskPlacementPolicy(featureGrid);
-            default -> throw new IllegalArgumentException(
-                "Unknown placement policy: '" + name + "'. Use 'scoring', 'greedy-area', or 'cpsat-mask'."
-            );
-        };
+    private static void runToolingAnalysis(PipelineRequest request,
+                                           Mesh mesh,
+                                           VoxelGrid solid,
+                                           VoxelGrid surface,
+                                           PrintStream out) throws IOException {
+        invokeToolingMethod(
+            "com.lego.cli.AnalysisCoordinator",
+            "runAnalysis",
+            new Class<?>[] { PipelineRequest.class, Mesh.class, VoxelGrid.class, VoxelGrid.class, PrintStream.class },
+            new Object[] { request, mesh, solid, surface, out }
+        );
+    }
+
+    private static void runToolingBenchmark(PipelineRequest request,
+                                            PrintStream out,
+                                            VoxelGrid surface,
+                                            List<AllowedBrickDimensions.BrickSpec> allowedDims,
+                                            PlacementFeatureGrid featureGrid,
+                                            String selectedPolicyName,
+                                            List<Brick> selectedBricks,
+                                            long selectedRuntimeMs,
+                                            int selectedPeakCandidateCount,
+                                            PartMaskProvider maskProvider,
+                                            MaskSource maskSource) throws IOException {
+        invokeToolingMethod(
+            "com.lego.cli.PolicyBenchmarkRunner",
+            "runAndWrite",
+            new Class<?>[] {
+                PipelineRequest.class, PrintStream.class, VoxelGrid.class,
+                List.class, PlacementFeatureGrid.class, String.class, List.class,
+                long.class, int.class, PartMaskProvider.class, MaskSource.class
+            },
+            new Object[] {
+                request, out, surface, allowedDims, featureGrid, selectedPolicyName, selectedBricks,
+                selectedRuntimeMs, selectedPeakCandidateCount, maskProvider, maskSource
+            }
+        );
+    }
+
+    private static void invokeToolingMethod(String className,
+                                            String methodName,
+                                            Class<?>[] parameterTypes,
+                                            Object[] args) throws IOException {
+        try {
+            Class<?> type = Class.forName(className);
+            Method method = type.getDeclaredMethod(methodName, parameterTypes);
+            method.setAccessible(true);
+            method.invoke(null, args);
+        } catch (ClassNotFoundException e) {
+            throw new IllegalStateException("Tooling features are not available in this build. Rebuild with -Ptooling.");
+        } catch (NoSuchMethodException | IllegalAccessException e) {
+            throw new IllegalStateException("Tooling feature '" + methodName + "' is incompatible: " + e.getMessage(), e);
+        } catch (InvocationTargetException e) {
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
+            if (cause instanceof IOException io) {
+                throw io;
+            }
+            if (cause instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            throw new IllegalStateException("Tooling feature '" + methodName + "' failed: " + cause.getMessage(), cause);
+        }
     }
 }

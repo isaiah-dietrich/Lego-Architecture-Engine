@@ -116,7 +116,7 @@ class PlacementBenchmarkCalculatorTypedCollisionTest {
     }
 
     @Test
-    void overlapPlacementCount_cpsatMaskUsesMaskOccupancyNotAabb() {
+    void overlapPlacementCount_maskUsesMaskOccupancyNotAabb() {
         VoxelGrid surface = filledSurface(6, 6, 6);
         List<Brick> bricks = List.of(
             new Brick(0, 0, 0, 2, 2, 3, "3039", Facing.NORTH),
@@ -124,25 +124,25 @@ class PlacementBenchmarkCalculatorTypedCollisionTest {
         );
 
         PlacementBenchmarkMetrics baselineStyle = metrics("test-policy", surface, bricks);
-        PlacementBenchmarkMetrics cpsatStyle = metrics("cpsat-mask", surface, bricks);
+        PlacementBenchmarkMetrics maskStyle = metrics("mask", surface, bricks);
 
         assertEquals(2, baselineStyle.overlapPlacementCount(),
             "AABB-style overlap should count both placements");
-        assertEquals(0, cpsatStyle.overlapPlacementCount(),
-            "CPSAT overlap must be mask-based and ignore non-overlapping occupied voxels");
+        assertEquals(0, maskStyle.overlapPlacementCount(),
+            "Mask overlap must be mask-based and ignore non-overlapping occupied voxels");
     }
 
     @Test
-    void overlapPlacementCount_cpsatMaskDetectsRealMaskOverlap() {
+    void overlapPlacementCount_maskDetectsRealMaskOverlap() {
         VoxelGrid surface = filledSurface(6, 6, 6);
         List<Brick> bricks = List.of(
             new Brick(0, 0, 0, 2, 2, 1, "3003"),
             new Brick(1, 0, 0, 2, 2, 1, "3003")
         );
 
-        PlacementBenchmarkMetrics metrics = metrics("cpsat-mask", surface, bricks);
+        PlacementBenchmarkMetrics metrics = metrics("mask", surface, bricks);
         assertEquals(2, metrics.overlapPlacementCount(),
-            "CPSAT overlap should count true occupied-voxel overlaps");
+            "Mask overlap should count true occupied-voxel overlaps");
     }
 
     private static PlacementBenchmarkMetrics metrics(VoxelGrid surface, List<Brick> bricks) {

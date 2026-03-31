@@ -160,6 +160,14 @@ public final class Main {
             OutputReporter.printUsage(err);
             return null;
         }
+        if (voxelizationStrategy == VoxelizationStrategy.LEGACY && !isLegacyAvailable()) {
+            err.println("Error: legacy features are not available in this build. Rebuild with -Plegacy (or -Pfull).");
+            return null;
+        }
+        if (usesToolingFeatures(opts) && !isToolingAvailable()) {
+            err.println("Error: tooling features are not available in this build. Rebuild with -Ptooling (or -Pfull).");
+            return null;
+        }
 
         String colorAlgorithm = opts.colorAlgorithm();
         if (!strategyRegistry.availableNames().contains(colorAlgorithm.toLowerCase())) {
@@ -168,11 +176,15 @@ public final class Main {
             return null;
         }
 
-        if ("glb-color".equals(opts.colorMode())) {
+        String colorMode = opts.colorMode();
+        if ("glb-color".equals(colorMode)) {
             String filename = modelPath.getFileName().toString().toLowerCase();
-            if (filename.endsWith(".obj")) {
+            if (filename.endsWith(".obj") && opts.colorModeExplicit()) {
                 err.println("Error: --color-mode=glb-color is not supported with .obj input. OBJ files have no color channel.");
                 return null;
+            }
+            if (filename.endsWith(".obj")) {
+                colorMode = "none";
             }
         }
 
@@ -182,18 +194,47 @@ public final class Main {
             outputPath,
             exportMode,
             voxelizationStrategy,
-            opts.colorMode(),
+            colorMode,
             opts.colorFallback(),
             opts.colorList(),
             colorAlgorithm,
-            opts.placementPolicy(),
             opts.analyzeStepping(),
             opts.analysisDir(),
             opts.largeJumpThreshold(),
             opts.sweepResolutions(),
             opts.benchmarkAb(),
-            opts.benchmarkDir()
+            opts.benchmarkDir(),
+            opts.ldrawLibraryDir(),
+            opts.geometryMaskCacheDir()
         );
+    }
+
+    private static boolean usesToolingFeatures(ParsedOptions opts) {
+        return opts.analyzeStepping()
+            || opts.analysisDir() != null
+            || opts.largeJumpThreshold() != 25
+            || !opts.sweepResolutions().isEmpty()
+            || opts.benchmarkAb()
+            || opts.benchmarkDir() != null;
+    }
+
+    private static boolean isToolingAvailable() {
+        try {
+            Class.forName("com.lego.cli.PolicyBenchmarkRunner");
+            Class.forName("com.lego.cli.AnalysisCoordinator");
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+    }
+
+    private static boolean isLegacyAvailable() {
+        try {
+            Class.forName("com.lego.voxel.LegacyVoxelizer");
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
     }
 
     /** Selects the appropriate ModelLoader implementation based on the file extension. */

@@ -288,6 +288,7 @@ class ColorAccuracyTest {
                 glb.toString(),
                 String.valueOf(RESOLUTION),
                 ldr.toString(), "ldraw", "topological",
+                "--placement-policy=scoring",
                 "--color-mode=glb-color",
                 "--color-algorithm=" + algorithm,
                 "--color-list"

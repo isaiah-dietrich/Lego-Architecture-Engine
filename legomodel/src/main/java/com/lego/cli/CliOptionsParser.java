@@ -20,13 +20,15 @@ final class CliOptionsParser {
         Path analysisDir = null;
         int jumpThreshold = 25;
         List<Integer> sweepResolutions = new ArrayList<>();
-        String colorMode = "none";
+        String colorMode = "glb-color";
+        boolean colorModeExplicit = false;
         int colorFallback = -1;
         boolean colorList = false;
         String colorAlgorithm = "direct";
-        String placementPolicy = "scoring";
         boolean benchmarkAb = false;
         Path benchmarkDir = null;
+        Path ldrawLibraryDir = null;
+        Path geometryMaskCacheDir = null;
 
         for (int i = 0; i < args.length; i++) {
             String arg = args[i];
@@ -51,6 +53,7 @@ final class CliOptionsParser {
                     sweepResolutions = parseSweepResolutions(val);
                 case "--color-mode" -> {
                     colorMode = val;
+                    colorModeExplicit = true;
                     if (!"none".equals(colorMode) && !"glb-color".equals(colorMode)) {
                         throw new IllegalArgumentException(
                             "Invalid --color-mode: " + colorMode + ". Use 'none' or 'glb-color'."
@@ -61,7 +64,6 @@ final class CliOptionsParser {
                     colorFallback = parseNonNegativeInt(val, "color-fallback");
                 case "--color-list" -> colorList = true;
                 case "--color-algorithm" -> colorAlgorithm = val;
-                case "--placement-policy" -> placementPolicy = val;
                 case "--benchmark-ab" -> benchmarkAb = true;
                 case "--benchmark-dir" -> {
                     if (val != null) {
@@ -72,13 +74,32 @@ final class CliOptionsParser {
                         benchmarkDir = Path.of(args[++i]);
                     }
                 }
+                case "--ldraw-library-dir" -> {
+                    if (val != null) {
+                        ldrawLibraryDir = Path.of(val);
+                    } else if (i + 1 >= args.length) {
+                        throw new IllegalArgumentException("--ldraw-library-dir requires a value");
+                    } else {
+                        ldrawLibraryDir = Path.of(args[++i]);
+                    }
+                }
+                case "--geometry-mask-cache-dir" -> {
+                    if (val != null) {
+                        geometryMaskCacheDir = Path.of(val);
+                    } else if (i + 1 >= args.length) {
+                        throw new IllegalArgumentException("--geometry-mask-cache-dir requires a value");
+                    } else {
+                        geometryMaskCacheDir = Path.of(args[++i]);
+                    }
+                }
                 default -> positional.add(arg);
             }
         }
 
         return new ParsedOptions(positional, analyzeStepping, analysisDir, jumpThreshold,
-            sweepResolutions, colorMode, colorFallback, colorList, colorAlgorithm,
-            placementPolicy, benchmarkAb, benchmarkDir);
+            sweepResolutions, colorMode, colorModeExplicit, colorFallback, colorList, colorAlgorithm,
+            benchmarkAb, benchmarkDir,
+            ldrawLibraryDir, geometryMaskCacheDir);
     }
 
     /** Parses a string as a non-negative integer, throwing on invalid input. */

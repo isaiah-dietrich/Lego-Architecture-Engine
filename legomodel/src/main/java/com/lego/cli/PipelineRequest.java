@@ -19,11 +19,12 @@ public record PipelineRequest(
     int colorFallback,
     boolean colorList,
     String colorAlgorithm,
-    String placementPolicy,
     boolean analyzeStepping,
     Path analysisDir,
     int largeJumpThreshold,
     List<Integer> sweepResolutions,
     boolean benchmarkAb,
-    Path benchmarkDir
+    Path benchmarkDir,
+    Path ldrawLibraryDir,
+    Path geometryMaskCacheDir
 ) {}

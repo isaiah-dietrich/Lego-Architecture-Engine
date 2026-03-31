@@ -34,7 +34,36 @@ final class PlacementBenchmarkCalculator {
         long runtimeMs,
         int peakCandidateCount
     ) {
-        PartMaskProvider maskProvider = new ProceduralPartMaskProvider();
+        return compute(
+            policyName,
+            surface,
+            allowedSpecs,
+            bricks,
+            featureGrid,
+            runtimeMs,
+            peakCandidateCount,
+            new ProceduralPartMaskProvider(),
+            MaskSource.LEGACY_PROCEDURAL.cliLabel()
+        );
+    }
+
+    static PlacementBenchmarkMetrics compute(
+        String policyName,
+        VoxelGrid surface,
+        List<BrickSpec> allowedSpecs,
+        List<Brick> bricks,
+        PlacementFeatureGrid featureGrid,
+        long runtimeMs,
+        int peakCandidateCount,
+        PartMaskProvider maskProvider,
+        String maskSource
+    ) {
+        if (maskProvider == null) {
+            maskProvider = new ProceduralPartMaskProvider();
+        }
+        if (maskSource == null || maskSource.isBlank()) {
+            maskSource = MaskSource.LEGACY_PROCEDURAL.cliLabel();
+        }
         Map<String, BrickSpec> specByPartId = new HashMap<>();
         for (BrickSpec spec : allowedSpecs) {
             specByPartId.putIfAbsent(spec.partId(), spec);
@@ -148,7 +177,7 @@ final class PlacementBenchmarkCalculator {
         }
         shellLeakResidualVoxelCount = shellLeakCount;
 
-        overlapPlacementCount = "cpsat-mask".equalsIgnoreCase(policyName)
+        overlapPlacementCount = "mask".equalsIgnoreCase(policyName)
             ? countMaskOverlappingPlacements(surface, placementMasks)
             : countOverlappingPlacements(bricks);
         slopeShadowIntrusionPlacementCount = countShadowIntrusionPlacements(surface, placementMasks, slopeBricks);
@@ -174,6 +203,7 @@ final class PlacementBenchmarkCalculator {
 
         return new PlacementBenchmarkMetrics(
             policyName,
+            maskSource,
             collisionCount,
             uncoveredRequiredCount,
             outsideTargetCoverageCount,

@@ -13,8 +13,8 @@ import java.util.Locale;
 import com.lego.model.Brick;
 import com.lego.optimize.AllowedBrickDimensions.BrickSpec;
 import com.lego.optimize.BrickPlacer;
-import com.lego.optimize.CpsatMaskPlacementPolicy;
 import com.lego.optimize.GreedyAreaPolicy;
+import com.lego.optimize.PartMaskProvider;
 import com.lego.optimize.PlacementFeatureGrid;
 import com.lego.optimize.PlacementPolicy;
 import com.lego.optimize.PlacementStatsProvider;
@@ -40,7 +40,9 @@ final class PolicyBenchmarkRunner {
         String selectedPolicyName,
         List<Brick> selectedBricks,
         long selectedRuntimeMs,
-        int selectedPeakCandidateCount
+        int selectedPeakCandidateCount,
+        PartMaskProvider maskProvider,
+        MaskSource maskSource
     ) throws IOException {
         PlacementBenchmarkMetrics selectedMetrics = PlacementBenchmarkCalculator.compute(
             selectedPolicyName,
@@ -49,7 +51,9 @@ final class PolicyBenchmarkRunner {
             selectedBricks,
             featureGrid,
             selectedRuntimeMs,
-            selectedPeakCandidateCount
+            selectedPeakCandidateCount,
+            maskProvider,
+            maskSource.cliLabel()
         );
 
         PlacementBenchmarkMetrics baselineMetrics;
@@ -70,7 +74,9 @@ final class PolicyBenchmarkRunner {
                 baselineBricks,
                 featureGrid,
                 baselineRuntimeMs,
-                baselinePeak
+                baselinePeak,
+                maskProvider,
+                maskSource.cliLabel()
             );
         }
 
@@ -102,6 +108,7 @@ final class PolicyBenchmarkRunner {
         String json = """
             {
               "policy": "%s",
+              "maskSource": "%s",
               "quality": {
                 "collisionCount": %d,
                 "uncoveredRequiredCount": %d,
@@ -145,6 +152,7 @@ final class PolicyBenchmarkRunner {
             }
             """.formatted(
             metrics.policyName(),
+            metrics.maskSource(),
             metrics.collisionCount(),
             metrics.uncoveredRequiredCount(),
             metrics.outsideTargetCoverageCount(),
@@ -181,6 +189,7 @@ final class PolicyBenchmarkRunner {
         return """
             {
               "selectedPolicy": "%s",
+              "maskSource": "%s",
               "baselinePolicy": "scoring",
               "deltaVsBaseline": {
                 "collisionCount": %d,
@@ -215,6 +224,7 @@ final class PolicyBenchmarkRunner {
             }
             """.formatted(
             delta.selectedPolicy(),
+            delta.maskSource(),
             delta.collisionDelta(),
             delta.uncoveredDelta(),
             delta.outsideCoverageDelta(),
@@ -248,6 +258,7 @@ final class PolicyBenchmarkRunner {
                                     PlacementBenchmarkMetrics selected,
                                     BenchmarkDelta delta) {
         out.println("Benchmark A/B (baseline=scoring, selected=" + selected.policyName() + ")");
+        out.println("Mask source: " + selected.maskSource());
         out.println("Quality (Hard Gates): collisions=" + selected.collisionCount()
             + ", uncovered=" + selected.uncoveredRequiredCount()
             + ", outsideCoverage=" + selected.outsideTargetCoverageCount()
@@ -294,6 +305,7 @@ final class PolicyBenchmarkRunner {
 
     private record BenchmarkDelta(
         String selectedPolicy,
+        String maskSource,
         int collisionDelta,
         int uncoveredDelta,
         int outsideCoverageDelta,
@@ -338,6 +350,7 @@ final class PolicyBenchmarkRunner {
 
             return new BenchmarkDelta(
                 selected.policyName(),
+                selected.maskSource(),
                 selected.collisionCount() - baseline.collisionCount(),
                 selected.uncoveredRequiredCount() - baseline.uncoveredRequiredCount(),
                 selected.outsideTargetCoverageCount() - baseline.outsideTargetCoverageCount(),

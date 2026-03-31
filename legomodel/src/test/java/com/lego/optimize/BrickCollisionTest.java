@@ -768,7 +768,7 @@ class BrickCollisionTest {
     }
 
     @Test
-    void staircaseSurfaceWithTallBricksBelow_cpsatMask_noVisualConflicts() {
+    void staircaseSurfaceWithTallBricksBelow_maskPolicy_noVisualConflicts() {
         VoxelGrid surface = new VoxelGrid(12, 15, 12);
         Vector3 northNormal = new Vector3(0f, 0.707f, -0.707f);
 
@@ -788,14 +788,14 @@ class BrickCollisionTest {
         }
         surface.normalizeNormals();
 
-        List<Brick> bricks = BrickPlacer.placeBricks(surface, SLOPE_AND_FLAT_SPECS, new CpsatMaskPlacementPolicy());
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, SLOPE_AND_FLAT_SPECS, new MaskPlacementPolicy());
 
         assertNoCollisions(bricks);
         assertNoTallFlatInSlopeFacingDirection(bricks);
     }
 
     @Test
-    void slopesWithFilledLayerAbove_cpsatMask_noCollisions() {
+    void slopesWithFilledLayerAbove_maskPolicy_noCollisions() {
         VoxelGrid surface = new VoxelGrid(10, 5, 10);
         Vector3 northNormal = new Vector3(0f, 0.707f, -0.707f);
         for (int x = 0; x < 8; x++) {
@@ -807,7 +807,7 @@ class BrickCollisionTest {
         }
         surface.normalizeNormals();
 
-        List<Brick> bricks = BrickPlacer.placeBricks(surface, SLOPE_AND_FLAT_SPECS, new CpsatMaskPlacementPolicy());
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, SLOPE_AND_FLAT_SPECS, new MaskPlacementPolicy());
         assertNoCollisions(bricks);
         assertNoTallFlatInSlopeFacingDirection(bricks);
     }

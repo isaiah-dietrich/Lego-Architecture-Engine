@@ -44,16 +44,16 @@ class PlacementPolicyTest {
     }
 
     @Test
-    void testCpsatMaskPolicyName() {
-        assertEquals("cpsat-mask", new CpsatMaskPlacementPolicy().name());
+    void testMaskPolicyName() {
+        assertEquals("mask", new MaskPlacementPolicy().name());
     }
 
     @Test
-    void testCpsatMask_SingleVoxel() {
+    void testMask_SingleVoxel() {
         VoxelGrid surface = new VoxelGrid(3, 3, 3);
         surface.setFilled(1, 1, 1, true);
 
-        List<Brick> bricks = BrickPlacer.placeBricks(surface, STANDARD_DIMS, new CpsatMaskPlacementPolicy());
+        List<Brick> bricks = BrickPlacer.placeBricks(surface, STANDARD_DIMS, new MaskPlacementPolicy());
 
         assertEquals(1, bricks.size());
         Brick b = bricks.get(0);

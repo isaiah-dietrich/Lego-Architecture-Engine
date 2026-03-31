@@ -1,8 +1,10 @@
 package com.lego.optimize;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import com.lego.model.Brick;
@@ -13,16 +15,14 @@ import com.lego.optimize.PartMask.VoxelOffset;
 import com.lego.voxel.VoxelGrid;
 
 /**
- * Mask-constrained global placement policy with deterministic lexicographic
+ * Geometry-mask-backed global placement policy with deterministic lexicographic
  * objective ordering:
- * 1) Feasibility via hard constraints
+ * 1) Feasibility via hard constraints (occupancy, blocking, target shell)
  * 2) Fewer pieces (max new coverage per placement)
- * 3) Lower color error
- *
- * The v1 implementation is a deterministic global selector over feasible
- * candidates and keeps the API seam for a later CP-SAT backend.
+ * 3) Lower color error (when feature grid is available)
+ * 4) More solid voxels, then deterministic spatial tiebreakers
  */
-public final class CpsatMaskPlacementPolicy implements BatchPlacementPolicy, PlacementStatsProvider {
+public final class MaskPlacementPolicy implements BatchPlacementPolicy, PlacementStatsProvider {
 
     private static final double MIN_SLOPE_INCLINATION_DEG = 20.0;
 
@@ -30,28 +30,28 @@ public final class CpsatMaskPlacementPolicy implements BatchPlacementPolicy, Pla
     private final PartMaskProvider maskProvider;
     private int peakCandidateCount;
 
-    public CpsatMaskPlacementPolicy() {
+    public MaskPlacementPolicy() {
         this(null, new ProceduralPartMaskProvider());
     }
 
-    public CpsatMaskPlacementPolicy(PlacementFeatureGrid featureGrid) {
+    public MaskPlacementPolicy(PlacementFeatureGrid featureGrid) {
         this(featureGrid, new ProceduralPartMaskProvider());
     }
 
-    public CpsatMaskPlacementPolicy(PlacementFeatureGrid featureGrid, PartMaskProvider maskProvider) {
+    public MaskPlacementPolicy(PlacementFeatureGrid featureGrid, PartMaskProvider maskProvider) {
         this.featureGrid = featureGrid;
         this.maskProvider = maskProvider != null ? maskProvider : new ProceduralPartMaskProvider();
     }
 
     @Override
     public String name() {
-        return "cpsat-mask";
+        return "mask";
     }
 
     @Override
     public Brick selectBrick(VoxelGrid surface, boolean[][][] covered,
                              int x, int y, int z, List<BrickSpec> allowedSpecs) {
-        throw new UnsupportedOperationException("cpsat-mask requires batch placement via placeAll()");
+        throw new UnsupportedOperationException("mask policy requires batch placement via placeAll()");
     }
 
     @Override
@@ -68,6 +68,7 @@ public final class CpsatMaskPlacementPolicy implements BatchPlacementPolicy, Pla
         boolean[][][] occupied = new boolean[target.width()][target.height()][target.depth()];
         boolean[][][] blocked = new boolean[target.width()][target.height()][target.depth()];
         boolean[][][] covered = new boolean[target.width()][target.height()][target.depth()];
+        Map<MaskKey, PartMask> resolvedMasks = new HashMap<>();
 
         int uncovered = target.requiredCount();
         List<Brick> selected = new ArrayList<>();
@@ -82,7 +83,7 @@ public final class CpsatMaskPlacementPolicy implements BatchPlacementPolicy, Pla
                             continue;
                         }
                         List<Candidate> candidates = generateCandidatesAtAnchor(
-                            target, occupied, blocked, covered, x, y, z, allowedSpecs
+                            target, occupied, blocked, covered, x, y, z, allowedSpecs, resolvedMasks
                         );
                         if (candidates.size() > peakCandidateCount) {
                             peakCandidateCount = candidates.size();
@@ -98,7 +99,7 @@ public final class CpsatMaskPlacementPolicy implements BatchPlacementPolicy, Pla
 
             if (best == null) {
                 throw new IllegalStateException(
-                    "cpsat-mask could not find a feasible candidate while uncovered voxels remain"
+                    "mask policy could not find a feasible candidate while uncovered voxels remain"
                 );
             }
 
@@ -136,7 +137,8 @@ public final class CpsatMaskPlacementPolicy implements BatchPlacementPolicy, Pla
                                                         boolean[][][] blocked,
                                                         boolean[][][] covered,
                                                         int x, int y, int z,
-                                                        List<BrickSpec> specs) {
+                                                        List<BrickSpec> specs,
+                                                        Map<MaskKey, PartMask> resolvedMasks) {
         List<Candidate> out = new ArrayList<>();
         Vector3 normal = target.normalAt(x, y, z);
 
@@ -152,7 +154,7 @@ public final class CpsatMaskPlacementPolicy implements BatchPlacementPolicy, Pla
                 Facing facing = match.facing();
                 int[] dims = orientedSlopeDims(spec, facing);
                 Candidate candidate = buildCandidate(
-                    target, occupied, blocked, covered, x, y, z, dims[0], dims[1], spec, facing
+                    target, occupied, blocked, covered, x, y, z, dims[0], dims[1], spec, facing, resolvedMasks
                 );
                 if (candidate != null) {
                     out.add(candidate);
@@ -161,7 +163,7 @@ public final class CpsatMaskPlacementPolicy implements BatchPlacementPolicy, Pla
             }
 
             Candidate identity = buildCandidate(
-                target, occupied, blocked, covered, x, y, z, spec.studX(), spec.studY(), spec, Facing.NONE
+                target, occupied, blocked, covered, x, y, z, spec.studX(), spec.studY(), spec, Facing.NONE, resolvedMasks
             );
             if (identity != null) {
                 out.add(identity);
@@ -169,7 +171,7 @@ public final class CpsatMaskPlacementPolicy implements BatchPlacementPolicy, Pla
 
             if (spec.studX() != spec.studY()) {
                 Candidate rotated = buildCandidate(
-                    target, occupied, blocked, covered, x, y, z, spec.studY(), spec.studX(), spec, Facing.NONE
+                    target, occupied, blocked, covered, x, y, z, spec.studY(), spec.studX(), spec, Facing.NONE, resolvedMasks
                 );
                 if (rotated != null) {
                     out.add(rotated);
@@ -186,8 +188,12 @@ public final class CpsatMaskPlacementPolicy implements BatchPlacementPolicy, Pla
                                      int x, int y, int z,
                                      int studX, int studY,
                                      BrickSpec spec,
-                                     Facing facing) {
-        PartMask mask = maskProvider.getMask(spec, facing, studX, studY);
+                                     Facing facing,
+                                     Map<MaskKey, PartMask> resolvedMasks) {
+        MaskKey maskKey = new MaskKey(spec.partId(), spec.heightUnits(), facing, studX, studY);
+        PartMask mask = resolvedMasks.computeIfAbsent(maskKey, ignored ->
+            maskProvider.getMask(spec, facing, studX, studY)
+        );
         List<Cell> solidCells = new ArrayList<>(mask.solidOccupancyMask().size());
         List<Cell> coverageCells = new ArrayList<>(mask.topCoverageMask().size());
         List<Cell> blockedCells = new ArrayList<>();
@@ -199,7 +205,7 @@ public final class CpsatMaskPlacementPolicy implements BatchPlacementPolicy, Pla
             if (!inBounds(target, cx, cy, cz)) return null;
             if (occupied[cx][cy][cz]) return null;
             if (blocked[cx][cy][cz]) return null;
-            // Hard constraint: no occupancy outside required target shell in v1.
+            // Hard constraint: no occupancy outside required target shell.
             if (!target.isRequired(cx, cy, cz)) return null;
             solidCells.add(new Cell(cx, cy, cz));
         }
@@ -364,6 +370,8 @@ public final class CpsatMaskPlacementPolicy implements BatchPlacementPolicy, Pla
     }
 
     private record Cell(int x, int y, int z) { }
+
+    private record MaskKey(String partId, int heightUnits, Facing facing, int studX, int studY) { }
 
     private record Candidate(
         Brick brick,
