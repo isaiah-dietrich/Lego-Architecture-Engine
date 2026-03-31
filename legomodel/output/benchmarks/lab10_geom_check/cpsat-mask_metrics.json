@@ -1,0 +1,44 @@
+{
+  "policy": "cpsat-mask",
+  "maskSource": "geometry",
+  "quality": {
+    "collisionCount": 0,
+    "uncoveredRequiredCount": 17,
+    "outsideTargetCoverageCount": 0,
+    "shellLeakCount": 17,
+    "typedCollisionCounts": {
+      "overlapPlacementCount": 0,
+      "outsideCoveragePlacementCount": 0,
+      "slopeAngleMismatchPlacementCount": 0,
+      "slopeFacingMismatchPlacementCount": 0,
+      "slopeMissingNormalPlacementCount": 0,
+      "slopeShadowIntrusionPlacementCount": 0,
+      "slopeAdjacentTallFlatConflictPlacementCount": 0,
+      "shellLeakResidualVoxelCount": 17
+    },
+    "typedCollisionUnits": {
+      "overlapPlacementCount": "placements",
+      "outsideCoveragePlacementCount": "placements",
+      "slopeAngleMismatchPlacementCount": "placements",
+      "slopeFacingMismatchPlacementCount": "placements",
+      "slopeMissingNormalPlacementCount": "placements",
+      "slopeShadowIntrusionPlacementCount": "placements",
+      "slopeAdjacentTallFlatConflictPlacementCount": "placements",
+      "shellLeakResidualVoxelCount": "voxels"
+    }
+  },
+  "slopeBehavior": {
+    "slopePlacementCount": 2,
+    "flatSlopeErrorCount": 0,
+    "slopeFacingConsistency": 1.000000
+  },
+  "efficiency": {
+    "pieceCount": 41,
+    "runtimeMs": 33766,
+    "peakCandidateCount": 22
+  },
+  "color": {
+    "meanDeltaE": 5.323824,
+    "p95DeltaE": 12.000000
+  }
+}

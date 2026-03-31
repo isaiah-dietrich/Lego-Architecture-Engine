@@ -1,0 +1,35 @@
+{
+  "selectedPolicy": "cpsat-mask",
+  "maskSource": "geometry",
+  "baselinePolicy": "scoring",
+  "deltaVsBaseline": {
+    "collisionCount": 0,
+    "uncoveredRequiredCount": 5,
+    "outsideTargetCoverageCount": -1,
+    "shellLeakCount": 5,
+    "flatSlopeErrorCount": 0,
+    "typedCollisionDeltas": {
+      "overlapPlacementCount": 0,
+      "outsideCoveragePlacementCount": -1,
+      "slopeAngleMismatchPlacementCount": 0,
+      "slopeFacingMismatchPlacementCount": 0,
+      "slopeMissingNormalPlacementCount": 0,
+      "slopeShadowIntrusionPlacementCount": 0,
+      "slopeAdjacentTallFlatConflictPlacementCount": 0,
+      "shellLeakResidualVoxelCount": 5
+    },
+    "pieceCount": -46,
+    "runtimeMs": 33764,
+    "meanDeltaE": -0.579112,
+    "p95DeltaE": 0.000000
+  },
+  "worksBetterCriteria": {
+    "hardGatesZero": false,
+    "typedHardGatesZero": false,
+    "flatSlopeErrorLowerThanScoring": false,
+    "shellLeakLowerThanScoring": false,
+    "pieceCountLEWhenHardGatesMet": true,
+    "meanDeltaELEWhenColorEnabled": true,
+    "runtimeWithin4xBudget": false
+  }
+}
