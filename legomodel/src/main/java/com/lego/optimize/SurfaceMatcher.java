@@ -56,8 +56,8 @@ public final class SurfaceMatcher {
         // Compute inclination: angle from the Y axis (vertical).
         // Y-up: a flat surface has normal ~(0,1,0) → inclination ~0°.
         // A 45° slope has inclination ~45°.
-        double cosAngle = Math.abs(normal.y());
-        double inclinationDeg = Math.toDegrees(Math.acos(Math.min(1.0, cosAngle)));
+        double cosAngle = Math.max(-1.0, Math.min(1.0, normal.y()));
+        double inclinationDeg = Math.toDegrees(Math.acos(cosAngle));
 
         // Slope spec: check if surface angle matches the part's declared angle
         double specAngle = spec.slopeAngle();

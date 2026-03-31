@@ -224,12 +224,19 @@ public final class MaskPlacementPolicy implements BatchPlacementPolicy, Placemen
         if (facing != Facing.NONE) {
             List<Cell> shadowCells = computeSlopeShadowCells(target, x, y, z, studX, studY, spec.heightUnits(), facing);
             for (Cell shadow : shadowCells) {
-                if (blocked[shadow.x()][shadow.y()][shadow.z()]) {
-                    return null;
+                if (!target.isRequired(shadow.x(), shadow.y(), shadow.z())) {
+                    continue; // non-surface cells can't hold bricks — no need to block
                 }
-                blockedCells.add(shadow);
-                // Treat slope shadow overlap with required surface as covered by the slope face.
-                if (target.isRequired(shadow.x(), shadow.y(), shadow.z())) {
+                // Only cover shadow cells whose normal matches this slope's angle and facing.
+                // Flat or mismatched cells (e.g. paw base connecting to leg) are left unblocked
+                // so flat bricks can cover them; resolveSlopeAdjacentConflicts handles aesthetics.
+                Vector3 shadowNormal = target.normalAt(shadow.x(), shadow.y(), shadow.z());
+                SurfaceMatcher.MatchResult shadowMatch = SurfaceMatcher.match(shadowNormal, spec);
+                if (shadowMatch.eligible() && shadowMatch.facing() == facing) {
+                    if (blocked[shadow.x()][shadow.y()][shadow.z()]) {
+                        return null;
+                    }
+                    blockedCells.add(shadow);
                     coverageCells.add(shadow);
                 }
             }
@@ -311,43 +318,34 @@ public final class MaskPlacementPolicy implements BatchPlacementPolicy, Placemen
         for (int k = 0; k < heightUnits; k++) {
             int shadowY = y + k;
             if (shadowY >= target.height()) break;
-
             for (int d = 1; d <= k + 1; d++) {
                 switch (facing) {
                     case NORTH -> {
                         int sz = z - d;
                         if (sz < 0) continue;
                         for (int cx = x; cx < x + studX; cx++) {
-                            if (cx >= 0 && cx < target.width()) {
-                                cells.add(new Cell(cx, shadowY, sz));
-                            }
+                            if (cx >= 0 && cx < target.width()) cells.add(new Cell(cx, shadowY, sz));
                         }
                     }
                     case SOUTH -> {
                         int sz = z + studY - 1 + d;
                         if (sz >= target.depth()) continue;
                         for (int cx = x; cx < x + studX; cx++) {
-                            if (cx >= 0 && cx < target.width()) {
-                                cells.add(new Cell(cx, shadowY, sz));
-                            }
+                            if (cx >= 0 && cx < target.width()) cells.add(new Cell(cx, shadowY, sz));
                         }
                     }
                     case EAST -> {
                         int sx = x + studX - 1 + d;
                         if (sx >= target.width()) continue;
                         for (int cz = z; cz < z + studY; cz++) {
-                            if (cz >= 0 && cz < target.depth()) {
-                                cells.add(new Cell(sx, shadowY, cz));
-                            }
+                            if (cz >= 0 && cz < target.depth()) cells.add(new Cell(sx, shadowY, cz));
                         }
                     }
                     case WEST -> {
                         int sx = x - d;
                         if (sx < 0) continue;
                         for (int cz = z; cz < z + studY; cz++) {
-                            if (cz >= 0 && cz < target.depth()) {
-                                cells.add(new Cell(sx, shadowY, cz));
-                            }
+                            if (cz >= 0 && cz < target.depth()) cells.add(new Cell(sx, shadowY, cz));
                         }
                     }
                     default -> { }

@@ -115,8 +115,7 @@ public final class BrickPlacer {
         if (policy instanceof BatchPlacementPolicy batchPolicy) {
             List<Brick> placed = batchPolicy.placeAll(surface, allowedSpecs);
             List<Brick> consolidated = consolidatePlateStacks(placed, allowedSpecs);
-            consolidated = resolveSlopeAdjacentConflicts(consolidated, allowedSpecs);
-            return consolidated;
+            return resolveSlopeAdjacentConflicts(consolidated, allowedSpecs);
         }
 
         List<Brick> bricks = new ArrayList<>();
@@ -625,37 +624,40 @@ public final class BrickPlacer {
      * full height range.
      */
     private static void addSlopeInfluenceZone(Set<String> zone, Brick slope) {
-        for (int y = slope.y(); y < slope.maxY(); y++) {
+        for (int k = 0; k < slope.heightUnits(); k++) {
+            int shadowY = slope.y() + k;
+            for (int d = 1; d <= k + 1; d++) {
             switch (slope.facing()) {
                 case NORTH -> {
-                    int z = slope.z() - 1;
+                    int z = slope.z() - d;
                     if (z >= 0) {
                         for (int x = slope.x(); x < slope.maxX(); x++) {
-                            zone.add(x + "," + y + "," + z);
+                            zone.add(x + "," + shadowY + "," + z);
                         }
                     }
                 }
                 case SOUTH -> {
-                    int z = slope.maxZ();
+                    int z = slope.maxZ() - 1 + d;
                     for (int x = slope.x(); x < slope.maxX(); x++) {
-                        zone.add(x + "," + y + "," + z);
+                        zone.add(x + "," + shadowY + "," + z);
                     }
                 }
                 case EAST -> {
-                    int x = slope.maxX();
+                    int x = slope.maxX() - 1 + d;
                     for (int z = slope.z(); z < slope.maxZ(); z++) {
-                        zone.add(x + "," + y + "," + z);
+                        zone.add(x + "," + shadowY + "," + z);
                     }
                 }
                 case WEST -> {
-                    int x = slope.x() - 1;
+                    int x = slope.x() - d;
                     if (x >= 0) {
                         for (int z = slope.z(); z < slope.maxZ(); z++) {
-                            zone.add(x + "," + y + "," + z);
+                            zone.add(x + "," + shadowY + "," + z);
                         }
                     }
                 }
                 default -> { }
+            }
             }
         }
     }

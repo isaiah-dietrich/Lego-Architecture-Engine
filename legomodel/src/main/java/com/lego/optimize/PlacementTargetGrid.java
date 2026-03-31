@@ -95,8 +95,8 @@ public final class PlacementTargetGrid {
         if (normal == null || normal.length() < 1e-6) {
             return false;
         }
-        double cosAngle = Math.abs(normal.y());
-        double inclination = Math.toDegrees(Math.acos(Math.min(1.0, cosAngle)));
+        double cosAngle = Math.max(-1.0, Math.min(1.0, normal.y()));
+        double inclination = Math.toDegrees(Math.acos(cosAngle));
         if (inclination < MIN_SLOPE_INCLINATION_DEG) {
             return false;
         }
