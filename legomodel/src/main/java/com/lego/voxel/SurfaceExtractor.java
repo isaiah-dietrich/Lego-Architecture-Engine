@@ -60,6 +60,7 @@ public final class SurfaceExtractor {
             }
         }
 
+        surface.normalizeNormals();
         return surface;
     }
 

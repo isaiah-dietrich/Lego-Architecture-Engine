@@ -146,8 +146,8 @@ public final class LDrawExporter {
                 }
             }
 
-            double centerXStuds = brick.x() + (brick.studX() / 2.0);
-            double centerZStuds = brick.z() + (brick.studY() / 2.0);
+            double centerXStuds = brick.x() + ((brick.studX() - 1) / 2.0);
+            double centerZStuds = brick.z() + ((brick.studY() - 1) / 2.0);
 
             double x = centerXStuds * STUD_PITCH_LDU;
             double z = centerZStuds * STUD_PITCH_LDU;

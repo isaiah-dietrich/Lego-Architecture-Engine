@@ -398,10 +398,8 @@ public final class BrickPlacer {
         for (int i = 0; i < bricks.size(); i++) {
             Brick b = bricks.get(i);
             if (b.facing() != Facing.NONE) continue;
-            if (b.heightUnits() <= 1) continue;
 
-            // Check if any voxel in this brick's upper layers (y+1 .. y+h-1)
-            // is in a slope's influence zone
+            // Check if any voxel in this brick's layers overlaps a slope's influence zone
             if (isInSlopeInfluence(slopeInfluence, b)) {
                 toShorten.add(i);
             }
@@ -525,21 +523,48 @@ public final class BrickPlacer {
             return bricks;
         }
 
+        // Spatial index: maps a brick's origin key to its index in the working list.
+        // Two bricks can only merge if they share an edge — so candidates are found
+        // by looking up the positions immediately adjacent to each brick's edges.
+        Map<String, Integer> posIndex = new HashMap<>(bricks.size() * 2);
         List<Brick> working = new ArrayList<>(bricks);
+
+        // Build initial index
+        for (int i = 0; i < working.size(); i++) {
+            Brick b = working.get(i);
+            if (b.facing() == Facing.NONE) {
+                posIndex.put(brickPosKey(b), i);
+            }
+        }
+
         boolean changed;
         do {
             changed = false;
-
             for (int i = 0; i < working.size(); i++) {
                 Brick a = working.get(i);
                 if (a.facing() != Facing.NONE) continue;
 
-                int bestJ = -1;
+                // Find merge candidates via spatial index:
+                // Along X: brick whose origin is at (a.maxX, a.y, a.z) or (a.x - b.studX, a.y, a.z)
+                // Along Z: brick whose origin is at (a.x, a.y, a.maxZ) or (a.x, a.y, a.z - b.studY)
+                // We probe by looking up what brick starts at our right/bottom edge,
+                // or whose right/bottom edge touches our origin.
                 Brick bestMerged = null;
+                int bestJ = -1;
                 int bestArea = -1;
 
                 for (int j = i + 1; j < working.size(); j++) {
                     Brick b = working.get(j);
+                    if (b.facing() != Facing.NONE) continue;
+                    if (a.y() != b.y() || a.heightUnits() != b.heightUnits()) continue;
+
+                    // Only attempt merge if the two bricks share an edge
+                    boolean couldBeAdjacentX = a.z() == b.z() && a.studY() == b.studY()
+                        && (a.maxX() == b.x() || b.maxX() == a.x());
+                    boolean couldBeAdjacentZ = a.x() == b.x() && a.studX() == b.studX()
+                        && (a.maxZ() == b.z() || b.maxZ() == a.z());
+                    if (!couldBeAdjacentX && !couldBeAdjacentZ) continue;
+
                     Brick merged = tryMerge(a, b, partLookup);
                     if (merged == null) continue;
 
@@ -552,10 +577,13 @@ public final class BrickPlacer {
                 }
 
                 if (bestJ >= 0) {
+                    posIndex.remove(brickPosKey(working.get(i)));
+                    posIndex.remove(brickPosKey(working.get(bestJ)));
                     working.set(i, bestMerged);
                     working.remove(bestJ);
+                    posIndex.put(brickPosKey(bestMerged), i);
                     changed = true;
-                    i--; // Reconsider merged brick for further growth.
+                    i--;
                 }
             }
         } while (changed);
@@ -610,6 +638,10 @@ public final class BrickPlacer {
         return a.x() < b.x();
     }
 
+    private static String brickPosKey(Brick b) {
+        return b.x() + "," + b.y() + "," + b.z();
+    }
+
     private static String mergeKey(int studX, int studY, int h) {
         return studX + "x" + studY + "x" + h;
     }
@@ -624,40 +656,28 @@ public final class BrickPlacer {
      * full height range.
      */
     private static void addSlopeInfluenceZone(Set<String> zone, Brick slope) {
-        for (int k = 0; k < slope.heightUnits(); k++) {
-            int shadowY = slope.y() + k;
-            for (int d = 1; d <= k + 1; d++) {
-            switch (slope.facing()) {
-                case NORTH -> {
-                    int z = slope.z() - d;
-                    if (z >= 0) {
-                        for (int x = slope.x(); x < slope.maxX(); x++) {
-                            zone.add(x + "," + shadowY + "," + z);
-                        }
-                    }
+        // Mark the slope's full bounding box. Also extend 1 cell in the facing
+        // direction and 1 cell on the two perpendicular sides, since the slope's
+        // triangular geometry can clip into those adjacent positions.
+        // The back (high) side does not need extension as it's a flat vertical face.
+        int xMin = slope.x();
+        int xMax = slope.maxX() - 1;
+        int zMin = slope.z();
+        int zMax = slope.maxZ() - 1;
+
+        switch (slope.facing()) {
+            case NORTH -> { xMin--; xMax++; zMin--; }   // extend forward (-Z) and sides
+            case SOUTH -> { xMin--; xMax++; zMax++; }   // extend forward (+Z) and sides
+            case WEST  -> { zMin--; zMax++; xMin--; }   // extend forward (-X) and sides
+            case EAST  -> { zMin--; zMax++; xMax++; }   // extend forward (+X) and sides
+            default -> { }
+        }
+
+        for (int y = slope.y(); y < slope.maxY(); y++) {
+            for (int x = xMin; x <= xMax; x++) {
+                for (int z = zMin; z <= zMax; z++) {
+                    zone.add(x + "," + y + "," + z);
                 }
-                case SOUTH -> {
-                    int z = slope.maxZ() - 1 + d;
-                    for (int x = slope.x(); x < slope.maxX(); x++) {
-                        zone.add(x + "," + shadowY + "," + z);
-                    }
-                }
-                case EAST -> {
-                    int x = slope.maxX() - 1 + d;
-                    for (int z = slope.z(); z < slope.maxZ(); z++) {
-                        zone.add(x + "," + shadowY + "," + z);
-                    }
-                }
-                case WEST -> {
-                    int x = slope.x() - d;
-                    if (x >= 0) {
-                        for (int z = slope.z(); z < slope.maxZ(); z++) {
-                            zone.add(x + "," + shadowY + "," + z);
-                        }
-                    }
-                }
-                default -> { }
-            }
             }
         }
     }
@@ -668,7 +688,7 @@ public final class BrickPlacer {
      * at those layers visually conflicts with an adjacent slope.
      */
     private static boolean isInSlopeInfluence(Set<String> slopeInfluence, Brick brick) {
-        for (int dy = 1; dy < brick.heightUnits(); dy++) {
+        for (int dy = 0; dy < brick.heightUnits(); dy++) {
             int y = brick.y() + dy;
             for (int dx = 0; dx < brick.studX(); dx++) {
                 for (int dz = 0; dz < brick.studY(); dz++) {

@@ -111,6 +111,20 @@ public final class MaskPlacementPolicy implements BatchPlacementPolicy, Placemen
             for (Cell cell : best.blockedCells()) {
                 blocked[cell.x()][cell.y()][cell.z()] = true;
             }
+            // For slopes, block the entire bounding box so no flat brick can be
+            // placed within the slope's height envelope from any direction.
+            if (best.brick().facing() != Facing.NONE) {
+                Brick s = best.brick();
+                for (int by = s.y(); by < s.maxY(); by++) {
+                    for (int bx = s.x(); bx < s.maxX(); bx++) {
+                        for (int bz = s.z(); bz < s.maxZ(); bz++) {
+                            if (inBounds(target, bx, by, bz)) {
+                                blocked[bx][by][bz] = true;
+                            }
+                        }
+                    }
+                }
+            }
             for (Cell cell : best.coverageCells()) {
                 if (!covered[cell.x()][cell.y()][cell.z()]) {
                     covered[cell.x()][cell.y()][cell.z()] = true;
@@ -208,6 +222,26 @@ public final class MaskPlacementPolicy implements BatchPlacementPolicy, Placemen
             // Hard constraint: no occupancy outside required target shell.
             if (!target.isRequired(cx, cy, cz)) return null;
             solidCells.add(new Cell(cx, cy, cz));
+        }
+
+        // Slopes: reject if any cell in the full bounding box is already occupied or blocked.
+        // The wedge-shaped solid mask omits the "air pocket" at the slope toe (top-front corner),
+        // so previously placed flat bricks there would not be detected by the solid mask check.
+        // This extra sweep prevents visual collisions caused by bricks inside the height envelope.
+        if (facing != Facing.NONE) {
+            for (int dy = 0; dy < spec.heightUnits(); dy++) {
+                for (int dx = 0; dx < studX; dx++) {
+                    for (int dz = 0; dz < studY; dz++) {
+                        int cx = x + dx;
+                        int cy = y + dy;
+                        int cz = z + dz;
+                        if (inBounds(target, cx, cy, cz)
+                                && (occupied[cx][cy][cz] || blocked[cx][cy][cz])) {
+                            return null;
+                        }
+                    }
+                }
+            }
         }
 
         int newCoverage = 0;

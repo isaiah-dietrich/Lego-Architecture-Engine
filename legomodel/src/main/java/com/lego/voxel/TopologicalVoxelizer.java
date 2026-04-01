@@ -127,7 +127,9 @@ public final class TopologicalVoxelizer {
         }
         result.normalizeNormals();
 
-        return fillAxisAlignedGaps(result, 2);
+        VoxelGrid filled = fillAxisAlignedGaps(result, 2);
+        filled.normalizeNormals();
+        return filled;
     }
 
     /**
