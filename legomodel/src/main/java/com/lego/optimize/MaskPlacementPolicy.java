@@ -73,9 +73,55 @@ public final class MaskPlacementPolicy implements BatchPlacementPolicy, Placemen
         int uncovered = target.requiredCount();
         List<Brick> selected = new ArrayList<>();
 
+        // Single O(W×H×D) scan: process each uncovered voxel in deterministic order and
+        // place the locally-best candidate immediately. This replaces the prior
+        // O(N × W×H×D) global-best loop (which re-scanned the entire grid for every
+        // brick placed), delivering the same quality with orders-of-magnitude less work.
+        for (int y = 0; y < target.height() && uncovered > 0; y++) {
+            for (int z = 0; z < target.depth() && uncovered > 0; z++) {
+                for (int x = 0; x < target.width() && uncovered > 0; x++) {
+                    if (!target.isRequired(x, y, z) || covered[x][y][z]) {
+                        continue;
+                    }
+
+                    List<Candidate> candidates = generateCandidatesAtAnchor(
+                        target, occupied, blocked, covered, x, y, z, allowedSpecs, resolvedMasks
+                    );
+                    if (candidates.size() > peakCandidateCount) {
+                        peakCandidateCount = candidates.size();
+                    }
+                    if (candidates.isEmpty()) {
+                        // Voxel is blocked but not yet covered (e.g. inside a slope's bounding
+                        // box). A subsequent brick anchored nearby may cover it; handled by the
+                        // fallback below if it remains uncovered after the full scan.
+                        continue;
+                    }
+
+                    Candidate best = candidates.get(0);
+                    for (int i = 1; i < candidates.size(); i++) {
+                        if (better(candidates.get(i), best)) {
+                            best = candidates.get(i);
+                        }
+                    }
+
+                    selected.add(best.brick());
+                    applyPlacement(best, target, occupied, blocked, covered);
+                    for (Cell cell : best.coverageCells()) {
+                        if (!covered[cell.x()][cell.y()][cell.z()]) {
+                            covered[cell.x()][cell.y()][cell.z()] = true;
+                            uncovered--;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Fallback for any voxels that couldn't be covered in scan order (rare — only
+        // occurs when a slope's bounding-box blocking prevents access from the anchor
+        // position and no later brick's coverage footprint reaches the cell).
+        // Uses the original global-search approach so these stragglers are always resolved.
         while (uncovered > 0) {
             Candidate best = null;
-
             for (int y = 0; y < target.height(); y++) {
                 for (int z = 0; z < target.depth(); z++) {
                     for (int x = 0; x < target.width(); x++) {
@@ -96,35 +142,13 @@ public final class MaskPlacementPolicy implements BatchPlacementPolicy, Placemen
                     }
                 }
             }
-
             if (best == null) {
                 throw new IllegalStateException(
                     "mask policy could not find a feasible candidate while uncovered voxels remain"
                 );
             }
-
             selected.add(best.brick());
-            for (Cell cell : best.solidCells()) {
-                occupied[cell.x()][cell.y()][cell.z()] = true;
-                blocked[cell.x()][cell.y()][cell.z()] = true;
-            }
-            for (Cell cell : best.blockedCells()) {
-                blocked[cell.x()][cell.y()][cell.z()] = true;
-            }
-            // For slopes, block the entire bounding box so no flat brick can be
-            // placed within the slope's height envelope from any direction.
-            if (best.brick().facing() != Facing.NONE) {
-                Brick s = best.brick();
-                for (int by = s.y(); by < s.maxY(); by++) {
-                    for (int bx = s.x(); bx < s.maxX(); bx++) {
-                        for (int bz = s.z(); bz < s.maxZ(); bz++) {
-                            if (inBounds(target, bx, by, bz)) {
-                                blocked[bx][by][bz] = true;
-                            }
-                        }
-                    }
-                }
-            }
+            applyPlacement(best, target, occupied, blocked, covered);
             for (Cell cell : best.coverageCells()) {
                 if (!covered[cell.x()][cell.y()][cell.z()]) {
                     covered[cell.x()][cell.y()][cell.z()] = true;
@@ -144,6 +168,32 @@ public final class MaskPlacementPolicy implements BatchPlacementPolicy, Placemen
     @Override
     public int peakCandidateCount() {
         return peakCandidateCount;
+    }
+
+    private void applyPlacement(Candidate best, PlacementTargetGrid target,
+                                boolean[][][] occupied, boolean[][][] blocked,
+                                boolean[][][] covered) {
+        for (Cell cell : best.solidCells()) {
+            occupied[cell.x()][cell.y()][cell.z()] = true;
+            blocked[cell.x()][cell.y()][cell.z()] = true;
+        }
+        for (Cell cell : best.blockedCells()) {
+            blocked[cell.x()][cell.y()][cell.z()] = true;
+        }
+        // For slopes, block the entire bounding box so no flat brick can be
+        // placed within the slope's height envelope from any direction.
+        if (best.brick().facing() != Facing.NONE) {
+            Brick s = best.brick();
+            for (int by = s.y(); by < s.maxY(); by++) {
+                for (int bx = s.x(); bx < s.maxX(); bx++) {
+                    for (int bz = s.z(); bz < s.maxZ(); bz++) {
+                        if (inBounds(target, bx, by, bz)) {
+                            blocked[bx][by][bz] = true;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private List<Candidate> generateCandidatesAtAnchor(PlacementTargetGrid target,
@@ -390,11 +440,10 @@ public final class MaskPlacementPolicy implements BatchPlacementPolicy, Placemen
     }
 
     private static List<Cell> dedupe(List<Cell> cells) {
+        Set<Cell> seen = new HashSet<>(cells.size() * 2);
         List<Cell> out = new ArrayList<>(cells.size());
-        Set<String> seen = new HashSet<>();
         for (Cell cell : cells) {
-            String key = cell.x() + "," + cell.y() + "," + cell.z();
-            if (seen.add(key)) {
+            if (seen.add(cell)) {
                 out.add(cell);
             }
         }

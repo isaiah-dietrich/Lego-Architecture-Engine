@@ -1,8 +1,11 @@
 package com.lego.optimize;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -125,9 +128,13 @@ public final class BrickPlacer {
             preMarkSlopeAdjacentZones(surface, covered, allowedSpecs);
         }
 
+        // Loop order: y → x → z so z is innermost, matching grid[x][y][z] layout.
+        // grid[x][y] is a contiguous boolean[depth] row; iterating z sequentially
+        // gives cache-friendly stride-1 access instead of jumping across width
+        // different heap objects on every inner step.
         for (int y = 0; y < surface.height(); y++) {
-            for (int z = 0; z < surface.depth(); z++) {
-                for (int x = 0; x < surface.width(); x++) {
+            for (int x = 0; x < surface.width(); x++) {
+                for (int z = 0; z < surface.depth(); z++) {
                     if (surface.isFilled(x, y, z) && !covered[x][y][z]) {
                         Brick brick = policy.selectBrick(surface, covered, x, y, z, allowedSpecs);
                         bricks.add(brick);
@@ -214,8 +221,8 @@ public final class BrickPlacer {
         int depth = surface.depth();
 
         for (int y = 0; y < height; y++) {
-            for (int z = 0; z < depth; z++) {
-                for (int x = 0; x < width; x++) {
+            for (int x = 0; x < width; x++) {
+                for (int z = 0; z < depth; z++) {
                     if (!surface.isFilled(x, y, z)) continue;
 
                     Vector3 normal = surface.getNormal(x, y, z);
@@ -523,77 +530,65 @@ public final class BrickPlacer {
             return bricks;
         }
 
-        // Spatial index: maps a brick's origin key to its index in the working list.
-        // Two bricks can only merge if they share an edge — so candidates are found
-        // by looking up the positions immediately adjacent to each brick's edges.
-        Map<String, Integer> posIndex = new HashMap<>(bricks.size() * 2);
-        List<Brick> working = new ArrayList<>(bricks);
+        // Spatial index: brick origin key ("x,y,z") → brick reference.
+        // Two bricks can only merge if they share an edge, so each brick needs at
+        // most two O(1) probes: right edge (a.maxX, a.y, a.z) and front edge
+        // (a.x, a.y, a.maxZ). Left/back adjacency is discovered symmetrically
+        // when the neighboring brick takes its own turn in the queue.
+        Map<String, Brick> originIndex = new HashMap<>(bricks.size() * 2);
+        Set<Brick> working = new LinkedHashSet<>(bricks);
 
-        // Build initial index
-        for (int i = 0; i < working.size(); i++) {
-            Brick b = working.get(i);
+        for (Brick b : working) {
             if (b.facing() == Facing.NONE) {
-                posIndex.put(brickPosKey(b), i);
+                originIndex.put(brickPosKey(b), b);
             }
         }
 
-        boolean changed;
-        do {
-            changed = false;
-            for (int i = 0; i < working.size(); i++) {
-                Brick a = working.get(i);
-                if (a.facing() != Facing.NONE) continue;
+        // Queue all bricks for processing. When a merge produces a larger brick,
+        // re-queue it so further merges can chain (e.g. 1x1+1x1→1x2, 1x2+1x2→1x4).
+        Deque<Brick> queue = new ArrayDeque<>(working);
+        while (!queue.isEmpty()) {
+            Brick a = queue.poll();
+            if (!working.contains(a) || a.facing() != Facing.NONE) continue;
 
-                // Find merge candidates via spatial index:
-                // Along X: brick whose origin is at (a.maxX, a.y, a.z) or (a.x - b.studX, a.y, a.z)
-                // Along Z: brick whose origin is at (a.x, a.y, a.maxZ) or (a.x, a.y, a.z - b.studY)
-                // We probe by looking up what brick starts at our right/bottom edge,
-                // or whose right/bottom edge touches our origin.
-                Brick bestMerged = null;
-                int bestJ = -1;
-                int bestArea = -1;
+            // Probe only right (X+) and front (Z+) neighbors — O(1) each
+            Brick rightNeighbor = originIndex.get(a.maxX() + "," + a.y() + "," + a.z());
+            Brick frontNeighbor = originIndex.get(a.x() + "," + a.y() + "," + a.maxZ());
 
-                for (int j = i + 1; j < working.size(); j++) {
-                    Brick b = working.get(j);
-                    if (b.facing() != Facing.NONE) continue;
-                    if (a.y() != b.y() || a.heightUnits() != b.heightUnits()) continue;
+            Brick bestMerged = null;
+            Brick bestB = null;
+            int bestArea = -1;
 
-                    // Only attempt merge if the two bricks share an edge
-                    boolean couldBeAdjacentX = a.z() == b.z() && a.studY() == b.studY()
-                        && (a.maxX() == b.x() || b.maxX() == a.x());
-                    boolean couldBeAdjacentZ = a.x() == b.x() && a.studX() == b.studX()
-                        && (a.maxZ() == b.z() || b.maxZ() == a.z());
-                    if (!couldBeAdjacentX && !couldBeAdjacentZ) continue;
-
-                    Brick merged = tryMerge(a, b, partLookup);
-                    if (merged == null) continue;
-
-                    int area = merged.studX() * merged.studY();
-                    if (area > bestArea || (area == bestArea && isEarlier(merged, bestMerged))) {
-                        bestArea = area;
-                        bestJ = j;
-                        bestMerged = merged;
-                    }
-                }
-
-                if (bestJ >= 0) {
-                    posIndex.remove(brickPosKey(working.get(i)));
-                    posIndex.remove(brickPosKey(working.get(bestJ)));
-                    working.set(i, bestMerged);
-                    working.remove(bestJ);
-                    posIndex.put(brickPosKey(bestMerged), i);
-                    changed = true;
-                    i--;
+            for (Brick b : new Brick[]{rightNeighbor, frontNeighbor}) {
+                if (b == null || !working.contains(b)) continue;
+                Brick merged = tryMerge(a, b, partLookup);
+                if (merged == null) continue;
+                int area = merged.studX() * merged.studY();
+                if (area > bestArea || (area == bestArea && isEarlier(merged, bestMerged))) {
+                    bestArea = area;
+                    bestMerged = merged;
+                    bestB = b;
                 }
             }
-        } while (changed);
 
-        working.sort((a, b) -> {
+            if (bestMerged != null) {
+                originIndex.remove(brickPosKey(a));
+                originIndex.remove(brickPosKey(bestB));
+                working.remove(a);
+                working.remove(bestB);
+                working.add(bestMerged);
+                originIndex.put(brickPosKey(bestMerged), bestMerged);
+                queue.add(bestMerged);
+            }
+        }
+
+        List<Brick> result = new ArrayList<>(working);
+        result.sort((a, b) -> {
             if (a.y() != b.y()) return Integer.compare(a.y(), b.y());
             if (a.z() != b.z()) return Integer.compare(a.z(), b.z());
             return Integer.compare(a.x(), b.x());
         });
-        return working;
+        return result;
     }
 
     private static Brick tryMerge(Brick a, Brick b, Map<String, String> partLookup) {

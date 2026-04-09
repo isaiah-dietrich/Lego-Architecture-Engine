@@ -71,8 +71,15 @@ public final class PlacementFeatureGrid {
             return 1.0;
         }
 
-        // Collect Lab values for voxels across the brick volume
-        double[][] labs = new double[volume][];
+        // Collect per-channel min/max across the brick volume in a single pass.
+        // The AABB diagonal sqrt((maxL-minL)²+(maxA-minA)²+(maxB-minB)²) is an
+        // O(n) upper bound on the true max pairwise ΔE76, which was O(n²).
+        // It equals the true diameter when the two most-distant Lab points sit at
+        // diagonally-opposite corners of the bounding box, and conservatively
+        // overestimates otherwise (biasing toward smaller bricks in edge cases).
+        double minL = Double.MAX_VALUE, maxL = -Double.MAX_VALUE;
+        double minA = Double.MAX_VALUE, maxA = -Double.MAX_VALUE;
+        double minB = Double.MAX_VALUE, maxB = -Double.MAX_VALUE;
         int count = 0;
         for (int dy = 0; dy < heightUnits; dy++) {
             int cy = y + dy;
@@ -84,7 +91,13 @@ public final class PlacementFeatureGrid {
                     if (cx < labValues.length && cz < labValues[0][0].length) {
                         double[] lab = labValues[cx][cy][cz];
                         if (lab != null) {
-                            labs[count++] = lab;
+                            if (lab[0] < minL) minL = lab[0];
+                            if (lab[0] > maxL) maxL = lab[0];
+                            if (lab[1] < minA) minA = lab[1];
+                            if (lab[1] > maxA) maxA = lab[1];
+                            if (lab[2] < minB) minB = lab[2];
+                            if (lab[2] > maxB) maxB = lab[2];
+                            count++;
                         }
                     }
                 }
@@ -95,19 +108,10 @@ public final class PlacementFeatureGrid {
             return 1.0;
         }
 
-        // Maximum pairwise ΔE76 (Euclidean distance in Lab)
-        double maxDeltaE = 0;
-        for (int i = 0; i < count; i++) {
-            for (int j = i + 1; j < count; j++) {
-                double dl = labs[i][0] - labs[j][0];
-                double da = labs[i][1] - labs[j][1];
-                double db = labs[i][2] - labs[j][2];
-                double de = Math.sqrt(dl * dl + da * da + db * db);
-                if (de > maxDeltaE) {
-                    maxDeltaE = de;
-                }
-            }
-        }
+        double dL = maxL - minL;
+        double dA = maxA - minA;
+        double dB = maxB - minB;
+        double maxDeltaE = Math.sqrt(dL * dL + dA * dA + dB * dB);
 
         return Math.max(0.0, 1.0 - maxDeltaE / colorDiffThreshold);
     }
