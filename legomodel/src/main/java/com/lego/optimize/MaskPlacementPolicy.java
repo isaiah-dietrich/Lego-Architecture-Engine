@@ -326,6 +326,32 @@ public final class MaskPlacementPolicy implements BatchPlacementPolicy, Placemen
             }
         }
 
+        // For slopes: the bounding-box blocking in applyPlacement blocks ALL cells inside
+        // the slope's height envelope (including the "air pocket" cells at the slope toe
+        // that the wedge solid mask omits). If any of those air-pocket cells are required
+        // surface voxels, they would be blocked but never covered — stranding them and
+        // crashing the fallback. Claim them in coverageCells here so they are marked
+        // covered when the slope is applied.
+        if (facing != Facing.NONE) {
+            Set<Cell> claimed = new HashSet<>(solidCells);
+            claimed.addAll(coverageCells);
+            for (int dy = 0; dy < spec.heightUnits(); dy++) {
+                for (int dx = 0; dx < studX; dx++) {
+                    for (int dz = 0; dz < studY; dz++) {
+                        int cx = x + dx;
+                        int cy = y + dy;
+                        int cz = z + dz;
+                        Cell air = new Cell(cx, cy, cz);
+                        if (!claimed.contains(air)
+                                && inBounds(target, cx, cy, cz)
+                                && target.isRequired(cx, cy, cz)) {
+                            coverageCells.add(air);
+                        }
+                    }
+                }
+            }
+        }
+
         coverageCells = dedupe(coverageCells);
         blockedCells = dedupe(blockedCells);
         for (Cell cell : coverageCells) {
