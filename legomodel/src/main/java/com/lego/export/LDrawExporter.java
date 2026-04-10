@@ -146,8 +146,22 @@ public final class LDrawExporter {
                 }
             }
 
-            double centerXStuds = brick.x() + ((brick.studX() - 1) / 2.0);
-            double centerZStuds = brick.z() + ((brick.studY() - 1) / 2.0);
+            // Standard bricks: centre the origin in the voxel footprint on both axes.
+            // Slopes: the LDraw part origin sits at the anchor-voxel stud position.
+            // Applying the standard (studN-1)/2 offset on the depth axis shifts the
+            // stud 0.5 studs between grid positions. Suppress it on the depth axis only.
+            double centerXStuds;
+            double centerZStuds;
+            if (brick.facing() == Facing.NORTH || brick.facing() == Facing.SOUTH) {
+                centerXStuds = brick.x() + ((brick.studX() - 1) / 2.0); // width — centred
+                centerZStuds = brick.z();                                 // depth — no offset
+            } else if (brick.facing() == Facing.EAST || brick.facing() == Facing.WEST) {
+                centerXStuds = brick.x();                                 // depth — no offset
+                centerZStuds = brick.z() + ((brick.studY() - 1) / 2.0); // width — centred
+            } else {
+                centerXStuds = brick.x() + ((brick.studX() - 1) / 2.0);
+                centerZStuds = brick.z() + ((brick.studY() - 1) / 2.0);
+            }
 
             double x = centerXStuds * STUD_PITCH_LDU;
             double z = centerZStuds * STUD_PITCH_LDU;

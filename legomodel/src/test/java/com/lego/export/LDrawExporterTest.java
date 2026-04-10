@@ -213,10 +213,10 @@ class LDrawExporterTest {
 
     @Test
     void singleSlopeAtOrigin_hasExpectedLDrawCoordinates() throws IOException {
-        // A 2x2 slope at voxel (0,0,0) with heightUnits=3 should produce:
-        //   x = (0 + (2-1)/2.0) * 20 = 10 LDU  (center between stud 0 and stud 20)
-        //   z = (0 + (2-1)/2.0) * 20 = 10 LDU
-        //   y = -(0 * 8 + 3 * 8)     = -24 LDU  (LDraw Y is negative-up)
+        // A 2x2 NORTH slope at voxel (0,0,0) with heightUnits=3 should produce:
+        //   x = (0 + (2-1)/2.0) * 20 = 10 LDU  (centred over 2-stud width)
+        //   z = 0 * 20               =  0 LDU  (anchor voxel, no depth-axis offset for slopes)
+        //   y = -(0 * 8 + 3 * 8)     = -24 LDU (LDraw Y is negative-up)
         createSlopeCatalog(tempDir);
         Path ldr = tempDir.resolve("single_slope_origin.ldr");
 
@@ -234,17 +234,17 @@ class LDrawExporterTest {
         double y = Double.parseDouble(fields[3]);
         double z = Double.parseDouble(fields[4]);
 
-        assertEquals(10.0, x, 0.001, "x should be 10 LDU (center between stud 0 and stud 20). Got: " + x);
+        assertEquals(10.0, x, 0.001, "x should be 10 LDU (centred over 2-stud width). Got: " + x);
         assertEquals(-24.0, y, 0.001, "y should be -24 LDU (3 height units * 8 LDU, negative-up). Got: " + y);
-        assertEquals(10.0, z, 0.001, "z should be 10 LDU (center between stud 0 and stud 20). Got: " + z);
+        assertEquals(0.0,  z, 0.001, "z should be 0 LDU (anchor voxel, no depth offset for slopes). Got: " + z);
     }
 
     @Test
     void singleSlopeAtNonOrigin_hasExpectedLDrawCoordinates() throws IOException {
-        // A 2x2 slope at voxel (4, 6, 2) with heightUnits=3:
-        //   x = (4 + 0.5) * 20 = 90 LDU
-        //   z = (2 + 0.5) * 20 = 50 LDU
-        //   y = -(6 * 8 + 3 * 8) = -(48 + 24) = -72 LDU
+        // A 2x2 NORTH slope at voxel (4, 6, 2) with heightUnits=3:
+        //   x = (4 + 0.5) * 20 = 90 LDU  (centred over 2-stud width)
+        //   z = 2 * 20          = 40 LDU  (anchor voxel, no depth-axis offset)
+        //   y = -(6 * 8 + 3 * 8) = -72 LDU
         createSlopeCatalog(tempDir);
         Path ldr = tempDir.resolve("single_slope_nonorigin.ldr");
 
@@ -263,7 +263,7 @@ class LDrawExporterTest {
 
         assertEquals(90.0, x, 0.001, "x should be 90 LDU. Got: " + x);
         assertEquals(-72.0, y, 0.001, "y should be -72 LDU. Got: " + y);
-        assertEquals(50.0,  z, 0.001, "z should be 50 LDU. Got: " + z);
+        assertEquals(40.0,  z, 0.001, "z should be 40 LDU (anchor voxel, no depth offset). Got: " + z);
     }
 
     @Test
