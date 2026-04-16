@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import axios from 'axios'
 import { checkHealth, submitJob, downloadUrl } from './api/jobs'
 import { useJobPoller } from './hooks/useJobPoller'
 import { useLocalStorage } from './hooks/useLocalStorage'
@@ -30,6 +31,7 @@ export default function App() {
   const [jobId, setJobId] = useState<string | null>(null)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [pipelineStartTime, setPipelineStartTime] = useState<number>(0)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [serverOnline, setServerOnline] = useState<boolean | null>(null)
 
   const { data: jobData } = useJobPoller(
@@ -68,18 +70,25 @@ export default function App() {
     setJobId(null)
     setJobStatus('idle')
     setUploadProgress(0)
+    setErrorMessage(null)
   }
 
   async function handleConvert() {
     if (!file) return
     setJobStatus('uploading')
     setUploadProgress(0)
+    setErrorMessage(null)
     try {
       const id = await submitJob(file, settings, setUploadProgress)
       setJobId(id)
       setPipelineStartTime(Date.now())
       setJobStatus('queued')
-    } catch {
+    } catch (err) {
+      let msg = 'Upload failed — check that the API server is running'
+      if (axios.isAxiosError(err)) {
+        msg = err.response?.data?.error ?? err.message ?? msg
+      }
+      setErrorMessage(msg)
       setJobStatus('error')
     }
   }
@@ -142,7 +151,7 @@ export default function App() {
           <div className="w-full bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-xl px-5 py-4 text-sm text-red-800 dark:text-red-200">
             <p className="font-medium">Conversion failed</p>
             <p className="mt-1 text-red-600 dark:text-red-300">
-              {jobData?.error ?? 'Upload failed — check that the API server is running'}
+              {errorMessage ?? jobData?.error ?? 'Unknown error'}
             </p>
             <button
               onClick={resetJob}

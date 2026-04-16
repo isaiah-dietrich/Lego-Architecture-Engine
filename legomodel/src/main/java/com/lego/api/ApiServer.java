@@ -73,7 +73,7 @@ public final class ApiServer {
 
         Javalin app = Javalin.create(config ->
             config.plugins.enableCors(cors ->
-                cors.add(rule -> rule.allowHost("http://localhost:5173", "localhost:5173"))
+                cors.add(rule -> rule.anyHost())
             )
         );
 
