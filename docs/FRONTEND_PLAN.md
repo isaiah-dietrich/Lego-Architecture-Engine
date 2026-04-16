@@ -1,22 +1,34 @@
 # Frontend Plan: Lego Architecture Engine Web App
 
+## Status
+
+| Phase | Description | Status |
+|---|---|---|
+| 1 | Backend API wrapper (Javalin) | **Done** |
+| 2 | Frontend scaffold | **Done** |
+| 3 | Upload flow + settings + convert button | **Done** |
+| 4 | Pipeline progress component | **Done** |
+| 5 | Output section (stats + download) | **Remaining** |
+
+---
+
 ## Tech Stack
 
-- **React + Vite + TypeScript** — minimal setup, fast dev server
-- **Tailwind CSS** — utility-first, no component library overhead
-- **Axios** — handles multipart upload with progress events
-- **TanStack Query** — clean polling loop for job status
-- No external state manager needed — `useState`/`useReducer` is sufficient
+- **React 19 + Vite 8 + TypeScript** — scaffolded via `create-vite`
+- **Tailwind CSS v4** — Vite plugin (`@tailwindcss/vite`); no `tailwind.config.ts` needed
+- **Axios** — multipart upload with `onUploadProgress` events
+- **TanStack Query v5** — polling loop, stops automatically on terminal state
 
 ---
 
 ## UX Flow
 
 ```
-[Drop File] → [Settings Panel] → [Convert] → [Upload Progress] → [Pipeline Stages] → [Stats + Download]
+[Drop File] → [Settings Panel] → [Convert] → [Upload Progress Bar]
+  → [Pipeline Progress] → [Stats + Download]
 ```
 
-The page is single-screen. The settings panel appears after a file is dropped. Controls are locked during upload/run. On error, the user can retry with the same file and settings.
+Single-screen. Settings panel appears after a file is dropped. All controls lock while a job is active. Error card has "Try Again" (keeps file + settings). Output has "Start Over" (full reset).
 
 ---
 
@@ -24,74 +36,52 @@ The page is single-screen. The settings panel appears after a file is dropped. C
 
 ```
 App
-├── Header
-├── UploadZone               ← drag-and-drop, click-to-browse, .obj/.glb validation
-├── SettingsPanel            ← revealed after file drop
-│   ├── ResolutionInput      ← integer ≥ 2, default 40
-│   ├── AlgorithmSelect      ← topological | legacy
-│   ├── OutputTypeSelect     ← brick | voxel-surface | ldraw | ...
-│   ├── ColorModeToggle      ← glb-color | none (disabled if .obj)
-│   └── ColorAlgorithmSelect ← direct | uvlab | dominant | region | supersampled
-│                               (shown only when glb-color + .glb)
-├── ConvertButton / UploadProgressBar
-├── PipelineProgress         ← stage label + spinner + elapsed timer
-└── OutputSection
-    ├── StatsCard            ← triangles → voxels → bricks, reduction %
-    ├── BrickTypeTable       ← partId / name / count
-    ├── ColorInfoRow         ← only for ldraw + glb-color
-    └── DownloadButton
+├── Header                   ✓ done
+├── OfflineBanner            ✓ done (inline in App)
+├── UploadZone               ✓ done — drag-and-drop, click-to-browse, file badge, clear button
+├── SettingsPanel            ✓ done — revealed after file drop
+│   ├── ResolutionInput      ✓ integer ≥ 2, validated on blur
+│   ├── AlgorithmSelect      ✓ topological | legacy
+│   ├── OutputTypeSelect     ✓ all 7 export modes
+│   ├── ColorModeToggle      ✓ glb-color | none (auto-disabled + tooltip for .obj)
+│   └── ColorAlgorithmSelect ✓ shown only when glb-color + .glb
+├── ConvertButton            ✓ done — idle button / animated upload progress bar
+├── PipelineProgress         ✓ done — spinner, stage breadcrumb, elapsed timer
+└── OutputSection            ☐ Phase 5
+    ├── StatsCard            ☐ triangles → voxels → bricks, reduction %
+    ├── BrickTypeTable       ☐ partId / name / count, sorted by count desc
+    ├── ColorInfoRow         ☐ only for ldraw + glb-color results
+    └── DownloadButton       ☐ direct link to /api/jobs/{id}/download
 ```
 
 ---
 
 ## API Contract
 
-The backend needs a Javalin (or Spring Boot) HTTP wrapper around `PipelineRunner`.
-
 **Base URL:** `http://localhost:7070/api`
+
+> Port 7070 — macOS AirPlay receiver owns 7000.
 
 | Endpoint | Purpose |
 |---|---|
-| `POST /api/convert` | Multipart upload + config → returns `{ jobId }` |
-| `GET /api/jobs/{id}` | Poll status: `queued/running/done/error` + stage name + stats |
-| `GET /api/jobs/{id}/download` | Stream output file as attachment |
-| `GET /api/health` | Frontend health check on mount |
+| `POST /api/convert` | Multipart upload + config → `{ jobId }` |
+| `GET /api/jobs/{id}` | Poll status + stage + stats |
+| `GET /api/jobs/{id}/download` | Stream output file |
+| `GET /api/health` | Reachability check on mount |
 
-### POST /api/convert
+### POST /api/convert — form fields
 
-**Request:** `multipart/form-data`
-
-| Field | Type | Required | Notes |
+| Field | Type | Default | Notes |
 |---|---|---|---|
-| `file` | binary | yes | `.obj` or `.glb` file |
-| `resolution` | int | yes | >= 2 |
-| `algorithm` | string | yes | `topological` or `legacy` |
-| `outputType` | string | yes | `brick`, `voxel-surface`, `voxel-solid`, `voxel-slope-surface`, `voxel-surface-combined`, `voxel-slope-placed`, `ldraw` |
-| `colorMode` | string | yes | `glb-color` or `none` |
-| `colorAlgorithm` | string | no | `direct`, `uvlab`, `dominant`, `region`, `supersampled` |
+| `file` | binary | — | `.obj` or `.glb` |
+| `resolution` | int | — | >= 2 |
+| `algorithm` | string | `topological` | `topological` or `legacy` |
+| `outputType` | string | `ldraw` | see export modes below |
+| `colorMode` | string | `glb-color` / `none` | server defaults `none` for `.obj` |
+| `colorAlgorithm` | string | `direct` | ignored unless `colorMode=glb-color` |
 
-**Response:** `202 Accepted`
-```json
-{ "jobId": "a3f9c1b2" }
-```
+### GET /api/jobs/{jobId} — response shape
 
-### GET /api/jobs/{jobId}
-
-Poll every 1–2 seconds until `status` is `done` or `error`.
-
-Stage values: `queued`, `loading`, `voxelizing`, `placing_bricks`, `colorizing`, `exporting`, `complete`
-
-**Response (running):**
-```json
-{
-  "jobId": "a3f9c1b2",
-  "status": "running",
-  "stage": "placing_bricks",
-  "stats": null
-}
-```
-
-**Response (done):**
 ```json
 {
   "jobId": "a3f9c1b2",
@@ -107,8 +97,7 @@ Stage values: `queued`, `loading`, `voxelizing`, `placing_bricks`, `colorizing`,
     "reductionPercent": 40.6,
     "placementPolicy": "mask",
     "brickTypes": [
-      { "partId": "3001", "name": "Brick 2 x 4", "count": 420 },
-      { "partId": "3003", "name": "Brick 2 x 2", "count": 310 }
+      { "partId": "3001", "name": "Brick 2 x 4", "count": 420 }
     ],
     "colorInfo": {
       "coloredBrickCount": 1800,
@@ -118,143 +107,123 @@ Stage values: `queued`, `loading`, `voxelizing`, `placing_bricks`, `colorizing`,
       "smoothedCount": 23
     }
   },
-  "outputFilename": "output.ldr"
+  "outputFilename": "output.ldr",
+  "error": null
 }
 ```
 
+`stats` and `outputFilename` are `null` until `status === "done"`.
 `colorInfo` is `null` when color was not applied.
 
-**Response (error):**
-```json
-{
-  "jobId": "a3f9c1b2",
-  "status": "error",
-  "stage": "voxelizing",
-  "error": "Failed to parse OBJ file: unexpected token at line 42"
-}
-```
+**Implemented stage values:** `queued`, `loading`, `exporting`, `complete`, `error`
 
-### GET /api/jobs/{jobId}/download
-
-Returns the output file as a binary stream with `Content-Disposition: attachment`.
+> The plan originally specified intermediate stages (`voxelizing`, `placing_bricks`, `colorizing`). These are not currently emitted by the backend — `PipelineProgress` handles unknown stage strings gracefully by auto-capitalizing them.
 
 ---
 
-## State Shape
+## State Shape (as implemented in App.tsx)
 
 ```typescript
-type AppState = {
-  file: File | null;
-  fileType: 'obj' | 'glb' | null;
-  settings: {
-    algorithm: 'topological' | 'legacy';
-    outputType: 'brick' | 'voxel-surface' | 'voxel-solid' | 'voxel-slope-surface' | 'voxel-surface-combined' | 'voxel-slope-placed' | 'ldraw';
-    colorMode: 'glb-color' | 'none';
-    colorAlgorithm: 'direct' | 'uvlab' | 'dominant' | 'region' | 'supersampled';
-    resolution: number;
-  };
-  jobId: string | null;
-  jobStatus: 'idle' | 'uploading' | 'running' | 'done' | 'error';
-  uploadProgress: number;     // 0–100 from Axios onUploadProgress
-  currentStage: string | null;
-  stats: StatsPayload | null;
-  errorMessage: string | null;
-  outputFilename: string | null;
-};
-```
+// Persisted to localStorage
+settings: Settings  // { resolution, algorithm, outputType, colorMode, colorAlgorithm }
 
-Settings are persisted to `localStorage` so they survive page refresh.
+// Ephemeral
+file: File | null
+jobStatus: 'idle' | 'uploading' | 'queued' | 'running' | 'done' | 'error'
+jobId: string | null
+uploadProgress: number       // 0–100, Axios onUploadProgress
+pipelineStartTime: number    // epoch ms, set when job is accepted (202)
+serverOnline: boolean | null // set by health check on mount
+
+// Via TanStack Query (useJobPoller)
+jobData: JobStatusResponse | undefined  // polled every 1.5s while active
+```
 
 ---
 
-## Folder Structure
+## Folder Structure (as built)
 
 ```
 lego-frontend/
 ├── index.html
-├── vite.config.ts
-├── tailwind.config.ts
+├── vite.config.ts           # Tailwind v4 plugin + React plugin
 ├── package.json
 ├── tsconfig.json
 └── src/
-    ├── main.tsx
-    ├── App.tsx
+    ├── main.tsx             # QueryClientProvider root
+    ├── App.tsx              # All state + layout
+    ├── index.css            # @import "tailwindcss" + minimal resets
     ├── api/
-    │   ├── client.ts           # Axios instance with base URL
-    │   └── jobs.ts             # submitJob, pollJob, downloadUrl
+    │   ├── client.ts        # Axios instance → localhost:7070
+    │   └── jobs.ts          # submitJob, pollJob, downloadUrl, checkHealth
     ├── hooks/
-    │   ├── useJobPoller.ts     # TanStack Query polling wrapper
-    │   └── useLocalStorage.ts  # Persist settings between sessions
+    │   ├── useJobPoller.ts  # TanStack Query, refetchInterval 1500ms
+    │   └── useLocalStorage.ts
     ├── components/
     │   ├── Header.tsx
     │   ├── UploadZone.tsx
     │   ├── SettingsPanel.tsx
     │   ├── ConvertButton.tsx
     │   ├── PipelineProgress.tsx
-    │   ├── OutputSection.tsx
-    │   ├── StatsCard.tsx
-    │   ├── BrickTypeTable.tsx
-    │   └── ColorInfoRow.tsx
+    │   ├── OutputSection.tsx     ☐ Phase 5
+    │   ├── StatsCard.tsx         ☐ Phase 5
+    │   ├── BrickTypeTable.tsx    ☐ Phase 5
+    │   └── ColorInfoRow.tsx      ☐ Phase 5
     ├── types/
-    │   └── api.ts              # TypeScript types mirroring the API contract
+    │   └── api.ts           # All TS types + DEFAULT_SETTINGS
     └── utils/
-        └── fileHelpers.ts      # Extension check, size formatting
+        └── fileHelpers.ts   # getFileType, formatBytes
 ```
 
 ---
 
-## Build Order
+## Phase 5 — Output Section
 
-### Phase 1 — Backend API wrapper (do this first)
+The output section is currently a placeholder in `App.tsx`. Replace it with:
 
-1. Add Javalin to `pom.xml`
-2. Create `ApiServer.java` alongside `Main.java` — wraps `PipelineRunner` over HTTP
-3. Implement job storage with `ConcurrentHashMap<String, JobState>`
-4. Implement thread pool with `Executors.newFixedThreadPool(2)` for async pipeline runs
-5. Implement the four endpoints
-6. Add CORS headers for `localhost:5173`
-7. Test with curl before touching the frontend
+### StatsCard
 
-Output files go to a system temp directory keyed by job ID. Clean up with a `ScheduledExecutorService` on a 30-minute TTL.
+Key numbers in a grid — triangles in, bricks out, reduction percent, resolution.
 
-### Phase 2 — Frontend scaffold
+```
+12,480 triangles  →  40³ voxels  →  1,840 bricks  (40.6% reduction)
+```
 
-1. `npm create vite@latest lego-frontend -- --template react-ts`
-2. Install Tailwind, Axios, TanStack Query
-3. Create `api/client.ts`, `api/jobs.ts`, `types/api.ts`
+### BrickTypeTable
 
-### Phase 3 — Upload flow
+Sorted by count descending. Columns: part ID, part name, count, bar showing relative proportion.
 
-1. Build `UploadZone` with drag-and-drop and click-to-browse
-2. Wire file drop to App state, display accepted file name + size
-3. Build `SettingsPanel` with all controls and sensible defaults
-4. Wire `useLocalStorage` to persist settings
-5. Build `ConvertButton` with Axios upload progress bar
+### ColorInfoRow
 
-### Phase 4 — Polling and pipeline progress
+Shown only when `stats.colorInfo !== null`. One line:
+`1,800 / 1,840 bricks colored · 14 palette colors · direct algorithm · 23 smoothed`
 
-1. Build `useJobPoller` with TanStack Query `refetchInterval: 1500`
-2. Build `PipelineProgress` — stage label + spinner + elapsed timer
-3. Wire App state transitions: `idle → uploading → running → done/error`
+### DownloadButton
 
-### Phase 5 — Output section
+Direct `<a>` link to `GET /api/jobs/{id}/download` — no `createObjectURL` needed since the API streams the file with the correct `Content-Disposition` header.
 
-1. Build `StatsCard` from stats payload
-2. Build `BrickTypeTable`
-3. Build `ColorInfoRow` (conditional)
-4. Wire `DownloadButton` using `URL.createObjectURL` on a temporary `<a>` element
-5. Implement "Start Over" and "Try Again" reset flows
-
-### Phase 6 — Polish
-
-1. Lock settings panel during upload/run
-2. Disable color controls for `.obj` files with tooltip
-3. Validate resolution input (integer ≥ 2)
-4. Health check on mount — show banner if backend unreachable
-5. End-to-end test with a real `.glb` and a real `.obj`
+Also needs:
+- "Start Over" button → `resetJob(); setFile(null)`
+- "Convert Again" button → `resetJob()` only (keeps file + settings for re-runs)
 
 ---
 
-## Open Question
+## Backend Files
 
-Whether to add Javalin to the existing `legomodel` Maven module or create a sibling `lego-api` module. A sibling module is cleaner for separation of concerns but adds Maven complexity. For v1, adding to the existing module is fine.
+| File | Role |
+|---|---|
+| `legomodel/src/main/java/com/lego/api/ApiServer.java` | Javalin server, 4 endpoints, thread pool, cleanup scheduler |
+| `legomodel/src/main/java/com/lego/api/JobState.java` | Mutable job state with volatile fields |
+| `legomodel/src/main/java/com/lego/cli/PipelineRunner.java` | Added `runForApi()` and `runCore()` alongside existing `run()` |
+
+Start the server:
+```bash
+cd legomodel
+mvn compile exec:java -Dexec.mainClass=com.lego.api.ApiServer
+```
+
+Start the frontend:
+```bash
+cd lego-frontend
+npm run dev   # http://localhost:5173
+```
